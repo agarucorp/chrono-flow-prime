@@ -6,9 +6,12 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:prod": "vite build --config vite.config.prod.ts",
     "build:dev": "vite build --mode development",
+    "build:turnos": "vite build --config vite.config.prod.ts --mode production",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:turnos": "npm run build:turnos && npm run preview"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.0",
