@@ -10,7 +10,7 @@ export const AppointmentSystem = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentView, setCurrentView] = useState<'calendar' | 'settings'>('calendar');
   const [professional, setProfessional] = useState({
-    name: "Dr. María González",
+    name: "Dr. Facundo Aguirre",
     specialty: "Medicina General",
     workingHours: { start: "09:00", end: "18:00" },
     appointmentDuration: 30,
