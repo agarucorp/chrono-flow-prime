@@ -143,9 +143,9 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
 
   if (showBookingForm) {
     return (
-      <div className="min-h-screen bg-gradient-subtle">
+      <div className="min-h-screen bg-background">
         {/* Header */}
-        <header className="bg-white border-b shadow-card">
+        <header className="bg-card border-b shadow-card">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
               <div className="flex items-center space-x-4">
@@ -157,8 +157,8 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                <div className="p-2 bg-gradient-primary rounded-lg shadow-glow">
-                  <Calendar className="h-6 w-6 text-white" />
+                <div className="w-8 h-8">
+                  <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-foreground">Reservar Turno</h1>
@@ -256,14 +256,14 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
   }
 
   return (
-    <div className="min-h-screen bg-gradient-subtle">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-white border-b shadow-card">
+      <header className="bg-card border-b shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="p-2 bg-gradient-primary rounded-lg shadow-glow">
-                <Calendar className="h-6 w-6 text-white" />
+              <div className="w-8 h-8">
+                <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">Turnos Disponibles</h1>

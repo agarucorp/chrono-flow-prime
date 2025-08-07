@@ -176,7 +176,7 @@ export const AppointmentCalendar = ({ professional }: AppointmentCalendarProps) 
                         h-20 p-2 flex flex-col justify-start items-center relative transition-all duration-200
                         ${!isAvailable ? 'opacity-50 cursor-not-allowed' : 'hover:shadow-md'}
                         ${isCurrentDay ? 'ring-2 ring-primary/50' : ''}
-                        ${isSelected ? 'shadow-glow' : ''}
+                        ${isSelected ? 'shadow-md' : ''}
                       `}
                       onClick={() => isAvailable && setSelectedDate(date)}
                       disabled={!isAvailable}

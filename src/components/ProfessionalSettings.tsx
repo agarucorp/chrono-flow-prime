@@ -176,7 +176,7 @@ export const ProfessionalSettings = ({ professional, onUpdate }: ProfessionalSet
                       size="sm"
                       onClick={() => toggleDay(dayValue)}
                       className={`transition-all duration-200 ${
-                        isSelected ? 'shadow-glow' : 'hover:shadow-md'
+                        isSelected ? 'shadow-md' : 'hover:shadow-md'
                       }`}
                     >
                       {day}
@@ -312,7 +312,7 @@ export const ProfessionalSettings = ({ professional, onUpdate }: ProfessionalSet
         <Button
           onClick={handleSave}
           disabled={isLoading}
-          className="bg-gradient-primary hover:shadow-glow transition-all duration-300 min-w-[120px]"
+          className="bg-gradient-primary hover:shadow-md transition-all duration-300 min-w-[120px]"
         >
           {isLoading ? (
             <div className="flex items-center space-x-2">
