@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { Lock, User, Calendar, Mail, ChevronLeft, ChevronRight } from "lucide-react";
+import { Lock, User, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
-import { format } from "date-fns";
-import { es } from "date-fns/locale";
+
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -238,43 +235,15 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label>Fecha de Nacimiento</Label>
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start text-left font-normal"
-                        >
-                          <Calendar className="mr-2 h-4 w-4" />
-                          {registerData.birthDate ? format(registerData.birthDate, "dd/MM/yyyy") : "DD/MM/AAAA"}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          mode="single"
-                          selected={registerData.birthDate}
-                          onSelect={(date) => setRegisterData(prev => ({ ...prev, birthDate: date }))}
-                          disabled={(date) => date > new Date() || date < new Date("1900-01-01")}
-                          initialFocus
-                          fromYear={1950}
-                          toYear={new Date().getFullYear()}
-                          showOutsideDays={false}
-                          fixedWeeks
-                          hideHead={false}
-                          classNames={{
-                            caption: "flex justify-start items-center p-2 relative",
-                            caption_label: "text-sm font-medium px-8",
-                            caption_dropdowns: "hidden",
-                            nav: "flex items-center",
-                            nav_button_previous: "h-7 w-7 absolute left-2",
-                            nav_button_next: "h-7 w-7 absolute left-20"
-                          }}
-                          formatters={{
-                            formatCaption: (date) => format(date, "MMMM", { locale: es })
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
+                    <Input
+                      id="birthDate"
+                      type="date"
+                      value={registerData.birthDate ? registerData.birthDate.toISOString().split('T')[0] : ""}
+                      onChange={(e) => setRegisterData(prev => ({ ...prev, birthDate: e.target.value ? new Date(e.target.value) : undefined }))}
+                      className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                      required
+                    />
                   </div>
                 </>
               ) : (

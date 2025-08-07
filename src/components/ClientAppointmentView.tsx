@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { format, addDays, startOfWeek, isSameDay, isToday, isBefore, startOfDay } from "date-fns";
+import { format, addDays, startOfWeek, startOfMonth, endOfMonth, isSameDay, isToday, isBefore, startOfDay, addMonths, getDate } from "date-fns";
 import { es } from "date-fns/locale";
 
 interface Professional {
@@ -32,7 +32,7 @@ interface ClientAppointmentViewProps {
 }
 
 export const ClientAppointmentView = ({ professional }: ClientAppointmentViewProps) => {
-  const [currentWeek, setCurrentWeek] = useState(startOfWeek(new Date(), { weekStartsOn: 1 }));
+  const [currentMonth, setCurrentMonth] = useState(startOfMonth(new Date()));
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [showBookingForm, setShowBookingForm] = useState(false);
@@ -94,13 +94,26 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
     return slots;
   }, [selectedDate, professional, appointments]);
 
-  // Get week days
-  const weekDays = useMemo(() => {
-    return Array.from({ length: 7 }, (_, i) => addDays(currentWeek, i));
-  }, [currentWeek]);
+  // Generate calendar grid for the month
+  const monthDays = useMemo(() => {
+    const monthStart = currentMonth;
+    const monthEnd = endOfMonth(monthStart);
+    const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
+    const endDate = startOfWeek(addDays(monthEnd, 6), { weekStartsOn: 1 });
+    
+    const days = [];
+    let currentDate = startDate;
+    
+    while (currentDate <= endDate) {
+      days.push(currentDate);
+      currentDate = addDays(currentDate, 1);
+    }
+    
+    return days;
+  }, [currentMonth]);
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    setCurrentWeek(prev => addDays(prev, direction === 'next' ? 7 : -7));
+  const navigateMonth = (direction: 'prev' | 'next') => {
+    setCurrentMonth(prev => addMonths(prev, direction === 'next' ? 1 : -1));
   };
 
   const isDateAvailable = (date: Date) => {
@@ -297,21 +310,21 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigateWeek('prev')}
+                      onClick={() => navigateMonth('prev')}
                     >
                       <ChevronLeft className="h-4 w-4" />
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => navigateWeek('next')}
+                      onClick={() => navigateMonth('next')}
                     >
                       <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </div>
                 <CardDescription>
-                  {format(currentWeek, "MMMM yyyy", { locale: es })}
+                  {format(currentMonth, "MMMM yyyy", { locale: es })}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -322,10 +335,12 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                     </div>
                   ))}
                   
-                  {weekDays.map((date) => {
+                  {monthDays.map((date) => {
                     const isAvailable = isDateAvailable(date);
                     const isSelected = isSameDay(date, selectedDate);
                     const isCurrentDay = isToday(date);
+                    const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                    const appointmentCount = appointments.filter(apt => isSameDay(apt.date, date)).length;
                     
                     return (
                       <button
@@ -333,19 +348,22 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                         onClick={() => isAvailable && setSelectedDate(date)}
                         disabled={!isAvailable}
                         className={`
-                          p-3 text-sm rounded-lg transition-all duration-200
+                          p-2 text-sm rounded-lg transition-all duration-200 min-h-[60px] flex flex-col items-center justify-center
+                          ${!isCurrentMonth ? 'opacity-30' : ''}
                           ${isAvailable 
                             ? 'hover:bg-primary/10 cursor-pointer' 
                             : 'opacity-50 cursor-not-allowed'
                           }
                           ${isSelected ? 'bg-primary text-primary-foreground' : ''}
-                          ${isCurrentDay && !isSelected ? 'ring-2 ring-primary/50' : ''}
+                          ${isCurrentDay && !isSelected ? 'ring-2 ring-primary/50 font-bold' : ''}
                         `}
                       >
-                        <div className="font-medium">{format(date, 'd')}</div>
-                        {isAvailable && (
-                          <div className="text-xs opacity-75">
-                            {appointments.filter(apt => isSameDay(apt.date, date)).length} reservado
+                        <div className={`font-medium ${isCurrentDay ? 'font-bold' : ''}`}>
+                          {getDate(date)}
+                        </div>
+                        {isAvailable && appointmentCount > 0 && (
+                          <div className="text-xs opacity-75 mt-1">
+                            <div className="w-2 h-2 bg-current rounded-full mx-auto"></div>
                           </div>
                         )}
                       </button>
