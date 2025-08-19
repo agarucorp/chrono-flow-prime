@@ -43,13 +43,16 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [clientesReservados, setClientesReservados] = useState<AdminUser[]>([]);
+  const [capacidadDisponible, setCapacidadDisponible] = useState(0);
 
-  // Cargar clientes disponibles
+  // Cargar clientes disponibles y reservas existentes
   useEffect(() => {
     if (isOpen) {
       cargarClientes();
+      cargarReservasExistentes();
     }
-  }, [isOpen]);
+  }, [isOpen, turno]);
 
   const cargarClientes = async () => {
     try {
@@ -67,6 +70,39 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     }
   };
 
+  const cargarReservasExistentes = async () => {
+    if (!turno) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('reservas_turnos')
+        .select(`
+          cliente_id,
+          estado,
+          clientes:cliente_id(id, full_name, email)
+        `)
+        .eq('turno_id', turno.id)
+        .eq('estado', 'confirmada');
+
+      if (error) throw error;
+
+      const clientesReservados = data?.map((reserva: any) => ({
+        id: reserva.clientes.id,
+        full_name: reserva.clientes.full_name,
+        email: reserva.clientes.email,
+        role: 'client'
+      })) || [];
+
+      setClientesReservados(clientesReservados);
+      
+      // Calcular capacidad disponible
+      const maxAlumnos = turno.max_alumnos || 1;
+      setCapacidadDisponible(Math.max(0, maxAlumnos - clientesReservados.length));
+    } catch (error) {
+      console.error('Error cargando reservas:', error);
+    }
+  };
+
   // Reservar turno para un cliente
   const reservarTurno = async () => {
     if (!turno || !clienteSeleccionado) {
@@ -74,26 +110,34 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       return;
     }
 
+    if (capacidadDisponible <= 0) {
+      showError('Error', 'El turno ya no tiene capacidad disponible');
+      return;
+    }
+
     try {
       setLoading(true);
       const loadingToast = showLoading('Reservando turno...');
 
+      // Crear reserva en la tabla de reservas
       const { error } = await supabase
-        .from('turnos')
-        .update({
-          estado: 'ocupado',
+        .from('reservas_turnos')
+        .insert({
+          turno_id: turno.id,
           cliente_id: clienteSeleccionado,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', turno.id);
+          estado: 'confirmada'
+        });
 
       dismissToast(loadingToast);
 
       if (error) throw error;
 
       showSuccess('Turno reservado', 'El turno ha sido asignado al cliente exitosamente');
+      
+      // Recargar reservas y limpiar selección
+      await cargarReservasExistentes();
+      setClienteSeleccionado('');
       onTurnoUpdated();
-      onClose();
     } catch (error) {
       console.error('Error reservando turno:', error);
       showError('Error', 'No se pudo reservar el turno');
@@ -102,30 +146,33 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     }
   };
 
-  // Cancelar reserva de un turno
-  const cancelarReserva = async () => {
+  // Cancelar reserva de un cliente específico
+  const cancelarReserva = async (clienteId: string) => {
     if (!turno) return;
 
     try {
       setLoading(true);
       const loadingToast = showLoading('Cancelando reserva...');
 
+      // Cambiar estado de la reserva a cancelada
       const { error } = await supabase
-        .from('turnos')
+        .from('reservas_turnos')
         .update({
-          estado: 'disponible',
-          cliente_id: null,
+          estado: 'cancelada',
           updated_at: new Date().toISOString()
         })
-        .eq('id', turno.id);
+        .eq('turno_id', turno.id)
+        .eq('cliente_id', clienteId);
 
       dismissToast(loadingToast);
 
       if (error) throw error;
 
-      showSuccess('Reserva cancelada', 'El turno está disponible nuevamente');
+      showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada');
+      
+      // Recargar reservas
+      await cargarReservasExistentes();
       onTurnoUpdated();
-      onClose();
     } catch (error) {
       console.error('Error cancelando reserva:', error);
       showError('Error', 'No se pudo cancelar la reserva');
@@ -166,10 +213,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     }
   };
 
-  // Filtrar clientes por búsqueda
+  // Filtrar clientes por búsqueda y excluir los ya reservados
   const clientesFiltrados = clientes.filter(cliente =>
-    cliente.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    cliente.email.toLowerCase().includes(searchTerm.toLowerCase())
+    (cliente.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+     cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    !clientesReservados.some(reservado => reservado.id === cliente.id)
   );
 
   if (!isOpen || !turno) return null;
@@ -218,45 +266,63 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               </Badge>
             </div>
             <div>
-              <Label className="text-sm font-medium text-muted-foreground">Servicio</Label>
-              <p className="font-medium">{turno.servicio || 'Sin especificar'}</p>
+              <Label className="text-sm font-medium text-muted-foreground">Capacidad</Label>
+              <p className="font-medium">
+                {clientesReservados.length} / {turno.max_alumnos || 1} alumnos
+              </p>
             </div>
           </div>
 
-          {/* Cliente Actual (si está reservado) */}
-          {turno.estado === 'ocupado' && turno.cliente_nombre && (
+          {/* Clientes Reservados */}
+          {clientesReservados.length > 0 && (
             <div className="p-4 bg-blue-50 dark:bg-blue-950 rounded-lg border border-blue-200 dark:border-blue-800">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <User className="h-5 w-5 text-blue-600" />
-                  <div>
-                    <Label className="text-sm font-medium text-blue-800 dark:text-blue-200">
-                      Cliente Actual
-                    </Label>
-                    <p className="font-medium text-blue-900 dark:text-blue-100">
-                      {turno.cliente_nombre}
-                    </p>
+              <div className="flex items-center space-x-2 mb-3">
+                <Users className="h-5 w-5 text-blue-600" />
+                <Label className="text-base font-medium text-blue-800 dark:text-blue-200">
+                  Clientes Reservados ({clientesReservados.length})
+                </Label>
+              </div>
+              
+              <div className="space-y-2">
+                {clientesReservados.map((cliente) => (
+                  <div key={cliente.id} className="flex items-center justify-between p-2 bg-white dark:bg-blue-900 rounded border">
+                    <div className="flex items-center space-x-3">
+                      <User className="h-4 w-4 text-blue-600" />
+                      <div>
+                        <p className="font-medium text-blue-900 dark:text-blue-100">
+                          {cliente.full_name}
+                        </p>
+                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                          {cliente.email}
+                        </p>
+                      </div>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => cancelarReserva(cliente.id)}
+                      disabled={loading}
+                    >
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Cancelar
+                    </Button>
                   </div>
-                </div>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={cancelarReserva}
-                  disabled={loading}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Cancelar Reserva
-                </Button>
+                ))}
               </div>
             </div>
           )}
 
           {/* Reservar para Nuevo Cliente */}
-          {turno.estado === 'disponible' && (
+          {capacidadDisponible > 0 && (
             <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Users className="h-5 w-5 text-green-600" />
-                <Label className="text-base font-medium">Reservar para Cliente</Label>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <Users className="h-5 w-5 text-green-600" />
+                  <Label className="text-base font-medium">Reservar para Cliente</Label>
+                </div>
+                <Badge variant="outline" className="text-green-600 border-green-600">
+                  {capacidadDisponible} cupo{capacidadDisponible > 1 ? 's' : ''} disponible{capacidadDisponible > 1 ? 's' : ''}
+                </Badge>
               </div>
               
               {/* Búsqueda de clientes */}
