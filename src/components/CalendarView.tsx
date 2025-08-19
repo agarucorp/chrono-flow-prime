@@ -7,6 +7,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { AdminTurnoModal } from './AdminTurnoModal';
+import { useAdmin } from '@/hooks/useAdmin';
 
 interface Turno {
   id: string;
@@ -30,6 +32,7 @@ interface CalendarViewProps {
 export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  const { isAdmin } = useAdmin();
   
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -37,6 +40,10 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   const [loading, setLoading] = useState(true);
   const [selectedTurno, setSelectedTurno] = useState<Turno | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
+  
+  // Estado para admin
+  const [showAdminModal, setShowAdminModal] = useState(false);
+  const [adminSelectedTurno, setAdminSelectedTurno] = useState<Turno | null>(null);
 
   // Obtener turnos desde Supabase
   useEffect(() => {
@@ -141,9 +148,25 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
 
   // Función para manejar clic en turno del calendario
   const handleTurnoClick = (turno: Turno) => {
-    if (turno.estado === 'disponible') {
-      setSelectedTurno(turno);
-      setShowReservationModal(true);
+    if (isAdmin) {
+      // Para admin: abrir modal de gestión
+      setAdminSelectedTurno(turno);
+      setShowAdminModal(true);
+    } else {
+      // Para clientes: solo reservar turnos disponibles
+      if (turno.estado === 'disponible') {
+        setSelectedTurno(turno);
+        setShowReservationModal(true);
+      }
+    }
+  };
+
+  // Función para manejar clic en día (navegación inteligente)
+  const handleDayClick = (date: Date) => {
+    if (viewMode === 'month') {
+      // Si estamos en vista mensual, cambiar a semanal y centrar en esa fecha
+      setCurrentDate(date);
+      setViewMode('week');
     }
   };
 
@@ -277,9 +300,10 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
           return (
             <div
               key={index}
-              className={`min-h-[80px] p-1 border border-border ${
+              className={`min-h-[80px] p-1 border border-border cursor-pointer transition-colors ${
                 isCurrentMonth ? 'bg-background' : 'bg-muted/30'
-              } ${isToday ? 'ring-2 ring-primary' : ''}`}
+              } ${isToday ? 'ring-2 ring-primary' : ''} hover:bg-muted/50`}
+              onClick={() => handleDayClick(date)}
             >
               <div className={`text-xs p-1 text-right ${
                 isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
@@ -584,6 +608,24 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Modal de gestión para admin */}
+      {showAdminModal && adminSelectedTurno && (
+        <AdminTurnoModal
+          turno={adminSelectedTurno}
+          isOpen={showAdminModal}
+          onClose={() => {
+            setShowAdminModal(false);
+            setAdminSelectedTurno(null);
+          }}
+          onTurnoUpdated={() => {
+            fetchTurnos();
+            if (onTurnoReservado) {
+              onTurnoReservado();
+            }
+          }}
+        />
       )}
     </div>
   );

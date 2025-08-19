@@ -13,7 +13,8 @@ import {
   Edit,
   Trash2,
   Eye,
-  EyeOff
+  EyeOff,
+  Settings
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,8 @@ import {
 import { useAdmin, AdminUser } from '@/hooks/useAdmin';
 import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
+import { TurnoManagement } from '@/components/TurnoManagement';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function Admin() {
   const { 
@@ -132,230 +135,247 @@ export default function Admin() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-bold text-foreground flex items-center gap-3">
-                <Crown className="w-8 h-8 text-yellow-500" />
-                Panel de Administración
-              </h1>
-              <p className="text-muted-foreground mt-2">
-                Gestiona usuarios, roles y configuraciones del sistema
-              </p>
-            </div>
-            <Badge variant="secondary" className="text-sm">
-              {adminUsers.length} Administradores
-            </Badge>
-          </div>
+          <h1 className="text-3xl font-bold text-foreground mb-2">
+            Panel de Administración
+          </h1>
+          <p className="text-muted-foreground">
+            Gestión centralizada de usuarios y turnos del sistema.
+          </p>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Usuarios</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{allUsers.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Usuarios registrados en el sistema
-              </p>
-            </CardContent>
-          </Card>
+        {/* Tabs principales */}
+        <Tabs defaultValue="usuarios" className="w-full">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="usuarios" className="flex items-center space-x-2">
+              <Users className="h-4 w-4" />
+              <span>Usuarios</span>
+            </TabsTrigger>
+            <TabsTrigger value="turnos" className="flex items-center space-x-2">
+              <Settings className="h-4 w-4" />
+              <span>Gestión Turnos</span>
+            </TabsTrigger>
+            <TabsTrigger value="calendario" className="flex items-center space-x-2">
+              <Calendar className="h-4 w-4" />
+              <span>Calendario</span>
+            </TabsTrigger>
+          </TabsList>
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Administradores</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{adminUsers.length}</div>
-              <p className="text-xs text-muted-foreground">
-                Usuarios con permisos de admin
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Clientes</CardTitle>
-              <User className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{allUsers.filter(u => u.role === 'client').length}</div>
-              <p className="text-xs text-muted-foreground">
-                Usuarios con rol de cliente
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Search and Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Buscar usuarios por nombre o email..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant={filterRole === 'all' ? 'default' : 'outline'}
-                  onClick={() => setFilterRole('all')}
-                  size="sm"
-                >
-                  Todos
-                </Button>
-                <Button
-                  variant={filterRole === 'admin' ? 'default' : 'outline'}
-                  onClick={() => setFilterRole('admin')}
-                  size="sm"
-                >
-                  <Shield className="w-4 h-4 mr-2" />
-                  Admins
-                </Button>
-                <Button
-                  variant={filterRole === 'client' ? 'default' : 'outline'}
-                  onClick={() => setFilterRole('client')}
-                  size="sm"
-                >
-                  <User className="w-4 h-4 mr-2" />
-                  Clientes
-                </Button>
-              </div>
+          {/* Tab de Usuarios */}
+          <TabsContent value="usuarios" className="mt-6">
+            {/* Stats Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{allUsers.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Usuarios registrados en el sistema
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Administradores</CardTitle>
+                  <Crown className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{adminUsers.length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Usuarios con permisos de admin
+                  </p>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Clientes</CardTitle>
+                  <User className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">{allUsers.filter(u => u.role === 'client').length}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Usuarios con rol de cliente
+                  </p>
+                </CardContent>
+              </Card>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Users Table */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Gestión de Usuarios</CardTitle>
-            <CardDescription>
-              Administra roles y permisos de los usuarios del sistema
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left p-3 font-medium">Usuario</th>
-                    <th className="text-left p-3 font-medium">Email</th>
-                    <th className="text-left p-3 font-medium">Rol</th>
-                    <th className="text-left p-3 font-medium">Fecha</th>
-                    <th className="text-left p-3 font-medium">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredUsers.map((user) => (
-                    <tr key={user.id} className="border-b hover:bg-muted/50">
-                      <td className="p-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
-                            {user.role === 'admin' ? (
-                              <Crown className="w-4 h-4 text-yellow-600" />
-                            ) : (
-                              <User className="w-4 h-4 text-primary" />
-                            )}
-                          </div>
-                          <div>
-                            <p className="font-medium">{user.full_name}</p>
-                            <p className="text-sm text-muted-foreground">ID: {user.id.slice(0, 8)}...</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-3">
-                        <p className="text-sm">{user.email}</p>
-                      </td>
-                      <td className="p-3">
-                        <Badge 
-                          variant={user.role === 'admin' ? 'default' : 'secondary'}
-                          className={user.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}
-                        >
-                          {user.role === 'admin' ? 'Administrador' : 'Cliente'}
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <p className="text-sm text-muted-foreground">
-                          {new Date(user.created_at).toLocaleDateString('es-ES')}
-                        </p>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setSelectedUser(user);
-                              setShowUserDetails(true);
-                            }}
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                          
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="sm">
-                                <MoreHorizontal className="w-4 h-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              {user.role === 'client' && canBeAdmin(user.email) && (
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(user.id, 'admin')}
-                                  className="text-yellow-600"
-                                >
-                                  <Crown className="w-4 h-4 mr-2" />
-                                  Hacer Administrador
-                                </DropdownMenuItem>
-                              )}
-                              
-                              {user.role === 'admin' && (
-                                <DropdownMenuItem
-                                  onClick={() => handleRoleChange(user.id, 'client')}
-                                  className="text-blue-600"
-                                >
-                                  <User className="w-4 h-4 mr-2" />
-                                  Hacer Cliente
-                                </DropdownMenuItem>
-                              )}
-                              
-                              <DropdownMenuItem
-                                onClick={() => handleDeleteUser(user.id, user.full_name)}
-                                className="text-red-600"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Eliminar Usuario
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              
-              {filteredUsers.length === 0 && (
-                <div className="text-center py-8">
-                  <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No se encontraron usuarios</p>
+            {/* Search and Filters */}
+            <Card className="mb-6">
+              <CardContent className="pt-6">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex-1 relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar usuarios por nombre o email..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      variant={filterRole === 'all' ? 'default' : 'outline'}
+                      onClick={() => setFilterRole('all')}
+                      size="sm"
+                    >
+                      Todos
+                    </Button>
+                    <Button
+                      variant={filterRole === 'admin' ? 'default' : 'outline'}
+                      onClick={() => setFilterRole('admin')}
+                      size="sm"
+                    >
+                      <Shield className="w-4 h-4 mr-2" />
+                      Admins
+                    </Button>
+                    <Button
+                      variant={filterRole === 'client' ? 'default' : 'outline'}
+                      onClick={() => setFilterRole('client')}
+                      size="sm"
+                    >
+                      <User className="w-4 h-4 mr-2" />
+                      Clientes
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-        
-        {/* Calendario de Turnos */}
-        <div className="mt-8">
-          <CalendarView />
-        </div>
+              </CardContent>
+            </Card>
+
+            {/* Users Table */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Gestión de Usuarios</CardTitle>
+                <CardDescription>
+                  Administra roles y permisos de los usuarios del sistema
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-medium">Usuario</th>
+                        <th className="text-left p-3 font-medium">Email</th>
+                        <th className="text-left p-3 font-medium">Rol</th>
+                        <th className="text-left p-3 font-medium">Fecha</th>
+                        <th className="text-left p-3 font-medium">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-b hover:bg-muted/50">
+                          <td className="p-3">
+                            <div className="flex items-center gap-3">
+                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                                {user.role === 'admin' ? (
+                                  <Crown className="w-4 h-4 text-yellow-600" />
+                                ) : (
+                                  <User className="w-4 h-4 text-primary" />
+                                )}
+                              </div>
+                              <div>
+                                <p className="font-medium">{user.full_name}</p>
+                                <p className="text-sm text-muted-foreground">ID: {user.id.slice(0, 8)}...</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-3">
+                            <p className="text-sm">{user.email}</p>
+                          </td>
+                          <td className="p-3">
+                            <Badge 
+                              variant={user.role === 'admin' ? 'default' : 'secondary'}
+                              className={user.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}
+                            >
+                              {user.role === 'admin' ? 'Administrador' : 'Cliente'}
+                            </Badge>
+                          </td>
+                          <td className="p-3">
+                            <p className="text-sm text-muted-foreground">
+                              {new Date(user.created_at).toLocaleDateString('es-ES')}
+                            </p>
+                          </td>
+                          <td className="p-3">
+                            <div className="flex items-center space-x-2">
+                              <Button 
+                                variant="outline" 
+                                size="sm" 
+                                onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                    <span className="sr-only">Abrir menú</span>
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                  <DropdownMenuItem onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}>
+                                    <Eye className="w-4 h-4 mr-2" />
+                                    Ver Detalles
+                                  </DropdownMenuItem>
+                                  {user.role === 'client' && canBeAdmin(user.email) && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleRoleChange(user.id, 'admin')}
+                                      className="text-yellow-600"
+                                    >
+                                      <Crown className="w-4 h-4 mr-2" />
+                                      Hacer Administrador
+                                    </DropdownMenuItem>
+                                  )}
+                                  
+                                  {user.role === 'admin' && (
+                                    <DropdownMenuItem
+                                      onClick={() => handleRoleChange(user.id, 'client')}
+                                      className="text-blue-600"
+                                    >
+                                      <User className="w-4 h-4 mr-2" />
+                                      Hacer Cliente
+                                    </DropdownMenuItem>
+                                  )}
+                                  
+                                  <DropdownMenuItem
+                                    onClick={() => handleDeleteUser(user.id, user.full_name)}
+                                    className="text-red-600"
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Eliminar Usuario
+                                  </DropdownMenuItem>
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  
+                  {filteredUsers.length === 0 && (
+                    <div className="text-center py-8">
+                      <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No se encontraron usuarios</p>
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab de Gestión de Turnos */}
+          <TabsContent value="turnos" className="mt-6">
+            <TurnoManagement />
+          </TabsContent>
+
+          {/* Tab de Calendario */}
+          <TabsContent value="calendario" className="mt-6">
+            <CalendarView />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* User Details Modal */}
