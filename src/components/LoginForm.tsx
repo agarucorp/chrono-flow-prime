@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
@@ -19,6 +20,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const { signIn, signUp, user } = useAuthContext();
   const navigate = useNavigate();
   const { showSuccess, showError, showInfo, showWarning, showLoading, dismissToast } = useNotifications();
+  const { canBeAdmin } = useAdmin(); // ✅ Hook para verificar si un email puede ser admin
   const [credentials, setCredentials] = useState({
     email: "",
     password: ""
@@ -41,10 +43,45 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false); // ✅ Estado para mostrar/ocultar contraseña
 
-  // Redirección automática solo si el usuario está autenticado Y confirmado
+  // Redirección automática según el rol del usuario
   useEffect(() => {
     if (user && user.email_confirmed_at) {
-      navigate('/turnos');
+      console.log('🔍 Usuario autenticado y confirmado, verificando rol...');
+      
+      // Verificar rol y redirigir
+      const checkRoleAndRedirect = async () => {
+        try {
+          // ✅ Consulta más simple - solo verificar si el usuario actual es admin
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .eq('role', 'admin')
+            .maybeSingle(); // ✅ Usar maybeSingle para evitar errores si no hay resultados
+
+          if (error) {
+            console.error('Error verificando rol:', error);
+            console.log('🔄 Redirigiendo a /turnos por error');
+            navigate('/turnos'); // Por defecto a turnos
+            return;
+          }
+
+          // ✅ Si data existe, es admin; si no, es cliente
+          if (data && data.role === 'admin') {
+            console.log('👑 Usuario es ADMIN, redirigiendo a /admin');
+            navigate('/admin');
+          } else {
+            console.log('👤 Usuario es CLIENTE, redirigiendo a /turnos');
+            navigate('/turnos');
+          }
+        } catch (err) {
+          console.error('Error inesperado:', err);
+          console.log('🔄 Redirigiendo a /turnos por error inesperado');
+          navigate('/turnos'); // Por defecto a turnos
+        }
+      };
+
+      checkRoleAndRedirect();
     }
   }, [user, navigate]);
 
@@ -112,6 +149,9 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         const result = await signUp(registerData.email, registerData.password);
         
         if (result.success && result.user) {
+          // ✅ Determinar el rol según el email
+          const userRole = canBeAdmin(registerData.email) ? 'admin' : 'client';
+          
           // Crear perfil extendido en la tabla profiles
           const { error: profileError } = await supabase
             .from('profiles')
@@ -124,7 +164,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               phone: registerData.phone,
               gender: registerData.gender,
               birth_date: registerData.birthDate?.toISOString(),
-              role: 'client'
+              role: userRole // ✅ Rol asignado automáticamente
             });
 
           dismissToast(loadingToast);
@@ -138,9 +178,13 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             setError('Usuario creado pero error al crear perfil. Contacte soporte.');
           } else {
             // ✅ Usuario creado exitosamente - mostrar toast y volver al login
+            const roleMessage = userRole === 'admin' 
+              ? "¡Usuario ADMIN creado exitosamente! Revise su email y confirme la cuenta."
+              : "¡Usuario creado exitosamente! Revise su email y confirme la cuenta para poder iniciar sesión";
+            
             showSuccess(
               "¡Usuario creado exitosamente!", 
-              "Revise su email y confirme la cuenta para poder iniciar sesión"
+              roleMessage
             );
             
             // Limpiar formulario y volver al login
@@ -412,11 +456,31 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="email"
                         placeholder="Ingrese su email"
                         value={registerData.email}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      {/* ✅ Indicador de email admin */}
+                      {registerData.email && canBeAdmin(registerData.email) && (
+                        <div className="absolute right-3 top-3">
+                          <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+                            <svg 
+                              className="w-3 h-3 text-white" 
+                              fill="currentColor" 
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          </div>
+                        </div>
+                      )}
                     </div>
+                    {/* ✅ Mensaje informativo para emails admin */}
+                    {registerData.email && canBeAdmin(registerData.email) && (
+                      <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded-md border border-yellow-200">
+                        ✨ Este email puede ser configurado como administrador del sistema
+                      </p>
+                    )}
                   </div>
 
                   <div className="space-y-2">

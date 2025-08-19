@@ -6,11 +6,13 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ProtectedAdminRoute } from "./components/ProtectedAdminRoute";
 import { LoginForm } from "./components/LoginForm";
 import { ResetPasswordForm } from "./components/ResetPasswordForm";
 import { Navigation } from "./components/Navigation";
 import Index from "./pages/Index";
 import Turnos from "./pages/Turnos";
+import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -46,6 +48,14 @@ const App = () => (
                     <Turnos />
                   </>
                 </ProtectedRoute>
+              } />
+              <Route path="/admin" element={
+                <ProtectedAdminRoute>
+                  <>
+                    <Navigation />
+                    <Admin />
+                  </>
+                </ProtectedAdminRoute>
               } />
               <Route path="*" element={<NotFound />} />
             </Routes>

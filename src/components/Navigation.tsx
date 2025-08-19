@@ -4,9 +4,14 @@ import { Button } from './ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { LogOut, User, Settings } from 'lucide-react'
+import { useAdmin } from '@/hooks/useAdmin'
+import { useNavigate } from 'react-router-dom'
+import { Crown, Shield } from 'lucide-react'
 
 export const Navigation: React.FC = () => {
   const { user, signOut } = useAuthContext()
+  const { isAdmin } = useAdmin()
+  const navigate = useNavigate()
 
   const handleSignOut = async () => {
     await signOut()
@@ -54,14 +59,27 @@ export const Navigation: React.FC = () => {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/profile')}>
                   <User className="mr-2 h-4 w-4" />
                   <span>Perfil</span>
                 </DropdownMenuItem>
-                <DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/settings')}>
                   <Settings className="mr-2 h-4 w-4" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
+                {isAdmin && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                      <Crown className="mr-2 h-4 w-4" />
+                      <span>Panel de Administración</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => navigate('/admin/users')}>
+                      <Shield className="mr-2 h-4 w-4" />
+                      <span>Gestionar Usuarios</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleSignOut}>
                   <LogOut className="mr-2 h-4 w-4" />
