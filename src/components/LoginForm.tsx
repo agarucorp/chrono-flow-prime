@@ -1,22 +1,26 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Lock, User, Mail, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-
+import { useAuthContext } from "@/contexts/AuthContext";
+import { supabase } from "@/lib/supabase";
+import { useNavigate } from "react-router-dom";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface LoginFormProps {
   onLogin: () => void;
 }
 
 export const LoginForm = ({ onLogin }: LoginFormProps) => {
+  const { signIn, signUp, user } = useAuthContext();
+  const navigate = useNavigate();
+  const { showSuccess, showError, showInfo, showWarning, showLoading, dismissToast } = useNotifications();
   const [credentials, setCredentials] = useState({
-    username: "",
-    password: "",
     email: "",
-    confirmPassword: ""
+    password: ""
   });
   const [registerData, setRegisterData] = useState({
     firstName: "",
@@ -32,17 +36,43 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+
+  // Redirección automática solo si el usuario está autenticado Y confirmado
+  useEffect(() => {
+    if (user && user.email_confirmed_at) {
+      navigate('/turnos');
+    }
+  }, [user, navigate]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     if (!isRegisterMode) {
-      // Login normal
-      setIsLoading(true);
-      setTimeout(() => {
+      // Login con Supabase
+      try {
+        setIsLoading(true);
+        const loadingToast = showLoading("Iniciando sesión...");
+        
+        const result = await signIn(credentials.email, credentials.password);
+        
+        dismissToast(loadingToast);
+        
+        if (result.success) {
+          showSuccess("¡Bienvenido!", "Sesión iniciada correctamente");
+          onLogin();
+          // ✅ NO redirigir manualmente - el useEffect se encargará automáticamente
+        } else {
+          showError("Error al iniciar sesión", result.error || "Credenciales incorrectas");
+          setError(result.error || 'Error al iniciar sesión');
+        }
+      } catch (err) {
+        showError("Error inesperado", "Ocurrió un problema al iniciar sesión");
+        setError('Error inesperado al iniciar sesión');
+      } finally {
         setIsLoading(false);
-        onLogin();
-      }, 1500);
+      }
       return;
     }
 
@@ -50,7 +80,8 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     if (currentStep === 1) {
       // Validación paso 1
       if (!registerData.firstName || !registerData.lastName || !registerData.phone || !registerData.gender || !registerData.birthDate) {
-        alert("Por favor complete todos los campos del paso 1");
+        showWarning("Campos incompletos", "Por favor complete todos los campos del paso 1");
+        setError("Por favor complete todos los campos del paso 1");
         return;
       }
       setCurrentStep(2);
@@ -60,32 +91,86 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     if (currentStep === 2) {
       // Validación paso 2
       if (registerData.email !== registerData.confirmEmail) {
-        alert("Los emails no coinciden");
+        showWarning("Emails no coinciden", "Los emails ingresados no son iguales");
+        setError("Los emails no coinciden");
         return;
       }
       if (registerData.password !== registerData.confirmPassword) {
-        alert("Las contraseñas no coinciden");
+        showWarning("Contraseñas no coinciden", "Las contraseñas ingresadas no son iguales");
+        setError("Las contraseñas no coinciden");
         return;
       }
       
-      setIsLoading(true);
-      setTimeout(() => {
+      try {
+        setIsLoading(true);
+        const loadingToast = showLoading("Creando cuenta...");
+        
+        // Crear usuario en Supabase
+        const result = await signUp(registerData.email, registerData.password);
+        
+        if (result.success && result.user) {
+          // Crear perfil extendido en la tabla profiles
+          const { error: profileError } = await supabase
+            .from('profiles')
+            .insert({
+              id: result.user.id,
+              email: registerData.email,
+              full_name: `${registerData.firstName} ${registerData.lastName}`,
+              first_name: registerData.firstName,
+              last_name: registerData.lastName,
+              phone: registerData.phone,
+              gender: registerData.gender,
+              birth_date: registerData.birthDate?.toISOString(),
+              role: 'client'
+            });
+
+          dismissToast(loadingToast);
+
+          if (profileError) {
+            console.error('Error creando perfil:', profileError);
+            showError(
+              "Error al crear perfil", 
+              "Usuario creado pero hubo un problema con el perfil. Contacte soporte."
+            );
+            setError('Usuario creado pero error al crear perfil. Contacte soporte.');
+          } else {
+            // ✅ Usuario creado exitosamente - mostrar toast y volver al login
+            showSuccess(
+              "¡Usuario creado exitosamente!", 
+              "Revise su email y confirme la cuenta para poder iniciar sesión"
+            );
+            
+            // Limpiar formulario y volver al login
+            setIsRegisterMode(false);
+            setCurrentStep(1);
+            setRegisterData({
+              firstName: "",
+              lastName: "",
+              phone: "",
+              gender: "",
+              birthDate: undefined,
+              email: "",
+              confirmEmail: "",
+              password: "",
+              confirmPassword: ""
+            });
+            
+            // Limpiar errores
+            setError(null);
+            
+            // ✅ NO navegar a /turnos - el usuario debe confirmar email y hacer login primero
+          }
+        } else {
+          dismissToast(loadingToast);
+          showError("Error al crear cuenta", result.error || "No se pudo crear la cuenta");
+          setError(result.error || 'Error al crear la cuenta');
+        }
+      } catch (err) {
+        showError("Error inesperado", "Ocurrió un problema al crear la cuenta");
+        setError('Error inesperado al crear la cuenta');
+      } finally {
         setIsLoading(false);
-        alert("Cuenta creada exitosamente. Ahora puede iniciar sesión.");
-        setIsRegisterMode(false);
-        setCurrentStep(1);
-        setRegisterData({
-          firstName: "",
-          lastName: "",
-          phone: "",
-          gender: "",
-          birthDate: undefined,
-          email: "",
-          confirmEmail: "",
-          password: "",
-          confirmPassword: ""
-        });
-      }, 1500);
+      }
     }
   };
 
@@ -94,6 +179,19 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
       setCurrentStep(currentStep - 1);
     }
   };
+
+  // Si ya está autenticado Y confirmado Y se solicita redirección, mostrar mensaje
+  if (user && user.email_confirmed_at) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
+          <h2 className="text-2xl font-bold mb-2">Redirigiendo...</h2>
+          <p className="text-muted-foreground">Ya estás autenticado, te llevamos a la sección de turnos.</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
@@ -142,20 +240,37 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             )}
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+            
+            {/* Mensaje para usuarios recién registrados que no han confirmado email */}
+            {user && !user.email_confirmed_at && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-700">
+                  📧 <strong>¡Cuenta creada exitosamente!</strong> 
+                  Hemos enviado un email de confirmación a <strong>{user.email}</strong>. 
+                  Por favor, revisa tu bandeja y haz clic en el enlace para activar tu cuenta.
+                </p>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isRegisterMode ? (
                 // Login Form
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="username">Usuario</Label>
+                    <Label htmlFor="email">Email</Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="username"
-                        type="text"
-                        placeholder="Ingrese su usuario"
-                        value={credentials.username}
-                        onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
+                        id="email"
+                        type="email"
+                        placeholder="Ingrese su email"
+                        value={credentials.email}
+                        onChange={(e) => setCredentials(prev => ({ ...prev, email: e.target.value }))}
                         className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
@@ -371,6 +486,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       onClick={() => {
                         setIsRegisterMode(false);
                         setCurrentStep(1);
+                        setError(null);
                       }}
                       className="text-primary hover:underline font-medium"
                     >
@@ -384,6 +500,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       onClick={() => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
+                        setError(null);
                       }}
                       className="text-primary hover:underline font-medium"
                     >
@@ -394,12 +511,23 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               </p>
               
               {!isRegisterMode && (
-                <p className="text-sm text-muted-foreground">
-                  ¿Olvidaste tu contraseña?{" "}
-                  <a href="#" className="text-primary hover:underline font-medium">
-                    Recuperar acceso
-                  </a>
-                </p>
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    ¿Olvidaste tu contraseña?{" "}
+                    <a href="#" className="text-primary hover:underline font-medium">
+                      Recuperar acceso
+                    </a>
+                  </p>
+                  
+                  {/* Mensaje informativo para usuarios recién registrados */}
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      💡 <strong>¿Primera vez aquí?</strong> Después de crear tu cuenta, 
+                      revisa tu email y haz clic en el enlace de confirmación. 
+                      Una vez confirmado, podrás iniciar sesión normalmente.
+                    </p>
+                  </div>
+                </>
               )}
             </div>
           </CardContent>
