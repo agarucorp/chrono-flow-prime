@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAdmin, AdminUser } from '@/hooks/useAdmin';
 import { useNotifications } from '@/hooks/useNotifications';
-import { Navigation } from '@/components/Navigation';
+import { CalendarView } from '@/components/CalendarView';
 
 export default function Admin() {
   const { 
@@ -129,8 +129,6 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-background">
-      <Navigation />
-      
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
@@ -353,6 +351,11 @@ export default function Admin() {
             </div>
           </CardContent>
         </Card>
+        
+        {/* Calendario de Turnos */}
+        <div className="mt-8">
+          <CalendarView />
+        </div>
       </div>
 
       {/* User Details Modal */}

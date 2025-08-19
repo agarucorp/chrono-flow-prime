@@ -26,11 +26,11 @@ export const Navigation: React.FC = () => {
   }
 
   return (
-    <nav className="border-b bg-white shadow-sm">
+    <nav className="border-b border-border bg-background shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold text-gray-900">
+            <h1 className="text-xl font-semibold text-foreground">
               Gestión Turnos
             </h1>
           </div>

@@ -267,17 +267,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
-      {/* Admin CTA */}
-      <div className="absolute top-4 right-4">
-        <Button 
-          variant="ghost" 
-          size="sm"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Admin
-        </Button>
-      </div>
-      
       <div className="w-full max-w-md space-y-8">
         {/* Logo & Title */}
         <div className="text-center animate-fade-in">
