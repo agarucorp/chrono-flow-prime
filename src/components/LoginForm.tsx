@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Lock, User, Mail, ChevronLeft, ChevronRight } from "lucide-react";
+import { Lock, User, Mail, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { useAuthContext } from "@/contexts/AuthContext";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
+import { RecoverPasswordForm } from "./RecoverPasswordForm";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -35,8 +36,10 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isRecoverMode, setIsRecoverMode] = useState(false); // ✅ Estado para modo recuperación
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false); // ✅ Estado para mostrar/ocultar contraseña
 
   // Redirección automática solo si el usuario está autenticado Y confirmado
   useEffect(() => {
@@ -180,8 +183,26 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     }
   };
 
+  // ✅ Función para manejar modo recuperación
+  const handleRecoverMode = () => {
+    setIsRecoverMode(true);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+  };
+
+  // ✅ Función para volver al login desde recuperación
+  const handleBackToLogin = () => {
+    setIsRecoverMode(false);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+    setCredentials({ email: "", password: "" });
+  };
+
   // Si ya está autenticado Y confirmado Y se solicita redirección, mostrar mensaje
-  if (user && user.email_confirmed_at) {
+  const shouldRedirect = user && user.email_confirmed_at;
+  if (shouldRedirect && user && user.email_confirmed_at) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center">
@@ -190,6 +211,13 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
           <p className="text-muted-foreground">Ya estás autenticado, te llevamos a la sección de turnos.</p>
         </div>
       </div>
+    );
+  }
+
+  // ✅ Si está en modo recuperación, mostrar formulario de recuperación
+  if (isRecoverMode) {
+    return (
+      <RecoverPasswordForm onBack={handleBackToLogin} />
     );
   }
 
@@ -283,13 +311,24 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         placeholder="Ingrese su contraseña"
                         value={credentials.password}
                         onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
                         className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 h-5 w-5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </>
@@ -413,18 +452,29 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="registerConfirmPassword">Confirmar Contraseña</Label>
+                    <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="registerConfirmPassword"
-                        type="password"
+                        id="confirmPassword"
+                        type={showPassword ? "text" : "password"}
                         placeholder="Confirme su contraseña"
                         value={registerData.confirmPassword}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 h-5 w-5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </>
@@ -514,19 +564,22 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                 <>
                   <p className="text-sm text-muted-foreground">
                     ¿Olvidaste tu contraseña?{" "}
-                    <a href="#" className="text-primary hover:underline font-medium">
+                    <button 
+                      onClick={handleRecoverMode}
+                      className="text-primary hover:underline font-medium"
+                    >
                       Recuperar acceso
-                    </a>
+                    </button>
                   </p>
                   
                   {/* Mensaje informativo para usuarios recién registrados */}
-                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  {/* ELIMINADO: <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-xs text-blue-700">
                       💡 <strong>¿Primera vez aquí?</strong> Después de crear tu cuenta, 
                       revisa tu email y haz clic en el enlace de confirmación. 
                       Una vez confirmado, podrás iniciar sesión normalmente.
                     </p>
-                  </div>
+                  </div> */}
                 </>
               )}
             </div>

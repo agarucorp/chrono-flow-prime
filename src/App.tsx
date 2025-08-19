@@ -7,6 +7,7 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import { LoginForm } from "./components/LoginForm";
+import { ResetPasswordForm } from "./components/ResetPasswordForm";
 import { Navigation } from "./components/Navigation";
 import Index from "./pages/Index";
 import Turnos from "./pages/Turnos";
@@ -29,6 +30,7 @@ const App = () => (
           <BrowserRouter>
             <Routes>
               <Route path="/login" element={<LoginForm onLogin={() => {}} />} />
+              <Route path="/reset-password" element={<ResetPasswordForm />} />
               <Route path="/" element={
                 <ProtectedRoute>
                   <>
