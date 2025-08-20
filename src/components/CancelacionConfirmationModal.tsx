@@ -124,3 +124,4 @@ export const CancelacionConfirmationModal: React.FC<CancelacionConfirmationModal
     </Dialog>
   );
 };
+

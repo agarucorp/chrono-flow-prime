@@ -268,116 +268,16 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     </div>
   );
 
-  const renderMonthView = () => {
-    const { startDate, endDate } = getDateRange();
-    const firstDay = new Date(startDate);
-    const lastDay = new Date(endDate);
-    const daysInMonth = lastDay.getDate();
-    const firstDayOfWeek = firstDay.getDay();
+  // Componente para marcar el día seleccionado
+  const SelectedDayMarker = ({ isSelected }: { isSelected: boolean }) => {
+    if (!isSelected) return null;
     
-    const days = [];
-    const today = new Date();
-    
-    // Agregar días del mes anterior para completar la primera semana
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      const prevDate = new Date(firstDay);
-      prevDate.setDate(firstDay.getDate() - (firstDayOfWeek - i));
-      days.push({ date: prevDate, isCurrentMonth: false });
-    }
-    
-    // Agregar días del mes actual
-    for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(firstDay);
-      currentDate.setDate(i);
-      days.push({ date: currentDate, isCurrentMonth: true });
-    }
-    
-    // Completar la última semana
-    const remainingDays = 42 - days.length; // 6 semanas * 7 días
-    for (let i = 1; i <= remainingDays; i++) {
-      const nextDate = new Date(lastDay);
-      nextDate.setDate(lastDay.getDate() + i);
-      days.push({ date: nextDate, isCurrentMonth: false });
-    }
-
     return (
-      <div className="grid grid-cols-7 gap-1">
-        {/* Días de la semana */}
-        {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-          <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
-            {day}
-          </div>
-        ))}
-        
-                 {/* Días del mes */}
-         {days.map(({ date, isCurrentMonth }, index) => {
-           const dayTurnos = getTurnosForDate(date);
-           const isToday = date.toDateString() === today.toDateString();
-           const isWeekend = date.getDay() === 0 || date.getDay() === 6; // 0 = Domingo, 6 = Sábado
-           
-           return (
-             <div
-               key={index}
-                               className={`min-h-[80px] p-1 border border-border transition-colors ${
-                  isCurrentMonth ? 'bg-background' : 'bg-muted/30'
-                } ${isToday ? 'ring-2 ring-primary' : ''} ${
-                  isWeekend 
-                    ? '' 
-                    : 'cursor-pointer hover:bg-muted/50'
-                }`}
-               onClick={() => !isWeekend && handleDateSelect(date)}
-             >
-                               <div className={`text-xs p-1 text-right ${
-                  isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
-                } ${isToday ? 'font-bold' : ''}`}>
-                  {date.getDate()}
-                </div>
-               
-                               {/* Resumen de turnos del día */}
-                <div className="space-y-1">
-                  {!isWeekend && (
-                    // Solo para días laborables, mostrar contadores normales
-                    <>
-                      {/* Contador de turnos disponibles */}
-                      {dayTurnos.filter(t => t.estado === 'disponible').length > 0 && (
-                        <div className="text-xs p-1 rounded bg-green-100 text-green-800 border border-green-200 text-center">
-                          {dayTurnos.filter(t => t.estado === 'disponible').length} Disponibles
-                        </div>
-                      )}
-                      
-                      {/* Contador de turnos reservados/ocupados */}
-                      {dayTurnos.filter(t => t.estado === 'ocupado').length > 0 && (
-                        <div className="text-xs p-1 rounded bg-blue-100 text-blue-800 border border-blue-200 text-center">
-                          {dayTurnos.filter(t => t.estado === 'ocupado').length} Reservados
-                        </div>
-                      )}
-                      
-                      {/* Contador de turnos cancelados */}
-                      {dayTurnos.filter(t => t.estado === 'cancelado').length > 0 && (
-                        <div className="text-xs p-1 rounded bg-red-100 text-red-800 border border-blue-200 text-center">
-                          {dayTurnos.filter(t => t.estado === 'cancelado').length} Cancelados
-                        </div>
-                      )}
-                      
-                      {/* Si no hay turnos, mostrar mensaje */}
-                      {dayTurnos.length === 0 && (
-                        <div className="text-xs text-muted-foreground text-center">
-                          Sin turnos
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-             </div>
-           );
-         })}
-      </div>
+      <div className="absolute inset-0 bg-orange-300/30 rounded-lg pointer-events-none" />
     );
   };
 
-
-
-    // Función para renderizar el calendario compacto
+  // Nueva función para renderizar el calendario compacto
   const renderCompactCalendar = () => {
     const { startDate, endDate } = getDateRange();
     const firstDay = new Date(startDate);
@@ -397,9 +297,9 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     
     // Agregar días del mes actual
     for (let i = 1; i <= daysInMonth; i++) {
-      const currentDate = new Date(firstDay);
-      currentDate.setDate(i);
-      days.push({ date: currentDate, isCurrentMonth: true });
+      const dayDate = new Date(firstDay);
+      dayDate.setDate(i);
+      days.push({ date: dayDate, isCurrentMonth: true });
     }
     
     // Completar la última semana
@@ -417,28 +317,21 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
           const isToday = date.toDateString() === today.toDateString();
           const isSelected = date.toDateString() === currentDate.toDateString();
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          const hasAvailableSlots = dayTurnos.filter(t => t.estado === 'disponible').length > 0;
           
           return (
             <div
               key={index}
-              className={`min-h-[40px] p-1 border border-border transition-colors text-center cursor-pointer ${
-                isCurrentMonth ? 'bg-background' : 'bg-muted/30'
-              } ${isToday ? 'ring-2 ring-primary' : ''} ${
-                isSelected ? 'bg-primary text-primary-foreground' : ''
-              } ${isWeekend ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50'} ${
-                hasAvailableSlots && !isWeekend ? 'bg-green-50 border-green-200' : ''
-              }`}
+              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer ${
+                isCurrentMonth ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/30'
+              } ${isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'}`}
               onClick={() => !isWeekend && handleDateSelect(date)}
             >
-              <div className={`text-xs ${
+              <SelectedDayMarker isSelected={isSelected} />
+              <div className={`text-sm font-medium relative z-10 ${
                 isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
-              } ${isToday ? 'font-bold' : ''} ${isSelected ? 'text-primary-foreground' : ''}`}>
+              }`}>
                 {date.getDate()}
               </div>
-              {hasAvailableSlots && !isWeekend && (
-                <div className="w-1 h-1 bg-green-500 rounded-full mx-auto mt-1"></div>
-              )}
             </div>
           );
         })}
@@ -495,16 +388,26 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                 <Button
                   key={`am-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className="h-12 justify-between px-4"
+                  className={`h-14 justify-between px-4 transition-all duration-200 ${
+                    slot.estado === 'disponible' 
+                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
+                      : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
+                  }`}
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {slot.horaInicio} - {slot.horaFin}
+                    <Clock className={`h-4 w-4 mr-2 ${
+                      slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
+                    }`} />
+                    <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   <Badge 
                     variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
-                    className="text-xs"
+                    className={`text-xs font-medium ${
+                      slot.estado === 'disponible' 
+                        ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90' 
+                        : 'bg-destructive text-destructive-foreground'
+                    }`}
                   >
                     {slot.estado === 'disponible' 
                       ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
@@ -526,16 +429,26 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                 <Button
                   key={`pm-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className="h-12 justify-between px-4"
+                  className={`h-14 justify-between px-4 transition-all duration-200 ${
+                    slot.estado === 'disponible' 
+                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
+                      : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
+                  }`}
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className="h-4 w-4 mr-2" />
-                    {slot.horaInicio} - {slot.horaFin}
+                    <Clock className={`h-4 w-4 mr-2 ${
+                      slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
+                    }`} />
+                    <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   <Badge 
                     variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
-                    className="text-xs"
+                    className={`text-xs font-medium ${
+                      slot.estado === 'disponible' 
+                        ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90' 
+                        : 'bg-destructive text-destructive-foreground'
+                    }`}
                   >
                     {slot.estado === 'disponible' 
                       ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
@@ -569,55 +482,47 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
               <span>Reservar Entrenamiento</span>
             </CardTitle>
             
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateDate('prev')}
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentDate(new Date())}
-              >
-                Hoy
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navigateDate('next')}
-              >
-                <ChevronRight className="h-4 w-4" />
-              </Button>
-            </div>
+
           </div>
           
-          <div className="text-center text-lg font-medium">
-            {formatDate(currentDate)}
-          </div>
+
         </CardHeader>
         
         <CardContent>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Calendario pequeño a la izquierda */}
+                          {/* Calendario pequeño a la izquierda */}
             <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold mb-2">
-                  {currentDate.toLocaleDateString('es-ES', { 
-                    month: 'long', 
-                    year: 'numeric' 
-                  })}
-                </h3>
+              <div className="text-center mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateDate('prev')}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  
+                  <h3 className="text-xl font-bold text-foreground bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                    {currentDate.toLocaleDateString('es-ES', { 
+                      month: 'long', 
+                      year: 'numeric' 
+                    }).replace(/^\w/, c => c.toUpperCase())}
+                  </h3>
+                  
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigateDate('next')}
+                  >
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               
               {/* Días de la semana */}
-              <div className="grid grid-cols-7 gap-1 mb-2">
+              <div className="grid grid-cols-7 gap-1 mb-3">
                 {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                  <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
+                  <div key={day} className="p-2 text-center text-sm font-semibold text-foreground bg-muted/30 rounded-md">
                     {day}
                   </div>
                 ))}

@@ -301,38 +301,7 @@ export const TurnoReservation = () => {
 
   return (
     <div className="space-y-6">
-             {/* Header con navegación de fecha */}
-       <div className="flex justify-center">
-         <Card className="w-[460px]">
-           <CardHeader className="py-3">
-             <div className="flex items-center justify-between">
-               <div className="flex items-center space-x-2">
-                 <Button
-                   variant="outline"
-                   size="sm"
-                   onClick={() => navegarFecha('prev')}
-                 >
-                   ←
-                 </Button>
-               </div>
-               
-               <div className="text-center text-xl font-medium">
-                 {formatDate(selectedDate)}
-               </div>
-               
-               <div className="flex items-center space-x-2">
-                 <Button
-                   variant="outline"
-                   size="sm"
-                   onClick={() => navegarFecha('next')}
-                 >
-                   →
-                 </Button>
-               </div>
-             </div>
-           </CardHeader>
-         </Card>
-       </div>
+
 
       {/* Tabs para Calendario y Mis Reservas */}
       <Tabs defaultValue="calendario" className="w-full">
