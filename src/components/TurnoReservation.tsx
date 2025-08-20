@@ -123,6 +123,25 @@ export const TurnoReservation = () => {
       console.log('🔍 handleConfirmReservation: Turno a reservar:', turno);
       console.log('🔍 handleConfirmReservation: Usuario actual:', user?.id);
       
+      // Verificar que el usuario no tenga ya una reserva para este día
+      const { data: reservasExistentes, error: errorVerificacion } = await supabase
+        .from('turnos')
+        .select('*')
+        .eq('cliente_id', user?.id)
+        .eq('fecha', selectedDate.toISOString().split('T')[0])
+        .in('estado', ['ocupado', 'disponible']);
+
+      if (errorVerificacion) {
+        console.error('❌ Error verificando reservas existentes:', errorVerificacion);
+        showError('Error al verificar reservas', errorVerificacion.message);
+        return;
+      }
+
+      if (reservasExistentes && reservasExistentes.length > 0) {
+        showError('Límite de reservas alcanzado', 'Solo puedes reservar 1 turno por día');
+        return;
+      }
+      
       const loadingToast = showLoading('Reservando turno...');
       
       // Datos a actualizar
@@ -159,14 +178,14 @@ export const TurnoReservation = () => {
       console.log('✅ Turno actualizado en base de datos:', data[0]);
       
       // Verificar que el turno se actualizó correctamente
-      const { data: turnoVerificado, error: errorVerificacion } = await supabase
+      const { data: turnoVerificado, error: errorVerificacion2 } = await supabase
         .from('turnos')
         .select('*')
         .eq('id', turno.id)
         .single();
 
-      if (errorVerificacion) {
-        console.error('❌ Error verificando turno actualizado:', errorVerificacion);
+      if (errorVerificacion2) {
+        console.error('❌ Error verificando turno actualizado:', errorVerificacion2);
       } else {
         console.log('✅ Turno verificado después de actualización:', turnoVerificado);
       }
@@ -243,6 +262,23 @@ export const TurnoReservation = () => {
     
     // Capitalizar solo la primera letra del string completo
     return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
+  };
+
+  const generarHorariosEstandar = () => {
+    const horarios = [];
+    for (let hour = 8; hour < 16; hour++) {
+      const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
+      const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      horarios.push({
+        id: `horario-${hour}`,
+        fecha: selectedDate.toISOString().split('T')[0],
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        estado: 'disponible',
+        servicio: 'Entrenamiento Personal'
+      });
+    }
+    return horarios;
   };
 
   const getStatusColor = (estado: string) => {
@@ -378,43 +414,64 @@ export const TurnoReservation = () => {
                   <p className="text-muted-foreground">No hay horarios disponibles para entrenamiento personal en esta fecha</p>
                 </div>
               ) : (
-                <div className="grid gap-4 grid-cols-4">
-                  {turnosDisponibles.slice(0, 8).map(turno => (
-                    <Card key={turno.id} className="hover:shadow-md transition-shadow min-h-[140px]">
-                      <CardContent className="p-3">
-                                                 <div className="flex items-center justify-start mb-3">
-                           <Badge className={getStatusColor(turno.estado)}>
-                             {turno.estado}
-                           </Badge>
-                         </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex items-center space-x-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium text-sm">
-                              {turno.hora_inicio} - {turno.hora_fin}
-                            </span>
-                          </div>
-                          
-                                                     <div className="flex items-center space-x-2">
-                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                             <span className="text-xs text-muted-foreground">
-                               {new Date(selectedDate).toLocaleDateString('es-ES')}
-                             </span>
+                                 <div className="grid gap-4 grid-cols-4">
+                   {generarHorariosEstandar().map((horario, index) => {
+                     const turnoExistente = turnosDisponibles.find(t => 
+                       t.hora_inicio === horario.hora_inicio
+                     );
+                     
+                     const estado = turnoExistente ? turnoExistente.estado : 'disponible';
+                     const puedeReservar = !turnoExistente || turnoExistente.estado === 'disponible';
+                     const esMiTurno = turnoExistente?.cliente_id === user?.id;
+                     
+                     return (
+                       <Card key={`${horario.hora_inicio}-${index}`} className="hover:shadow-md transition-shadow min-h-[140px]">
+                         <CardContent className="p-3">
+                           <div className="flex items-center justify-start mb-3">
+                             <Badge className={getStatusColor(estado)}>
+                               {estado === 'disponible' ? 'Disponible' : 
+                                estado === 'ocupado' ? (esMiTurno ? 'Mi Reserva' : 'No Disponible') : 
+                                estado === 'cancelado' ? 'Cancelado' : estado}
+                             </Badge>
                            </div>
-                        </div>
-                        
-                        <Button
-                          className="w-full mt-3"
-                          size="sm"
-                          onClick={() => handleReservarClick(turno)}
-                        >
-                          Reservar
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+                           
+                           <div className="space-y-2">
+                             <div className="flex items-center space-x-2">
+                               <Clock className="h-4 w-4 text-muted-foreground" />
+                               <span className="font-medium text-sm">
+                                 {horario.hora_inicio} - {horario.hora_fin}
+                               </span>
+                             </div>
+                             
+                             <div className="flex items-center space-x-2">
+                               <Calendar className="h-4 w-4 text-muted-foreground" />
+                               <span className="text-xs text-muted-foreground">
+                                 {new Date(selectedDate).toLocaleDateString('es-ES')}
+                               </span>
+                             </div>
+                           </div>
+                           
+                           {puedeReservar ? (
+                             <Button
+                               className="w-full mt-3"
+                               size="sm"
+                               onClick={() => handleReservarClick(turnoExistente || horario)}
+                               disabled={!puedeReservar}
+                             >
+                               Reservar
+                             </Button>
+                           ) : (
+                             <div className="mt-3 p-2 text-center text-xs text-muted-foreground bg-muted/50 rounded">
+                               {estado === 'ocupado' && esMiTurno ? 'Ya tienes reserva' : 
+                                estado === 'ocupado' ? 'Ocupado por otro' : 
+                                estado === 'cancelado' ? 'Turno cancelado' : 'No disponible'}
+                             </div>
+                           )}
+                         </CardContent>
+                       </Card>
+                     );
+                   })}
+                 </div>
               )}
             </CardContent>
           </Card>

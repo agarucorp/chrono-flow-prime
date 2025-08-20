@@ -257,6 +257,28 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     }
   };
 
+  // Función helper para renderizar slots disponibles con diseño unificado
+  const renderAvailableSlot = (horaInicio: string, horaFin: string, key: string) => (
+    <div key={key} className="p-2 border border-dashed border-green-300 rounded bg-green-50 cursor-pointer hover:bg-green-100 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-green-700 font-medium">Slot Disponible</div>
+        <div className="text-xs text-green-600 font-medium">{horaInicio} - {horaFin}</div>
+        <div className="text-xs text-green-600">Click para reservar</div>
+      </div>
+    </div>
+  );
+
+  // Función helper para renderizar turnos sin asignar con el mismo diseño
+  const renderUnassignedTurno = (turno: Turno, key: string) => (
+    <div key={key} className="p-2 border border-dashed border-green-300 rounded bg-green-50 cursor-pointer hover:bg-green-100 transition-colors">
+      <div className="flex items-center justify-between">
+        <div className="text-xs text-green-700 font-medium">Slot Disponible</div>
+        <div className="text-xs text-green-600 font-medium">{turno.hora_inicio} - {turno.hora_fin}</div>
+        <div className="text-xs text-green-600">Click para reservar</div>
+      </div>
+    </div>
+  );
+
   const renderMonthView = () => {
     const { startDate, endDate } = getDateRange();
     const firstDay = new Date(startDate);
@@ -317,30 +339,33 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                 {date.getDate()}
               </div>
               
-              {/* Turnos del día */}
+              {/* Resumen de turnos del día */}
               <div className="space-y-1">
-                {dayTurnos.slice(0, 3).map(turno => (
-                  <div
-                    key={turno.id}
-                    className={`text-xs p-1 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
-                      turno.estado === 'disponible' 
-                        ? 'hover:bg-green-200 hover:border-green-300' 
-                        : ''
-                    }`}
-                    title={`${turno.hora_inicio} - ${turno.hora_fin} - ${turno.cliente_nombre}`}
-                    onClick={() => handleTurnoClick(turno)}
-                  >
-                    {turno.hora_inicio} - {turno.cliente_nombre}
-                  </div>
-                ))}
-                {dayTurnos.length > 3 && dayTurnos.length <= 8 && (
-                  <div className="text-xs text-muted-foreground text-center">
-                    +{dayTurnos.length - 3} más
+                {/* Contador de turnos disponibles */}
+                {dayTurnos.filter(t => t.estado === 'disponible').length > 0 && (
+                  <div className="text-xs p-1 rounded bg-green-100 text-green-800 border border-green-200 text-center">
+                    {dayTurnos.filter(t => t.estado === 'disponible').length} Disponibles
                   </div>
                 )}
-                {dayTurnos.length > 8 && (
+                
+                {/* Contador de turnos reservados/ocupados */}
+                {dayTurnos.filter(t => t.estado === 'ocupado').length > 0 && (
+                  <div className="text-xs p-1 rounded bg-blue-100 text-blue-800 border border-blue-200 text-center">
+                    {dayTurnos.filter(t => t.estado === 'ocupado').length} Reservados
+                  </div>
+                )}
+                
+                {/* Contador de turnos cancelados */}
+                {dayTurnos.filter(t => t.estado === 'cancelado').length > 0 && (
+                  <div className="text-xs p-1 rounded bg-red-100 text-red-800 border border-red-200 text-center">
+                    {dayTurnos.filter(t => t.estado === 'cancelado').length} Cancelados
+                  </div>
+                )}
+                
+                {/* Si no hay turnos, mostrar mensaje */}
+                {dayTurnos.length === 0 && (
                   <div className="text-xs text-muted-foreground text-center">
-                    +5 más (máx. 8)
+                    Sin turnos
                   </div>
                 )}
               </div>
@@ -382,31 +407,47 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
               
               <div className="p-2 space-y-2">
                 {dayTurnos.length === 0 ? (
-                  <div className="text-center text-muted-foreground text-sm py-8">
-                    Sin turnos
+                  <div className="space-y-2">
+                                         {/* Mostrar 3 slots disponibles cuando no hay turnos */}
+                     {Array.from({ length: 3 }).map((_, index) => {
+                       const hour = 8 + index; // 8:00, 9:00, 10:00
+                       const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
+                       const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
+                       return renderAvailableSlot(horaInicio, horaFin, `available-week-${index}`);
+                     })}
                   </div>
                 ) : (
                   <div className="space-y-2">
-                    {/* Mostrar hasta 3 turnos por día en la vista semanal */}
-                    {dayTurnos.slice(0, 3).map(turno => (
-                      <div
-                        key={turno.id}
-                        className={`p-2 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
-                          turno.estado === 'disponible' 
-                            ? 'hover:bg-green-200 hover:border-green-300' 
-                            : ''
-                        }`}
-                        onClick={() => handleTurnoClick(turno)}
-                      >
-                        <div className="font-medium text-xs">
-                          {turno.hora_inicio} - {turno.hora_fin}
-                        </div>
-                        <div className="text-xs">{turno.cliente_nombre}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {turno.profesional_nombre}
-                        </div>
-                      </div>
-                    ))}
+                                         {/* Mostrar hasta 3 turnos por día en la vista semanal */}
+                     {dayTurnos.slice(0, 3).map(turno => {
+                       // Si el turno no tiene cliente asignado, mostrar como slot disponible
+                       if (!turno.cliente_id || turno.cliente_nombre === 'Sin asignar') {
+                         return renderUnassignedTurno(turno, `unassigned-week-${turno.id}`);
+                       }
+                       
+                       // Si tiene cliente, mostrar como turno normal
+                       return (
+                         <div
+                           key={turno.id}
+                           className={`p-2 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
+                             turno.estado === 'disponible' 
+                               ? 'hover:bg-green-200 hover:border-green-300' 
+                               : ''
+                           }`}
+                           onClick={() => handleTurnoClick(turno)}
+                         >
+                           <div className="flex items-center justify-between">
+                             <div className="font-medium text-xs">
+                               {turno.hora_inicio} - {turno.hora_fin}
+                             </div>
+                             <div className="text-xs text-muted-foreground">
+                               {turno.profesional_nombre}
+                             </div>
+                             <div className="text-xs">{turno.cliente_nombre}</div>
+                           </div>
+                         </div>
+                       );
+                     })}
                     {/* Indicador si hay más turnos */}
                     {dayTurnos.length > 3 && (
                       <div className="text-center text-muted-foreground text-xs p-1 border border-dashed rounded">
@@ -456,37 +497,46 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
               </div>
               
               <div className="flex-1">
-                {turnos.length === 0 ? (
-                  <div className="text-muted-foreground text-sm">Horario disponible</div>
-                ) : (
-                  <div className="grid grid-cols-3 gap-2">
-                    {turnos.slice(0, 3).map((turno, index) => (
-                      <div
-                        key={turno.id}
-                        className={`p-2 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
-                          turno.estado === 'disponible' 
-                            ? 'hover:bg-green-200 hover:border-green-300' 
-                            : ''
-                        }`}
-                        onClick={() => handleTurnoClick(turno)}
-                      >
-                        <div className="font-medium text-xs">
-                          {turno.hora_inicio} - {turno.hora_fin}
-                        </div>
-                        <div className="text-xs">{turno.cliente_nombre}</div>
-                        <div className="text-xs text-muted-foreground">
-                          {turno.profesional_nombre}
-                        </div>
-                      </div>
-                    ))}
-                    {/* Espacios vacíos para mantener el grid de 3 columnas */}
-                    {Array.from({ length: Math.max(0, 3 - turnos.length) }).map((_, index) => (
-                      <div key={`empty-${index}`} className="p-2 border border-dashed border-muted-foreground/30 rounded bg-muted/20">
-                        <div className="text-xs text-muted-foreground text-center">Disponible</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                {/* SIEMPRE mostrar 3 cards por línea */}
+                <div className="grid grid-cols-3 gap-2">
+                  {/* Mostrar turnos reales si existen */}
+                  {turnos.slice(0, 3).map((turno, index) => {
+                    // Si el turno no tiene cliente asignado, mostrar como slot disponible
+                    if (!turno.cliente_id || turno.cliente_nombre === 'Sin asignar') {
+                      return renderUnassignedTurno(turno, `unassigned-${turno.id}`);
+                    }
+                    
+                                         // Si tiene cliente, mostrar como turno normal
+                     return (
+                       <div
+                         key={turno.id}
+                         className={`p-2 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
+                           turno.estado === 'disponible' 
+                             ? 'hover:bg-green-200 hover:border-green-300' 
+                             : ''
+                         }`}
+                         onClick={() => handleTurnoClick(turno)}
+                       >
+                         <div className="flex items-center justify-between">
+                           <div className="text-xs font-medium">
+                             {turno.hora_inicio} - {turno.hora_fin}
+                           </div>
+                           <div className="text-xs text-muted-foreground">
+                             {turno.profesional_nombre}
+                           </div>
+                           <div className="text-xs">{turno.cliente_nombre}</div>
+                         </div>
+                       </div>
+                     );
+                  })}
+                  
+                  {/* Completar con slots disponibles hasta llegar a 3 */}
+                  {Array.from({ length: Math.max(0, 3 - turnos.length) }).map((_, index) => {
+                    const horaInicio = time;
+                    const horaFin = `${(parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')}:00`;
+                    return renderAvailableSlot(horaInicio, horaFin, `available-${time}-${index}`);
+                  })}
+                </div>
               </div>
             </div>
           ))}
