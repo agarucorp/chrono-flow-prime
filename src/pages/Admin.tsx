@@ -31,6 +31,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Footer } from '@/components/Footer';
 
 export default function Admin() {
   const { 
@@ -429,6 +430,8 @@ export default function Admin() {
           </Card>
         </div>
       )}
+
+      <Footer />
     </div>
   );
 }

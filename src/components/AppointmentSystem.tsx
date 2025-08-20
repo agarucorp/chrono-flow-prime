@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { LoginForm } from "./LoginForm";
 import { AppointmentCalendar } from "./AppointmentCalendar";
 import { ProfessionalSettings } from "./ProfessionalSettings";
+import { Footer } from "./Footer";
 
 export const AppointmentSystem = () => {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -88,6 +89,8 @@ export const AppointmentSystem = () => {
           />
         )}
       </main>
+
+      <Footer />
     </div>
   );
 };

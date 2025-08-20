@@ -736,24 +736,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
             </TabsContent>
           </Tabs>
           
-          {/* Leyenda */}
-          <div className="mt-6 pt-4 border-t">
-            <div className="flex items-center justify-center space-x-4 text-sm">
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-green-100 border border-green-200 rounded"></div>
-                <span>Disponible</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-blue-100 border border-blue-200 rounded"></div>
-                <span>Ocupado</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-3 h-3 bg-red-100 border border-red-200 rounded"></div>
-                <span>Cancelado</span>
-              </div>
-            </div>
-            
-          </div>
+          
         </CardContent>
       </Card>
 
