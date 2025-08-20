@@ -388,7 +388,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                 <Button
                   key={`am-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-14 justify-between px-4 transition-all duration-200 ${
+                  className={`h-14 justify-center px-4 transition-all duration-200 ${
                     slot.estado === 'disponible' 
                       ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
@@ -401,19 +401,14 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                     }`} />
                     <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
-                  <Badge 
-                    variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
-                    className={`text-xs font-medium ${
-                      slot.estado === 'disponible' 
-                        ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90' 
-                        : 'bg-destructive text-destructive-foreground'
-                    }`}
-                  >
-                    {slot.estado === 'disponible' 
-                      ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
-                      : 'No Disponible'
-                    }
-                  </Badge>
+                  {slot.estado === 'disponible' && (
+                    <Badge 
+                      variant="secondary"
+                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                    >
+                      {`${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`}
+                    </Badge>
+                  )}
                 </Button>
               ))}
             </div>
@@ -429,7 +424,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                 <Button
                   key={`pm-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-14 justify-between px-4 transition-all duration-200 ${
+                  className={`h-14 justify-center px-4 transition-all duration-200 ${
                     slot.estado === 'disponible' 
                       ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
@@ -442,19 +437,14 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                     }`} />
                     <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
-                  <Badge 
-                    variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
-                    className={`text-xs font-medium ${
-                      slot.estado === 'disponible' 
-                        ? 'bg-primary-foreground text-primary hover:bg-primary-foreground/90' 
-                        : 'bg-destructive text-destructive-foreground'
-                    }`}
-                  >
-                    {slot.estado === 'disponible' 
-                      ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
-                      : 'No Disponible'
-                    }
-                  </Badge>
+                  {slot.estado === 'disponible' && (
+                    <Badge 
+                      variant="secondary"
+                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                    >
+                      {`${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`}
+                    </Badge>
+                  )}
                 </Button>
               ))}
             </div>
