@@ -8,6 +8,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
+import { TurnoConfirmationModal } from '@/components/TurnoConfirmationModal';
 
 interface Turno {
   id: string;
@@ -38,6 +39,11 @@ export const TurnoReservation = () => {
   const [turnosReservados, setTurnosReservados] = useState<TurnoReservado[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
+  
+  // Estado para el modal de confirmación
+  const [showConfirmationModal, setShowConfirmationModal] = useState(false);
+  const [turnoToConfirm, setTurnoToConfirm] = useState<Turno | null>(null);
+  const [confirmingReservation, setConfirmingReservation] = useState(false);
 
   // Cargar turnos disponibles y reservados
   useEffect(() => {
@@ -105,11 +111,17 @@ export const TurnoReservation = () => {
     }
   };
 
-  const reservarTurno = async (turno: Turno) => {
+  const handleReservarClick = (turno: Turno) => {
+    setTurnoToConfirm(turno);
+    setShowConfirmationModal(true);
+  };
+
+  const handleConfirmReservation = async (turno: Turno) => {
     try {
-      console.log('🔍 reservarTurno: Iniciando reserva...');
-      console.log('🔍 reservarTurno: Turno a reservar:', turno);
-      console.log('🔍 reservarTurno: Usuario actual:', user?.id);
+      setConfirmingReservation(true);
+      console.log('🔍 handleConfirmReservation: Iniciando reserva...');
+      console.log('🔍 handleConfirmReservation: Turno a reservar:', turno);
+      console.log('🔍 handleConfirmReservation: Usuario actual:', user?.id);
       
       const loadingToast = showLoading('Reservando turno...');
       
@@ -120,7 +132,7 @@ export const TurnoReservation = () => {
         updated_at: new Date().toISOString()
       };
       
-      console.log('🔍 reservarTurno: Datos a actualizar:', datosActualizacion);
+      console.log('🔍 handleConfirmReservation: Datos a actualizar:', datosActualizacion);
       
       const { data, error, count } = await supabase
         .from('turnos')
@@ -128,7 +140,7 @@ export const TurnoReservation = () => {
         .eq('id', turno.id)
         .select(); // Agregamos .select() para ver qué se actualizó
 
-      console.log('🔍 reservarTurno: Respuesta completa de Supabase:', { data, error, count });
+      console.log('🔍 handleConfirmReservation: Respuesta completa de Supabase:', { data, error, count });
 
       dismissToast(loadingToast);
 
@@ -163,6 +175,10 @@ export const TurnoReservation = () => {
       showSuccess('¡Turno reservado exitosamente!', 
         `Has reservado ${turno.servicio} para el ${new Date(turno.fecha).toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
       
+      // Cerrar modal y limpiar estado
+      setShowConfirmationModal(false);
+      setTurnoToConfirm(null);
+      
       // Forzar recarga de turnos con un pequeño delay
       setTimeout(async () => {
         console.log('🔄 Recargando turnos después de delay...');
@@ -171,7 +187,15 @@ export const TurnoReservation = () => {
     } catch (error) {
       console.error('❌ Error inesperado:', error);
       showError('Error inesperado', 'No se pudo reservar el turno');
+    } finally {
+      setConfirmingReservation(false);
     }
+  };
+
+  const handleCloseConfirmationModal = () => {
+    setShowConfirmationModal(false);
+    setTurnoToConfirm(null);
+    setConfirmingReservation(false);
   };
 
   const cancelarTurno = async (turno: TurnoReservado) => {
@@ -360,10 +384,10 @@ export const TurnoReservation = () => {
                   <p className="text-muted-foreground">No hay horarios disponibles para entrenamiento personal en esta fecha</p>
                 </div>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                  {turnosDisponibles.map(turno => (
-                    <Card key={turno.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
+                <div className="grid gap-4 grid-cols-4">
+                  {turnosDisponibles.slice(0, 8).map(turno => (
+                    <Card key={turno.id} className="hover:shadow-md transition-shadow min-h-[140px]">
+                      <CardContent className="p-3">
                         <div className="flex items-center justify-between mb-3">
                           <Badge className={getStatusColor(turno.estado)}>
                             {turno.estado}
@@ -376,24 +400,25 @@ export const TurnoReservation = () => {
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="font-medium">
+                            <span className="font-medium text-sm">
                               {turno.hora_inicio} - {turno.hora_fin}
                             </span>
                           </div>
                           
                           <div className="flex items-center space-x-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-xs text-muted-foreground">
                               {new Date(turno.fecha).toLocaleDateString('es-ES')}
                             </span>
                           </div>
                         </div>
                         
                         <Button
-                          className="w-full mt-4"
-                          onClick={() => reservarTurno(turno)}
+                          className="w-full mt-3"
+                          size="sm"
+                          onClick={() => handleReservarClick(turno)}
                         >
-                          Reservar Entrenamiento
+                          Reservar
                         </Button>
                       </CardContent>
                     </Card>
@@ -462,7 +487,7 @@ export const TurnoReservation = () => {
                             className="w-full"
                           >
                             <XCircle className="h-4 w-4 mr-2" />
-                            Cancelar Entrenamiento
+                            Cancelar
                           </Button>
                         )}
                       </CardContent>
@@ -479,6 +504,15 @@ export const TurnoReservation = () => {
       <div className="mt-8">
         <CalendarView onTurnoReservado={fetchTurnos} />
       </div>
+
+      {/* Modal de Confirmación */}
+      <TurnoConfirmationModal
+        turno={turnoToConfirm}
+        isOpen={showConfirmationModal}
+        onClose={handleCloseConfirmationModal}
+        onConfirm={handleConfirmReservation}
+        loading={confirmingReservation}
+      />
     </div>
   );
 };
