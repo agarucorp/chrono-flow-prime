@@ -439,43 +439,31 @@ export const TurnoReservation = () => {
                   <p className="text-muted-foreground">No tienes sesiones de entrenamiento reservadas</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="grid gap-3 grid-cols-4">
                   {turnosReservados.map(turno => (
-                    <Card key={turno.id} className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <Badge className={getStatusColor(turno.estado)}>
-                            {turno.estado}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {turno.servicio}
-                          </span>
-                        </div>
+                    <Card key={turno.id} className="hover:shadow-md transition-shadow min-h-[140px]">
+                                             <CardContent className="p-3">
+                         <div className="mb-2">
+                         </div>
                         
-                        <div className="grid grid-cols-2 gap-4 mb-4">
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Fecha</p>
-                            <p className="text-sm">
+                        <div className="space-y-2 mb-3">
+                          <div className="flex items-center space-x-2">
+                            <Calendar className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs">
                               {new Date(turno.fecha).toLocaleDateString('es-ES')}
-                            </p>
+                            </span>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Horario</p>
-                            <p className="text-sm">
+                          <div className="flex items-center space-x-2">
+                            <Clock className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs">
                               {turno.hora_inicio} - {turno.hora_fin}
-                            </p>
+                            </span>
                           </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Profesional</p>
-                            <p className="text-sm">
+                          <div className="flex items-center space-x-2">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            <span className="text-xs text-muted-foreground">
                               {turno.profesional_nombre}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-muted-foreground">Estado</p>
-                            <p className="text-sm capitalize">
-                              {turno.estado}
-                            </p>
+                            </span>
                           </div>
                         </div>
                         
@@ -486,7 +474,7 @@ export const TurnoReservation = () => {
                             onClick={() => cancelarTurno(turno)}
                             className="w-full"
                           >
-                            <XCircle className="h-4 w-4 mr-2" />
+                            <XCircle className="h-3 w-3 mr-1" />
                             Cancelar
                           </Button>
                         )}
