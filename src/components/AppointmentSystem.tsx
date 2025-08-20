@@ -29,13 +29,12 @@ export const AppointmentSystem = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-              <div className="w-8 h-8">
-                <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-foreground">TurnoPro</h1>
-                <p className="text-sm text-muted-foreground">Sistema de Gestión de Turnos</p>
-              </div>
+                          <div className="w-8 h-8">
+              <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
+            </div>
+                             <div>
+                 <p className="text-sm text-muted-foreground">Sistema de Gestión de Turnos</p>
+               </div>
             </div>
             
             <div className="flex items-center space-x-4">

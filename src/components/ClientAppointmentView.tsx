@@ -171,7 +171,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="w-8 h-8">
-                  <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+                  <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-foreground">Reservar Turno</h1>
@@ -276,7 +276,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div className="w-8 h-8">
-                <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+                <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">Turnos Disponibles</h1>

@@ -28,11 +28,14 @@ export const Navigation: React.FC = () => {
   return (
     <nav className="border-b border-border bg-background shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
-          <div className="flex items-center">
-            <h1 className="text-xl font-semibold text-foreground">
-              Gestión Turnos
-            </h1>
+        <div className="flex justify-between items-center h-16 relative">
+          <div className="w-32 h-12">
+          </div>
+
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+            <div className="w-32 h-12">
+              <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+            </div>
           </div>
 
           <div className="flex items-center space-x-4">

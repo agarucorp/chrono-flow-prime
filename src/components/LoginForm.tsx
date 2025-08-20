@@ -268,14 +268,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo & Title */}
-        <div className="text-center animate-fade-in">
-          <div className="mx-auto w-20 h-20 mb-6">
-            <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">TurnoPro</h1>
-          <p className="text-muted-foreground">Sistema Premium de Gestión de Turnos</p>
-        </div>
+                 {/* Logo */}
+         <div className="text-center animate-fade-in">
+           <div className="mx-auto w-32 h-32 mb-6">
+             <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
+           </div>
+         </div>
 
         {/* Login/Register Card */}
         <Card className="shadow-elegant animate-slide-up">
@@ -283,14 +281,14 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             <CardTitle className="text-2xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
-            <CardDescription className="text-center">
-              {isRegisterMode 
-                ? currentStep === 1 
-                  ? "Complete su información personal" 
-                  : "Configure su acceso al sistema"
-                : "Ingrese sus credenciales para acceder al sistema"
-              }
-            </CardDescription>
+                         <CardDescription className="text-center">
+               {isRegisterMode 
+                 ? currentStep === 1 
+                   ? "Complete su información personal" 
+                   : "Configure su acceso al sistema"
+                 : "Ingresá a la plataforma para visualizar el calendario con los turnos disponibles y gestionar tus reservas."
+               }
+             </CardDescription>
             {isRegisterMode && (
               <div className="flex justify-center mt-4">
                 <div className="flex space-x-2">

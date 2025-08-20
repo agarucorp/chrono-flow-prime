@@ -94,13 +94,11 @@ export const ResetPasswordForm = () => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-8">
-          {/* Logo & Title */}
+          {/* Logo */}
           <div className="text-center animate-fade-in">
-            <div className="mx-auto w-20 h-20 mb-6">
-              <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+            <div className="mx-auto w-32 h-32 mb-6">
+              <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
             </div>
-            <h1 className="text-3xl font-bold text-foreground mb-2">TurnoPro</h1>
-            <p className="text-muted-foreground">Sistema Premium de Gestión de Turnos</p>
           </div>
 
           {/* Success Card */}
@@ -148,13 +146,11 @@ export const ResetPasswordForm = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo & Title */}
+        {/* Logo */}
         <div className="text-center animate-fade-in">
-          <div className="mx-auto w-20 h-20 mb-6">
-            <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+          <div className="mx-auto w-32 h-32 mb-6">
+            <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
           </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">TurnoPro</h1>
-          <p className="text-muted-foreground">Sistema Premium de Gestión de Turnos</p>
         </div>
 
         {/* Reset Password Card */}
