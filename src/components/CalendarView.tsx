@@ -1,13 +1,15 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Grid, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { AdminTurnoModal } from './AdminTurnoModal';
+import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
 
 interface Turno {
@@ -39,6 +41,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   const [loading, setLoading] = useState(true);
   const [selectedTurno, setSelectedTurno] = useState<Turno | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
+  const [reservationLoading, setReservationLoading] = useState(false);
   
   // Estado para admin
   const [showAdminModal, setShowAdminModal] = useState(false);
@@ -111,18 +114,37 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     }
 
     try {
-      const loadingToast = showLoading('Reservando entrenamiento...');
+      setReservationLoading(true);
       
-      const { error } = await supabase
-        .from('turnos')
-        .update({
-          estado: 'ocupado',
-          cliente_id: user.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', turno.id);
-
-      dismissToast(loadingToast);
+      let error;
+      
+      if (turno.id === 'temp') {
+        // Crear nuevo turno si es temporal
+        const { error: insertError } = await supabase
+          .from('turnos')
+          .insert({
+            fecha: turno.fecha,
+            hora_inicio: turno.hora_inicio,
+            hora_fin: turno.hora_fin,
+            estado: 'ocupado',
+            cliente_id: user.id,
+            servicio: turno.servicio,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+        error = insertError;
+      } else {
+        // Actualizar turno existente
+        const { error: updateError } = await supabase
+          .from('turnos')
+          .update({
+            estado: 'ocupado',
+            cliente_id: user.id,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', turno.id);
+        error = updateError;
+      }
 
       if (error) {
         showError('Error al reservar', error.message);
@@ -145,6 +167,8 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
       setSelectedTurno(null);
     } catch (error) {
       showError('Error inesperado', 'No se pudo reservar el entrenamiento');
+    } finally {
+      setReservationLoading(false);
     }
   };
 
@@ -174,18 +198,29 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   const handleTimeSlotReservation = (horaInicio: string, horaFin: string) => {
     const dayTurnos = getTurnosForDate(currentDate);
     
-    // Buscar un turno disponible para este horario
-    const turnoDisponible = dayTurnos.find(turno => 
+    // Buscar turnos ocupados para este horario
+    const turnosOcupados = dayTurnos.filter(turno => 
       turno.hora_inicio === horaInicio &&
-      turno.estado === 'disponible'
+      turno.estado === 'ocupado'
     );
 
-    if (turnoDisponible) {
-      // Si hay turno disponible, abrir modal de confirmación
-      setSelectedTurno(turnoDisponible);
+    // Si hay menos de 3 turnos ocupados, el horario está disponible
+    if (turnosOcupados.length < 3) {
+      // Crear un turno temporal para la reserva
+      const turnoTemporal: Turno = {
+        id: 'temp',
+        fecha: currentDate.toISOString().split('T')[0],
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        estado: 'disponible',
+        servicio: 'Entrenamiento Personal',
+        profesional_nombre: 'Sin asignar'
+      };
+      
+      setSelectedTurno(turnoTemporal);
       setShowReservationModal(true);
     } else {
-      // Si no hay turnos disponibles, crear un turno temporal para mostrar info
+      // Si ya están todos los slots ocupados
       const turnoTemporal: Turno = {
         id: 'temp',
         fecha: currentDate.toISOString().split('T')[0],
@@ -359,17 +394,17 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
       const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
       const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
       
-      // Buscar turnos disponibles para este horario
-      const turnosDisponibles = dayTurnos.filter(turno => 
-        turno.hora_inicio === horaInicio && turno.estado === 'disponible'
+      // Buscar turnos ocupados para este horario
+      const turnosOcupados = dayTurnos.filter(turno => 
+        turno.hora_inicio === horaInicio && turno.estado === 'ocupado'
       );
       
       timeSlots.push({
         horaInicio,
         horaFin,
-        turnosDisponibles: turnosDisponibles.length,
+        turnosDisponibles: 3 - turnosOcupados.length,
         totalSlots: 3,
-        estado: turnosDisponibles.length > 0 ? 'disponible' : 'no_disponible'
+        estado: turnosOcupados.length < 3 ? 'disponible' : 'no_disponible'
       });
     }
 
@@ -541,71 +576,17 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
       </Card>
 
       {/* Modal de confirmación de reserva */}
-      {showReservationModal && selectedTurno && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <Calendar className="h-5 w-5" />
-                <span>
-                  {selectedTurno.estado === 'disponible' ? 'Confirmar Reserva' : 'Horario No Disponible'}
-                </span>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-center">
-                {selectedTurno.estado === 'disponible' ? (
-                  <>
-                    <p className="text-lg font-medium mb-2">¿Confirmar entrenamiento?</p>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <p><strong>Fecha:</strong> {new Date(selectedTurno.fecha).toLocaleDateString('es-ES')}</p>
-                      <p><strong>Horario:</strong> {selectedTurno.hora_inicio} - {selectedTurno.hora_fin}</p>
-                      <p><strong>Servicio:</strong> {selectedTurno.servicio}</p>
-                      {selectedTurno.profesional_nombre && (
-                        <p><strong>Profesional:</strong> {selectedTurno.profesional_nombre}</p>
-                      )}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-lg font-medium mb-2 text-destructive">Este horario no está disponible</p>
-                    <div className="space-y-2 text-sm text-muted-foreground">
-                      <p><strong>Fecha:</strong> {new Date(selectedTurno.fecha).toLocaleDateString('es-ES')}</p>
-                      <p><strong>Horario:</strong> {selectedTurno.hora_inicio} - {selectedTurno.hora_fin}</p>
-                      <p><strong>Estado:</strong> Todos los slots están ocupados</p>
-                    </div>
-                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="text-sm text-amber-800">
-                        Te sugerimos elegir otro horario disponible o seleccionar una fecha diferente.
-                      </p>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowReservationModal(false);
-                    setSelectedTurno(null);
-                  }}
-                  className="flex-1"
-                >
-                  {selectedTurno.estado === 'disponible' ? 'Cancelar' : 'Cerrar'}
-                </Button>
-                {selectedTurno.estado === 'disponible' && (
-                  <Button
-                    onClick={() => reservarTurnoDesdeCalendario(selectedTurno)}
-                    className="flex-1"
-                  >
-                    Confirmar Reserva
-                  </Button>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+      {showReservationModal && selectedTurno && selectedTurno.estado === 'disponible' && (
+        <ReservaConfirmationModal
+          turno={selectedTurno}
+          isOpen={showReservationModal}
+          onClose={() => {
+            setShowReservationModal(false);
+            setSelectedTurno(null);
+          }}
+          onConfirm={() => reservarTurnoDesdeCalendario(selectedTurno)}
+          loading={reservationLoading}
+        />
       )}
 
       {/* Modal de gestión para admin */}
