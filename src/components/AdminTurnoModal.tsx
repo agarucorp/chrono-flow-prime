@@ -7,6 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { CancelacionConfirmationModal } from './CancelacionConfirmationModal';
 
 interface Turno {
   id: string;
@@ -45,6 +47,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   const [searchTerm, setSearchTerm] = useState('');
   const [clientesReservados, setClientesReservados] = useState<AdminUser[]>([]);
   const [capacidadDisponible, setCapacidadDisponible] = useState(0);
+
+  // Estado para el modal de confirmación de cancelación
+  const [showCancelacionModal, setShowCancelacionModal] = useState(false);
+  const [turnoToCancel, setTurnoToCancel] = useState<{clienteId: string, clienteNombre: string} | null>(null);
+  const [cancelingTurno, setCancelingTurno] = useState(false);
 
   // Cargar clientes disponibles y reservas existentes
   useEffect(() => {
@@ -154,27 +161,42 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       setLoading(true);
       const loadingToast = showLoading('Cancelando reserva...');
 
-      // Cambiar estado de la reserva a cancelada
-      const { error } = await supabase
-        .from('reservas_turnos')
+      // Buscar el turno específico de este cliente en este horario
+      const { data: turnoCliente, error: errorBuscar } = await supabase
+        .from('turnos')
+        .select('*')
+        .eq('fecha', turno.fecha)
+        .eq('hora_inicio', turno.hora_inicio)
+        .eq('cliente_id', clienteId)
+        .eq('estado', 'ocupado')
+        .single();
+
+      if (errorBuscar) {
+        showError('Error', 'No se pudo encontrar la reserva del cliente');
+        return;
+      }
+
+      // Cancelar la reserva
+      const { error: errorCancelar } = await supabase
+        .from('turnos')
         .update({
-          estado: 'cancelada',
+          estado: 'disponible',
+          cliente_id: null,
           updated_at: new Date().toISOString()
         })
-        .eq('turno_id', turno.id)
-        .eq('cliente_id', clienteId);
+        .eq('id', turnoCliente.id);
 
-      dismissToast(loadingToast);
+      if (errorCancelar) {
+        showError('Error', 'No se pudo cancelar la reserva');
+        return;
+      }
 
-      if (error) throw error;
-
-      showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada');
+      showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada exitosamente');
       
-      // Recargar reservas
+      // Recargar datos
       await cargarReservasExistentes();
       onTurnoUpdated();
     } catch (error) {
-      console.error('Error cancelando reserva:', error);
       showError('Error', 'No se pudo cancelar la reserva');
     } finally {
       setLoading(false);
@@ -219,6 +241,27 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
      cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
     !clientesReservados.some(reservado => reservado.id === cliente.id)
   );
+
+  const handleCancelarClick = (clienteId: string, clienteNombre: string) => {
+    setTurnoToCancel({ clienteId, clienteNombre });
+    setShowCancelacionModal(true);
+  };
+
+  const handleCloseCancelacionModal = () => {
+    setShowCancelacionModal(false);
+    setTurnoToCancel(null);
+    setCancelingTurno(false);
+  };
+
+  const handleConfirmCancelacion = async () => {
+    if (!turnoToCancel) return;
+    
+    setCancelingTurno(true);
+    await cancelarReserva(turnoToCancel.clienteId);
+    setCancelingTurno(false);
+    setShowCancelacionModal(false);
+    setTurnoToCancel(null);
+  };
 
   if (!isOpen || !turno) return null;
 
@@ -300,7 +343,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                     <Button
                       variant="destructive"
                       size="sm"
-                      onClick={() => cancelarReserva(cliente.id)}
+                      onClick={() => handleCancelarClick(cliente.id, cliente.full_name)}
                       disabled={loading}
                     >
                       <Trash2 className="h-4 w-4 mr-2" />
@@ -399,6 +442,23 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           </div>
         </CardContent>
       </Card>
+
+      {/* Modal de Confirmación de Cancelación */}
+      <CancelacionConfirmationModal
+        turno={{
+          id: turno.id,
+          fecha: turno.fecha,
+          hora_inicio: turno.hora_inicio,
+          hora_fin: turno.hora_fin,
+          servicio: turno.servicio || 'Entrenamiento Personal',
+          estado: 'ocupado',
+          profesional_nombre: turnoToCancel ? `Cliente: ${turnoToCancel.clienteNombre}` : undefined
+        }}
+        isOpen={showCancelacionModal}
+        onClose={handleCloseCancelacionModal}
+        onConfirm={handleConfirmCancelacion}
+        loading={cancelingTurno}
+      />
     </div>
   );
 };

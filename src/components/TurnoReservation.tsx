@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoConfirmationModal } from '@/components/TurnoConfirmationModal';
+import { CancelacionConfirmationModal } from '@/components/CancelacionConfirmationModal';
 
 interface Turno {
   id: string;
@@ -40,10 +41,15 @@ export const TurnoReservation = () => {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState(new Date());
   
-  // Estado para el modal de confirmación
+  // Estado para el modal de confirmación de reserva
   const [showConfirmationModal, setShowConfirmationModal] = useState(false);
   const [turnoToConfirm, setTurnoToConfirm] = useState<Turno | null>(null);
   const [confirmingReservation, setConfirmingReservation] = useState(false);
+
+  // Estado para el modal de confirmación de cancelación
+  const [showCancelacionModal, setShowCancelacionModal] = useState(false);
+  const [turnoToCancel, setTurnoToCancel] = useState<TurnoReservado | null>(null);
+  const [cancelingTurno, setCancelingTurno] = useState(false);
 
   // Cargar turnos disponibles y reservados
   useEffect(() => {
@@ -217,6 +223,27 @@ export const TurnoReservation = () => {
     setConfirmingReservation(false);
   };
 
+  const handleCancelarClick = (turno: TurnoReservado) => {
+    setTurnoToCancel(turno);
+    setShowCancelacionModal(true);
+  };
+
+  const handleCloseCancelacionModal = () => {
+    setShowCancelacionModal(false);
+    setTurnoToCancel(null);
+    setCancelingTurno(false);
+  };
+
+  const handleConfirmCancelacion = async () => {
+    if (!turnoToCancel) return;
+    
+    setCancelingTurno(true);
+    await cancelarTurno(turnoToCancel);
+    setCancelingTurno(false);
+    setShowCancelacionModal(false);
+    setTurnoToCancel(null);
+  };
+
   const cancelarTurno = async (turno: TurnoReservado) => {
     try {
       const loadingToast = showLoading('Cancelando turno...');
@@ -264,90 +291,6 @@ export const TurnoReservation = () => {
     return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 
-  const generarHorariosEstandar = () => {
-    const horarios = [];
-    for (let hour = 8; hour < 16; hour++) {
-      const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
-      const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
-      horarios.push({
-        id: `horario-${hour}`,
-        fecha: selectedDate.toISOString().split('T')[0],
-        hora_inicio: horaInicio,
-        hora_fin: horaFin,
-        estado: 'disponible',
-        servicio: 'Entrenamiento Personal'
-      });
-    }
-    return horarios;
-  };
-
-  const getStatusColor = (estado: string) => {
-    switch (estado) {
-      case 'disponible':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'ocupado':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'cancelado':
-        return 'bg-red-100 text-red-800 border-red-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const testUpdate = async () => {
-    try {
-      console.log('🧪 Test: Intentando UPDATE directo...');
-      
-      const { data, error } = await supabase
-        .from('turnos')
-        .update({ 
-          estado: 'ocupado',
-          cliente_id: user?.id,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', 'd2371dfd-598d-42af-a1c7-419ba206e52c') // ID del turno que vimos en los logs
-        .select();
-      
-      console.log('🧪 Test: Respuesta del UPDATE:', { data, error });
-      
-      if (error) {
-        console.error('❌ Test: Error en UPDATE:', error);
-        showError('Test falló', error.message);
-      } else {
-        console.log('✅ Test: UPDATE exitoso:', data);
-        showSuccess('Test exitoso', 'UPDATE funcionó correctamente');
-        await fetchTurnos();
-      }
-    } catch (error) {
-      console.error('❌ Test: Error inesperado:', error);
-    }
-  };
-
-  const testAuth = async () => {
-    try {
-      console.log('🔐 Test: Verificando autenticación...');
-      console.log('🔐 Test: Usuario del contexto:', user);
-      
-      // Verificar sesión actual
-      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-      console.log('🔐 Test: Sesión actual:', session);
-      console.log('🔐 Test: Error de sesión:', sessionError);
-      
-      // Verificar usuario actual
-      const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-      console.log('🔐 Test: Usuario actual de Supabase:', currentUser);
-      console.log('🔐 Test: Error de usuario:', userError);
-      
-      if (session && currentUser) {
-        showSuccess('Auth OK', 'Usuario autenticado correctamente');
-      } else {
-        showError('Auth Error', 'Problema con la autenticación');
-      }
-    } catch (error) {
-      console.error('❌ Test: Error inesperado en auth:', error);
-    }
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -391,12 +334,12 @@ export const TurnoReservation = () => {
          </Card>
        </div>
 
-      {/* Tabs para Turnos Disponibles y Mis Reservas */}
-      <Tabs defaultValue="disponibles" className="w-full">
+      {/* Tabs para Calendario y Mis Reservas */}
+      <Tabs defaultValue="calendario" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="disponibles" className="flex items-center space-x-2">
-            <CheckCircle className="h-4 w-4" />
-            <span>Turnos Disponibles</span>
+          <TabsTrigger value="calendario" className="flex items-center space-x-2">
+            <Calendar className="h-4 w-4" />
+            <span>Calendario</span>
           </TabsTrigger>
           <TabsTrigger value="reservados" className="flex items-center space-x-2">
             <User className="h-4 w-4" />
@@ -404,77 +347,9 @@ export const TurnoReservation = () => {
           </TabsTrigger>
         </TabsList>
         
-        {/* Turnos Disponibles */}
-        <TabsContent value="disponibles" className="mt-4">
-          <Card>
-            <CardContent className="pt-6">
-              {turnosDisponibles.length === 0 ? (
-                <div className="text-center py-8">
-                  <Clock className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">No hay horarios disponibles para entrenamiento personal en esta fecha</p>
-                </div>
-              ) : (
-                                 <div className="grid gap-4 grid-cols-4">
-                   {generarHorariosEstandar().map((horario, index) => {
-                     const turnoExistente = turnosDisponibles.find(t => 
-                       t.hora_inicio === horario.hora_inicio
-                     );
-                     
-                     const estado = turnoExistente ? turnoExistente.estado : 'disponible';
-                     const puedeReservar = !turnoExistente || turnoExistente.estado === 'disponible';
-                     const esMiTurno = turnoExistente?.cliente_id === user?.id;
-                     
-                     return (
-                       <Card key={`${horario.hora_inicio}-${index}`} className="hover:shadow-md transition-shadow min-h-[140px]">
-                         <CardContent className="p-3">
-                           <div className="flex items-center justify-start mb-3">
-                             <Badge className={getStatusColor(estado)}>
-                               {estado === 'disponible' ? 'Disponible' : 
-                                estado === 'ocupado' ? (esMiTurno ? 'Mi Reserva' : 'No Disponible') : 
-                                estado === 'cancelado' ? 'Cancelado' : estado}
-                             </Badge>
-                           </div>
-                           
-                           <div className="space-y-2">
-                             <div className="flex items-center space-x-2">
-                               <Clock className="h-4 w-4 text-muted-foreground" />
-                               <span className="font-medium text-sm">
-                                 {horario.hora_inicio} - {horario.hora_fin}
-                               </span>
-                             </div>
-                             
-                             <div className="flex items-center space-x-2">
-                               <Calendar className="h-4 w-4 text-muted-foreground" />
-                               <span className="text-xs text-muted-foreground">
-                                 {new Date(selectedDate).toLocaleDateString('es-ES')}
-                               </span>
-                             </div>
-                           </div>
-                           
-                           {puedeReservar ? (
-                             <Button
-                               className="w-full mt-3"
-                               size="sm"
-                               onClick={() => handleReservarClick(turnoExistente || horario)}
-                               disabled={!puedeReservar}
-                             >
-                               Reservar
-                             </Button>
-                           ) : (
-                             <div className="mt-3 p-2 text-center text-xs text-muted-foreground bg-muted/50 rounded">
-                               {estado === 'ocupado' && esMiTurno ? 'Ya tienes reserva' : 
-                                estado === 'ocupado' ? 'Ocupado por otro' : 
-                                estado === 'cancelado' ? 'Turno cancelado' : 'No disponible'}
-                             </div>
-                           )}
-                         </CardContent>
-                       </Card>
-                     );
-                   })}
-                 </div>
-              )}
-            </CardContent>
-          </Card>
+        {/* Calendario */}
+        <TabsContent value="calendario" className="mt-4">
+          <CalendarView onTurnoReservado={fetchTurnos} />
         </TabsContent>
         
         {/* Mis Reservas */}
@@ -519,7 +394,7 @@ export const TurnoReservation = () => {
                           <Button
                             variant="destructive"
                             size="sm"
-                            onClick={() => cancelarTurno(turno)}
+                            onClick={() => handleCancelarClick(turno)}
                             className="w-full"
                           >
                             <XCircle className="h-3 w-3 mr-1" />
@@ -536,18 +411,22 @@ export const TurnoReservation = () => {
         </TabsContent>
       </Tabs>
       
-      {/* Vista de Calendario */}
-      <div className="mt-8">
-        <CalendarView onTurnoReservado={fetchTurnos} />
-      </div>
-
-      {/* Modal de Confirmación */}
+      {/* Modal de Confirmación de Reserva */}
       <TurnoConfirmationModal
         turno={turnoToConfirm}
         isOpen={showConfirmationModal}
         onClose={handleCloseConfirmationModal}
         onConfirm={handleConfirmReservation}
         loading={confirmingReservation}
+      />
+
+      {/* Modal de Confirmación de Cancelación */}
+      <CancelacionConfirmationModal
+        turno={turnoToCancel}
+        isOpen={showCancelacionModal}
+        onClose={handleCloseCancelacionModal}
+        onConfirm={handleConfirmCancelacion}
+        loading={cancelingTurno}
       />
     </div>
   );

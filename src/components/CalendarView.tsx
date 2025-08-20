@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, ChevronDown, Grid, CalendarDays, Clock } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Grid, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,7 @@ interface Turno {
   servicio?: string;
 }
 
-type ViewMode = 'month' | 'week' | 'day';
+
 
 interface CalendarViewProps {
   onTurnoReservado?: () => void; // Callback para notificar cuando se reserva un turno
@@ -36,7 +36,6 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [loading, setLoading] = useState(true);
   const [selectedTurno, setSelectedTurno] = useState<Turno | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
@@ -45,13 +44,12 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminSelectedTurno, setAdminSelectedTurno] = useState<Turno | null>(null);
   
-  // Estado para dropdowns de la vista semanal
-  const [expandedSlots, setExpandedSlots] = useState<{[key: string]: boolean}>({});
+
 
   // Obtener turnos desde Supabase
   useEffect(() => {
     fetchTurnos();
-  }, [currentDate, viewMode]);
+  }, [currentDate]);
 
   const fetchTurnos = async () => {
     try {
@@ -165,27 +163,41 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     }
   };
 
-  // Función para manejar toggle de dropdowns en vista semanal
-  const toggleSlotExpansion = (dayId: string, turnoId: string) => {
-    const key = `${dayId}-${turnoId}`;
-    setExpandedSlots(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
+
+
+  // Función para manejar selección de fecha en el calendario compacto
+  const handleDateSelect = (date: Date) => {
+    setCurrentDate(date);
   };
 
-  // Función para manejar clic en día (navegación inteligente)
-  const handleDayClick = (date: Date) => {
-    // Verificar que no sea fin de semana
-    const isWeekend = date.getDay() === 0 || date.getDay() === 6; // 0 = Domingo, 6 = Sábado
-    if (isWeekend) {
-      return; // No permitir navegación a fines de semana
-    }
+  // Función para manejar clic en horario para reserva
+  const handleTimeSlotReservation = (horaInicio: string, horaFin: string) => {
+    const dayTurnos = getTurnosForDate(currentDate);
     
-    if (viewMode === 'month') {
-      // Si estamos en vista mensual, cambiar a semanal y centrar en esa fecha
-      setCurrentDate(date);
-      setViewMode('week');
+    // Buscar un turno disponible para este horario
+    const turnoDisponible = dayTurnos.find(turno => 
+      turno.hora_inicio === horaInicio &&
+      turno.estado === 'disponible'
+    );
+
+    if (turnoDisponible) {
+      // Si hay turno disponible, abrir modal de confirmación
+      setSelectedTurno(turnoDisponible);
+      setShowReservationModal(true);
+    } else {
+      // Si no hay turnos disponibles, crear un turno temporal para mostrar info
+      const turnoTemporal: Turno = {
+        id: 'temp',
+        fecha: currentDate.toISOString().split('T')[0],
+        hora_inicio: horaInicio,
+        hora_fin: horaFin,
+        estado: 'no_disponible' as any,
+        servicio: 'Entrenamiento Personal',
+        profesional_nombre: 'Sin asignar'
+      };
+      
+      setSelectedTurno(turnoTemporal);
+      setShowReservationModal(true);
     }
   };
 
@@ -193,73 +205,23 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
     
-    switch (viewMode) {
-      case 'month':
-        return {
-          startDate: new Date(year, month, 1),
-          endDate: new Date(year, month + 1, 0)
-        };
-             case 'week':
-         const startOfWeek = new Date(currentDate);
-         // Ajustar para que empiece en lunes
-         const dayOfWeek = currentDate.getDay();
-         if (dayOfWeek === 0) { // Domingo
-           startOfWeek.setDate(currentDate.getDate() + 1); // Ir al lunes
-         } else if (dayOfWeek === 6) { // Sábado
-           startOfWeek.setDate(currentDate.getDate() + 2); // Ir al lunes
-         } else {
-           startOfWeek.setDate(currentDate.getDate() - dayOfWeek + 1); // Ir al lunes de la semana
-         }
-         const endOfWeek = new Date(startOfWeek);
-         endOfWeek.setDate(startOfWeek.getDate() + 4); // Solo 5 días (lunes a viernes)
-         return { startDate: startOfWeek, endDate: endOfWeek };
-      case 'day':
-        return {
-          startDate: new Date(currentDate),
-          endDate: new Date(currentDate)
-        };
-      default:
-        return {
-          startDate: new Date(year, month, 1),
-          endDate: new Date(year, month + 1, 0)
-        };
-    }
+    return {
+      startDate: new Date(year, month, 1),
+      endDate: new Date(year, month + 1, 0)
+    };
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
-    
-    switch (viewMode) {
-      case 'month':
-        newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
-        break;
-             case 'week':
-         // Navegar entre semanas laborables (5 días)
-         newDate.setDate(newDate.getDate() + (direction === 'next' ? 5 : -5));
-         break;
-      case 'day':
-        newDate.setDate(newDate.getDate() + (direction === 'next' ? 1 : -1));
-        break;
-    }
-    
+    newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
     setCurrentDate(newDate);
   };
 
   const formatDate = (date: Date) => {
-    const options: Intl.DateTimeFormatOptions = {
+    const formattedDate = date.toLocaleDateString('es-ES', {
       year: 'numeric',
-      month: viewMode === 'month' ? 'long' : 'short',
-      day: viewMode === 'day' ? 'numeric' : undefined,
-      weekday: viewMode === 'day' ? 'long' : undefined
-    };
-    
-         if (viewMode === 'week') {
-       const { startDate, endDate } = getDateRange();
-       const weekRange = `${startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })} (Lun-Vie)`;
-       return weekRange.charAt(0).toUpperCase() + weekRange.slice(1);
-     }
-    
-    const formattedDate = date.toLocaleDateString('es-ES', options);
+      month: 'long'
+    });
     return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 
@@ -363,7 +325,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                     ? '' 
                     : 'cursor-pointer hover:bg-muted/50'
                 }`}
-               onClick={() => !isWeekend && handleDayClick(date)}
+               onClick={() => !isWeekend && handleDateSelect(date)}
              >
                                <div className={`text-xs p-1 text-right ${
                   isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
@@ -413,161 +375,70 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     );
   };
 
-    const renderWeekView = () => {
-    const { startDate } = getDateRange();
-    const weekDays = [];
+
+
+    // Función para renderizar el calendario compacto
+  const renderCompactCalendar = () => {
+    const { startDate, endDate } = getDateRange();
+    const firstDay = new Date(startDate);
+    const lastDay = new Date(endDate);
+    const daysInMonth = lastDay.getDate();
+    const firstDayOfWeek = firstDay.getDay();
     
-    // Solo mostrar días laborables (lunes a viernes)
-    for (let i = 0; i < 5; i++) {
-      const date = new Date(startDate);
-      // Ajustar para que empiece en lunes (1) en lugar de domingo (0)
-      const dayOfWeek = startDate.getDay();
-      const daysToAdd = i + (dayOfWeek === 0 ? 1 : dayOfWeek === 6 ? 2 : 0);
-      date.setDate(startDate.getDate() + daysToAdd);
-      weekDays.push(date);
+    const days = [];
+    const today = new Date();
+    
+    // Agregar días del mes anterior para completar la primera semana
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      const prevDate = new Date(firstDay);
+      prevDate.setDate(firstDay.getDate() - (firstDayOfWeek - i));
+      days.push({ date: prevDate, isCurrentMonth: false });
+    }
+    
+    // Agregar días del mes actual
+    for (let i = 1; i <= daysInMonth; i++) {
+      const currentDate = new Date(firstDay);
+      currentDate.setDate(i);
+      days.push({ date: currentDate, isCurrentMonth: true });
+    }
+    
+    // Completar la última semana
+    const remainingDays = 42 - days.length; // 6 semanas * 7 días
+    for (let i = 1; i <= remainingDays; i++) {
+      const nextDate = new Date(lastDay);
+      nextDate.setDate(lastDay.getDate() + i);
+      days.push({ date: nextDate, isCurrentMonth: false });
     }
 
-    // Generar los 8 horarios estándar (8:00 a 15:00)
-    const horariosEstandar = [];
-    for (let hour = 8; hour < 16; hour++) {
-      const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
-      const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
-      horariosEstandar.push({
-        id: `turno-${hour}`,
-        horaInicio,
-        horaFin,
-        nombre: `Turno ${hour - 7}` // Turno 1 (8:00), Turno 2 (9:00), etc.
-      });
-    }
-
-         return (
-       <div className="grid grid-cols-5 gap-4">
-         {/* Columnas de días */}
-         {weekDays.map((date, dayIndex) => {
+    return (
+      <div className="grid grid-cols-7 gap-1">
+        {days.map(({ date, isCurrentMonth }, index) => {
           const dayTurnos = getTurnosForDate(date);
-          const isToday = date.toDateString() === new Date().toDateString();
+          const isToday = date.toDateString() === today.toDateString();
+          const isSelected = date.toDateString() === currentDate.toDateString();
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const hasAvailableSlots = dayTurnos.filter(t => t.estado === 'disponible').length > 0;
           
           return (
-            <div key={dayIndex} className="min-h-[400px]">
-              <div className={`text-center p-2 border-b ${
-                isToday ? 'bg-primary text-primary-foreground' : 'bg-muted'
-              }`}>
-                <div className="font-medium">
-                  {date.toLocaleDateString('es-ES', { weekday: 'short' })}
-                </div>
-                <div className="text-sm">
-                  {date.getDate()}/{date.getMonth() + 1}
-                </div>
+            <div
+              key={index}
+              className={`min-h-[40px] p-1 border border-border transition-colors text-center cursor-pointer ${
+                isCurrentMonth ? 'bg-background' : 'bg-muted/30'
+              } ${isToday ? 'ring-2 ring-primary' : ''} ${
+                isSelected ? 'bg-primary text-primary-foreground' : ''
+              } ${isWeekend ? 'opacity-50 cursor-not-allowed' : 'hover:bg-muted/50'} ${
+                hasAvailableSlots && !isWeekend ? 'bg-green-50 border-green-200' : ''
+              }`}
+              onClick={() => !isWeekend && handleDateSelect(date)}
+            >
+              <div className={`text-xs ${
+                isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
+              } ${isToday ? 'font-bold' : ''} ${isSelected ? 'text-primary-foreground' : ''}`}>
+                {date.getDate()}
               </div>
-              
-                             <div className="space-y-1">
-                 {horariosEstandar.map((horario, turnoIndex) => {
-                   // Buscar turnos para este horario específico
-                   const turnosEnHorario = dayTurnos.filter(turno => 
-                     turno.hora_inicio === horario.horaInicio
-                   );
-                   
-                   // Generar 3 slots para este horario
-                   const slots = [];
-                   for (let i = 0; i < 3; i++) {
-                     if (i < turnosEnHorario.length) {
-                       const turno = turnosEnHorario[i];
-                       slots.push({
-                         id: turno.id,
-                         estado: turno.estado,
-                         cliente_nombre: turno.cliente_nombre,
-                         profesional_nombre: turno.profesional_nombre,
-                         hora_inicio: turno.hora_inicio,
-                         hora_fin: turno.hora_fin,
-                         isReal: true
-                       });
-                     } else {
-                       // Slot disponible
-                       slots.push({
-                         id: `available-${horario.id}-${i}`,
-                         estado: 'disponible',
-                         isReal: false
-                       });
-                     }
-                   }
-
-                   const expansionKey = `${date.toISOString().split('T')[0]}-${horario.id}`;
-                   const isExpanded = expandedSlots[expansionKey];
-                   
-                   return (
-                     <div key={horario.id} className="min-h-[48px]">
-                                               {/* Fila del turno con dropdown */}
-                        <div className="h-12 flex items-center justify-center">
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="flex items-center space-x-3">
-                              {/* Texto "Turno X" */}
-                              <span className="text-sm font-semibold text-foreground bg-primary/10 px-3 py-1 rounded-md border border-primary/20">
-                                {horario.nombre}
-                              </span>
-                              
-                              {/* Botón de dropdown */}
-                              <button
-                                onClick={() => toggleSlotExpansion(date.toISOString().split('T')[0], horario.id)}
-                                className="w-6 h-6 rounded-full bg-primary/10 hover:bg-primary/20 border border-primary/30 flex items-center justify-center text-primary transition-all duration-200 hover:scale-110"
-                                title="Expandir/Colapsar"
-                              >
-                                {isExpanded ? (
-                                  <ChevronDown className="h-3 w-3 text-primary" />
-                                ) : (
-                                  <ChevronRight className="h-3 w-3 text-primary" />
-                                )}
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                       
-                       {/* Contenido expandido del dropdown */}
-                       {isExpanded && (
-                         <div className="p-2 bg-gray-50 border-t border-gray-200">
-                           <div className="text-xs text-gray-600 mb-2 text-center">
-                             {horario.horaInicio} - {horario.horaFin}
-                           </div>
-                           <div className="space-y-1">
-                             {slots.map((slot, slotIndex) => (
-                               <div
-                                 key={slot.id}
-                                 className={`p-2 rounded border text-xs ${
-                                   slot.estado === 'disponible' 
-                                     ? 'bg-green-50 border-green-200 text-green-800' 
-                                     : slot.estado === 'ocupado'
-                                     ? 'bg-blue-50 border-blue-200 text-blue-800'
-                                     : slot.estado === 'cancelado'
-                                     ? 'bg-red-50 border-red-200 text-red-800'
-                                     : 'bg-gray-50 border-gray-200 text-gray-600'
-                                 }`}
-                               >
-                                 <div className="flex items-center justify-between">
-                                   <span className="font-medium">
-                                     Slot {slotIndex + 1}
-                                   </span>
-                                   <span className="capitalize">
-                                     {slot.estado}
-                                   </span>
-                                 </div>
-                                 {slot.isReal && slot.cliente_nombre && (
-                                   <div className="text-xs text-muted-foreground mt-1">
-                                     Cliente: {slot.cliente_nombre}
-                                   </div>
-                                 )}
-                                 {slot.isReal && slot.profesional_nombre && (
-                                   <div className="text-xs text-muted-foreground">
-                                     Profesional: {slot.profesional_nombre}
-                                   </div>
-                                 )}
-                               </div>
-                             ))}
-                           </div>
-                         </div>
-                       )}
-                     </div>
-                   );
-                 })}
-               </div>
+              {hasAvailableSlots && !isWeekend && (
+                <div className="w-1 h-1 bg-green-500 rounded-full mx-auto mt-1"></div>
+              )}
             </div>
           );
         })}
@@ -575,83 +446,107 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     );
   };
 
-  const renderDayView = () => {
+  // Función para renderizar los horarios disponibles como CTAs
+  const renderAvailableTimeSlots = () => {
     const dayTurnos = getTurnosForDate(currentDate);
-    const timeSlots = [];
+    const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
     
-    // Crear exactamente 8 horarios disponibles (de 8:00 a 15:00, cada hora)
-    for (let hour = 8; hour < 16; hour++) {
-      const time = `${hour.toString().padStart(2, '0')}:00`;
-      const turnosInSlot = dayTurnos.filter(turno => 
-        turno.hora_inicio.startsWith(hour.toString().padStart(2, '0'))
+    if (isWeekend) {
+      return (
+        <div className="text-center py-8">
+          <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No hay disponibilidad los fines de semana</p>
+        </div>
       );
-      
-      timeSlots.push({ time, turnos: turnosInSlot });
     }
 
+    // Generar los 8 horarios estándar (8:00 a 15:00)
+    const timeSlots = [];
+    for (let hour = 8; hour < 16; hour++) {
+      const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
+      const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
+      
+      // Buscar turnos disponibles para este horario
+      const turnosDisponibles = dayTurnos.filter(turno => 
+        turno.hora_inicio === horaInicio && turno.estado === 'disponible'
+      );
+      
+      timeSlots.push({
+        horaInicio,
+        horaFin,
+        turnosDisponibles: turnosDisponibles.length,
+        totalSlots: 3,
+        estado: turnosDisponibles.length > 0 ? 'disponible' : 'no_disponible'
+      });
+    }
+
+    // Agrupar por AM/PM
+    const amSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) < 12);
+    const pmSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) >= 12);
+
     return (
-      <div className="space-y-4">
-        <div className="text-center text-lg font-medium">
-          {currentDate.toLocaleDateString('es-ES', { 
-            weekday: 'long', 
-            year: 'numeric', 
-            month: 'long', 
-            day: 'numeric' 
-          })}
-        </div>
-        
-        <div className="space-y-2">
-          {timeSlots.map(({ time, turnos }) => (
-            <div key={time} className="flex items-center space-x-4 p-3 border rounded">
-              <div className="w-16 text-sm font-medium text-muted-foreground">
-                {time}
-              </div>
-              
-              <div className="flex-1">
-                {/* SIEMPRE mostrar 3 cards por línea */}
-                <div className="grid grid-cols-3 gap-2">
-                  {/* Mostrar turnos reales si existen */}
-                  {turnos.slice(0, 3).map((turno, index) => {
-                    // Si el turno no tiene cliente asignado, mostrar como slot disponible
-                    if (!turno.cliente_id || turno.cliente_nombre === 'Sin asignar') {
-                      return renderUnassignedTurno(turno, `unassigned-${turno.id}`);
+      <div className="space-y-6">
+        {/* Horarios AM */}
+        {amSlots.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">AM</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {amSlots.map((slot, index) => (
+                <Button
+                  key={`am-${index}`}
+                  variant={slot.estado === 'disponible' ? 'default' : 'outline'}
+                  className="h-12 justify-between px-4"
+                  onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
+                >
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    {slot.horaInicio} - {slot.horaFin}
+                  </div>
+                  <Badge 
+                    variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
+                    className="text-xs"
+                  >
+                    {slot.estado === 'disponible' 
+                      ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
+                      : 'No Disponible'
                     }
-                    
-                                         // Si tiene cliente, mostrar como turno normal
-                     return (
-                       <div
-                         key={turno.id}
-                         className={`p-2 rounded border cursor-pointer transition-colors ${getStatusColor(turno.estado)} ${
-                           turno.estado === 'disponible' 
-                             ? 'hover:bg-green-200 hover:border-green-300' 
-                             : ''
-                         }`}
-                         onClick={() => handleTurnoClick(turno)}
-                       >
-                         <div className="flex items-center justify-between">
-                           <div className="text-xs font-medium">
-                             {turno.hora_inicio} - {turno.hora_fin}
-                           </div>
-                           <div className="text-xs text-muted-foreground">
-                             {turno.profesional_nombre}
-                           </div>
-                           <div className="text-xs">{turno.cliente_nombre}</div>
-                         </div>
-                       </div>
-                     );
-                  })}
-                  
-                  {/* Completar con slots disponibles hasta llegar a 3 */}
-                  {Array.from({ length: Math.max(0, 3 - turnos.length) }).map((_, index) => {
-                    const horaInicio = time;
-                    const horaFin = `${(parseInt(time.split(':')[0]) + 1).toString().padStart(2, '0')}:00`;
-                    return renderAvailableSlot(horaInicio, horaFin, `available-${time}-${index}`);
-                  })}
-                </div>
-              </div>
+                  </Badge>
+                </Button>
+              ))}
             </div>
-          ))}
-        </div>
+          </div>
+        )}
+
+        {/* Horarios PM */}
+        {pmSlots.length > 0 && (
+          <div>
+            <h4 className="text-sm font-medium text-muted-foreground mb-3">PM</h4>
+            <div className="grid grid-cols-2 gap-3">
+              {pmSlots.map((slot, index) => (
+                <Button
+                  key={`pm-${index}`}
+                  variant={slot.estado === 'disponible' ? 'default' : 'outline'}
+                  className="h-12 justify-between px-4"
+                  onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
+                >
+                  <div className="flex items-center">
+                    <Clock className="h-4 w-4 mr-2" />
+                    {slot.horaInicio} - {slot.horaFin}
+                  </div>
+                  <Badge 
+                    variant={slot.estado === 'disponible' ? 'secondary' : 'destructive'}
+                    className="text-xs"
+                  >
+                    {slot.estado === 'disponible' 
+                      ? `${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`
+                      : 'No Disponible'
+                    }
+                  </Badge>
+                </Button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   };
@@ -671,7 +566,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5" />
-              <span>Calendario de Turnos</span>
+              <span>Reservar Entrenamiento</span>
             </CardTitle>
             
             <div className="flex items-center space-x-2">
@@ -707,36 +602,46 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
         </CardHeader>
         
         <CardContent>
-          <Tabs value={viewMode} onValueChange={(value) => setViewMode(value as ViewMode)}>
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="month" className="flex items-center space-x-2">
-                <Grid className="h-4 w-4" />
-                <span>Mensual</span>
-              </TabsTrigger>
-              <TabsTrigger value="week" className="flex items-center space-x-2">
-                <CalendarDays className="h-4 w-4" />
-                <span>Semanal</span>
-              </TabsTrigger>
-              <TabsTrigger value="day" className="flex items-center space-x-2">
-                <Clock className="h-4 w-4" />
-                <span>Diario</span>
-              </TabsTrigger>
-            </TabsList>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Calendario pequeño a la izquierda */}
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold mb-2">
+                  {currentDate.toLocaleDateString('es-ES', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                  })}
+                </h3>
+              </div>
+              
+              {/* Días de la semana */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
+                  <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
+                    {day}
+                  </div>
+                ))}
+              </div>
+              
+              {/* Calendario de días */}
+              {renderCompactCalendar()}
+            </div>
             
-            <TabsContent value="month" className="mt-4">
-              {renderMonthView()}
-            </TabsContent>
-            
-            <TabsContent value="week" className="mt-4">
-              {renderWeekView()}
-            </TabsContent>
-            
-            <TabsContent value="day" className="mt-4">
-              {renderDayView()}
-            </TabsContent>
-          </Tabs>
-          
-          
+            {/* Horarios disponibles a la derecha */}
+            <div className="space-y-4">
+              <div className="text-center">
+                <h3 className="text-lg font-semibold mb-2">
+                  Horarios Disponibles para {currentDate.toLocaleDateString('es-ES', { 
+                    weekday: 'long', 
+                    day: 'numeric', 
+                    month: 'long' 
+                  })}
+                </h3>
+              </div>
+              
+              {renderAvailableTimeSlots()}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -747,17 +652,40 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
             <CardHeader>
               <CardTitle className="flex items-center space-x-2">
                 <Calendar className="h-5 w-5" />
-                <span>Confirmar Reserva</span>
+                <span>
+                  {selectedTurno.estado === 'disponible' ? 'Confirmar Reserva' : 'Horario No Disponible'}
+                </span>
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-center">
-                <p className="text-lg font-medium mb-2">¿Confirmar entrenamiento?</p>
-                <div className="space-y-2 text-sm text-muted-foreground">
-                  <p><strong>Fecha:</strong> {new Date(selectedTurno.fecha).toLocaleDateString('es-ES')}</p>
-                  <p><strong>Horario:</strong> {selectedTurno.hora_inicio} - {selectedTurno.hora_fin}</p>
-                  <p><strong>Servicio:</strong> {selectedTurno.servicio}</p>
-                </div>
+                {selectedTurno.estado === 'disponible' ? (
+                  <>
+                    <p className="text-lg font-medium mb-2">¿Confirmar entrenamiento?</p>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p><strong>Fecha:</strong> {new Date(selectedTurno.fecha).toLocaleDateString('es-ES')}</p>
+                      <p><strong>Horario:</strong> {selectedTurno.hora_inicio} - {selectedTurno.hora_fin}</p>
+                      <p><strong>Servicio:</strong> {selectedTurno.servicio}</p>
+                      {selectedTurno.profesional_nombre && (
+                        <p><strong>Profesional:</strong> {selectedTurno.profesional_nombre}</p>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-lg font-medium mb-2 text-destructive">Este horario no está disponible</p>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p><strong>Fecha:</strong> {new Date(selectedTurno.fecha).toLocaleDateString('es-ES')}</p>
+                      <p><strong>Horario:</strong> {selectedTurno.hora_inicio} - {selectedTurno.hora_fin}</p>
+                      <p><strong>Estado:</strong> Todos los slots están ocupados</p>
+                    </div>
+                    <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="text-sm text-amber-800">
+                        Te sugerimos elegir otro horario disponible o seleccionar una fecha diferente.
+                      </p>
+                    </div>
+                  </>
+                )}
               </div>
               
               <div className="flex space-x-2">
@@ -769,14 +697,16 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
                   }}
                   className="flex-1"
                 >
-                  Cancelar
+                  {selectedTurno.estado === 'disponible' ? 'Cancelar' : 'Cerrar'}
                 </Button>
-                <Button
-                  onClick={() => reservarTurnoDesdeCalendario(selectedTurno)}
-                  className="flex-1"
-                >
-                  Confirmar Reserva
-                </Button>
+                {selectedTurno.estado === 'disponible' && (
+                  <Button
+                    onClick={() => reservarTurnoDesdeCalendario(selectedTurno)}
+                    className="flex-1"
+                  >
+                    Confirmar Reserva
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
