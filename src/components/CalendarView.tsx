@@ -228,10 +228,12 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     
     if (viewMode === 'week') {
       const { startDate, endDate } = getDateRange();
-      return `${startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      const weekRange = `${startDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - ${endDate.toLocaleDateString('es-ES', { day: 'numeric', month: 'short', year: 'numeric' })}`;
+      return weekRange.charAt(0).toUpperCase() + weekRange.slice(1);
     }
     
-    return date.toLocaleDateString('es-ES', options);
+    const formattedDate = date.toLocaleDateString('es-ES', options);
+    return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 
   const getTurnosForDate = (date: Date) => {

@@ -234,12 +234,15 @@ export const TurnoReservation = () => {
   };
 
   const formatDate = (date: Date) => {
-    return date.toLocaleDateString('es-ES', {
+    const formattedDate = date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
     });
+    
+    // Capitalizar solo la primera letra del string completo
+    return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 
   const getStatusColor = (estado: string) => {
@@ -319,47 +322,38 @@ export const TurnoReservation = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header con navegación de fecha */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5" />
-              <span>Reserva de Entrenamiento Personal</span>
-            </CardTitle>
-            
-            <div className="flex items-center space-x-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navegarFecha('prev')}
-              >
-                ← Anterior
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setSelectedDate(new Date())}
-              >
-                Hoy
-              </Button>
-              
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => navegarFecha('next')}
-              >
-                Siguiente →
-              </Button>
-            </div>
-          </div>
-          
-          <div className="text-center text-lg font-medium">
-            {formatDate(selectedDate)}
-          </div>
-        </CardHeader>
-      </Card>
+             {/* Header con navegación de fecha */}
+       <div className="flex justify-center">
+         <Card className="w-[460px]">
+           <CardHeader className="py-3">
+             <div className="flex items-center justify-between">
+               <div className="flex items-center space-x-2">
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={() => navegarFecha('prev')}
+                 >
+                   ←
+                 </Button>
+               </div>
+               
+               <div className="text-center text-xl font-medium">
+                 {formatDate(selectedDate)}
+               </div>
+               
+               <div className="flex items-center space-x-2">
+                 <Button
+                   variant="outline"
+                   size="sm"
+                   onClick={() => navegarFecha('next')}
+                 >
+                   →
+                 </Button>
+               </div>
+             </div>
+           </CardHeader>
+         </Card>
+       </div>
 
       {/* Tabs para Turnos Disponibles y Mis Reservas */}
       <Tabs defaultValue="disponibles" className="w-full">
@@ -388,14 +382,11 @@ export const TurnoReservation = () => {
                   {turnosDisponibles.slice(0, 8).map(turno => (
                     <Card key={turno.id} className="hover:shadow-md transition-shadow min-h-[140px]">
                       <CardContent className="p-3">
-                        <div className="flex items-center justify-between mb-3">
-                          <Badge className={getStatusColor(turno.estado)}>
-                            {turno.estado}
-                          </Badge>
-                          <span className="text-sm text-muted-foreground">
-                            {turno.servicio}
-                          </span>
-                        </div>
+                                                 <div className="flex items-center justify-start mb-3">
+                           <Badge className={getStatusColor(turno.estado)}>
+                             {turno.estado}
+                           </Badge>
+                         </div>
                         
                         <div className="space-y-2">
                           <div className="flex items-center space-x-2">
@@ -405,12 +396,12 @@ export const TurnoReservation = () => {
                             </span>
                           </div>
                           
-                          <div className="flex items-center space-x-2">
-                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(turno.fecha).toLocaleDateString('es-ES')}
-                            </span>
-                          </div>
+                                                     <div className="flex items-center space-x-2">
+                             <Calendar className="h-4 w-4 text-muted-foreground" />
+                             <span className="text-xs text-muted-foreground">
+                               {new Date(selectedDate).toLocaleDateString('es-ES')}
+                             </span>
+                           </div>
                         </div>
                         
                         <Button
