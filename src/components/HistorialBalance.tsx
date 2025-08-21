@@ -26,9 +26,316 @@ export const HistorialBalance: React.FC = () => {
     cantidad_clientes: 0
   });
   const [resumenDiario, setResumenDiario] = useState<ResumenDiario[]>([]);
+  const [turnosIndividuales, setTurnosIndividuales] = useState<Turno[]>([]);
   const [fechaExpandida, setFechaExpandida] = useState<string | null>(null);
   const [terminoBusqueda, setTerminoBusqueda] = useState('');
   const [tarifaPorHora, setTarifaPorHora] = useState(2500); // Tarifa por defecto en pesos argentinos
+  const [filtroSemana, setFiltroSemana] = useState<string>('todas');
+  const [filtroDia, setFiltroDia] = useState<string>('todos');
+  const [filtroPago, setFiltroPago] = useState<string>('todos');
+
+  // Datos simulados de julio 2024 (TEMPORAL - BORRAR DESPUÉS)
+  const turnosSimuladosJulio: Turno[] = [
+    // Semana 1 (1-7 julio)
+    {
+      id: '1',
+      fecha: '2024-07-01',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'María González', email: 'maria.gonzalez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '2',
+      fecha: '2024-07-01',
+      hora_inicio: '14:00',
+      hora_fin: '16:00',
+      usuario: { full_name: 'Carlos Rodríguez', email: 'carlos.rodriguez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '3',
+      fecha: '2024-07-01',
+      hora_inicio: '17:00',
+      hora_fin: '18:00',
+      usuario: { full_name: 'Ana Martínez', email: 'ana.martinez@email.com' },
+      estado_pago: 'pendiente',
+      tarifa_aplicada: 2500,
+      duracion_horas: 1
+    },
+    {
+      id: '4',
+      fecha: '2024-07-02',
+      hora_inicio: '10:00',
+      hora_fin: '12:00',
+      usuario: { full_name: 'Luis Fernández', email: 'luis.fernandez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '5',
+      fecha: '2024-07-03',
+      hora_inicio: '15:00',
+      hora_fin: '17:00',
+      usuario: { full_name: 'Sofía López', email: 'sofia.lopez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '6',
+      fecha: '2024-07-04',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'María González', email: 'maria.gonzalez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '7',
+      fecha: '2024-07-05',
+      hora_inicio: '16:00',
+      hora_fin: '18:00',
+      usuario: { full_name: 'Diego Silva', email: 'diego.silva@email.com' },
+      estado_pago: 'pendiente',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    
+    // Semana 2 (8-14 julio)
+    {
+      id: '8',
+      fecha: '2024-07-08',
+      hora_inicio: '11:00',
+      hora_fin: '13:00',
+      usuario: { full_name: 'Carlos Rodríguez', email: 'carlos.rodriguez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '9',
+      fecha: '2024-07-08',
+      hora_inicio: '14:00',
+      hora_fin: '15:00',
+      usuario: { full_name: 'Valentina Ruiz', email: 'valentina.ruiz@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 1
+    },
+    {
+      id: '10',
+      fecha: '2024-07-09',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'Ana Martínez', email: 'ana.martinez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '11',
+      fecha: '2024-07-10',
+      hora_inicio: '15:00',
+      hora_fin: '17:00',
+      usuario: { full_name: 'Roberto Jiménez', email: 'roberto.jimenez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '12',
+      fecha: '2024-07-11',
+      hora_inicio: '10:00',
+      hora_fin: '12:00',
+      usuario: { full_name: 'Luis Fernández', email: 'luis.fernandez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '13',
+      fecha: '2024-07-12',
+      hora_inicio: '16:00',
+      hora_fin: '18:00',
+      usuario: { full_name: 'Sofía López', email: 'sofia.lopez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    
+    // Semana 3 (15-21 julio)
+    {
+      id: '14',
+      fecha: '2024-07-15',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'María González', email: 'maria.gonzalez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '15',
+      fecha: '2024-07-15',
+      hora_inicio: '14:00',
+      hora_fin: '16:00',
+      usuario: { full_name: 'Carlos Rodríguez', email: 'carlos.rodriguez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '16',
+      fecha: '2024-07-16',
+      hora_inicio: '11:00',
+      hora_fin: '13:00',
+      usuario: { full_name: 'Diego Silva', email: 'diego.silva@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '17',
+      fecha: '2024-07-17',
+      hora_inicio: '15:00',
+      hora_fin: '17:00',
+      usuario: { full_name: 'Valentina Ruiz', email: 'valentina.ruiz@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '18',
+      fecha: '2024-07-18',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'Ana Martínez', email: 'ana.martinez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '19',
+      fecha: '2024-07-19',
+      hora_inicio: '16:00',
+      hora_fin: '18:00',
+      usuario: { full_name: 'Roberto Jiménez', email: 'roberto.jimenez@email.com' },
+      estado_pago: 'pendiente',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    
+    // Semana 4 (22-28 julio)
+    {
+      id: '20',
+      fecha: '2024-07-22',
+      hora_inicio: '10:00',
+      hora_fin: '12:00',
+      usuario: { full_name: 'Luis Fernández', email: 'luis.fernandez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '21',
+      fecha: '2024-07-22',
+      hora_inicio: '14:00',
+      hora_fin: '16:00',
+      usuario: { full_name: 'Sofía López', email: 'sofia.lopez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '22',
+      fecha: '2024-07-23',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'María González', email: 'maria.gonzalez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '23',
+      fecha: '2024-07-24',
+      hora_inicio: '15:00',
+      hora_fin: '17:00',
+      usuario: { full_name: 'Carlos Rodríguez', email: 'carlos.rodriguez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '24',
+      fecha: '2024-07-25',
+      hora_inicio: '11:00',
+      hora_fin: '13:00',
+      usuario: { full_name: 'Diego Silva', email: 'diego.silva@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '25',
+      fecha: '2024-07-26',
+      hora_inicio: '16:00',
+      hora_fin: '18:00',
+      usuario: { full_name: 'Valentina Ruiz', email: 'valentina.ruiz@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    
+    // Semana 5 (29-31 julio)
+    {
+      id: '26',
+      fecha: '2024-07-29',
+      hora_inicio: '09:00',
+      hora_fin: '11:00',
+      usuario: { full_name: 'Ana Martínez', email: 'ana.martinez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '27',
+      fecha: '2024-07-29',
+      hora_inicio: '14:00',
+      hora_fin: '16:00',
+      usuario: { full_name: 'Roberto Jiménez', email: 'roberto.jimenez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '28',
+      fecha: '2024-07-30',
+      hora_inicio: '10:00',
+      hora_fin: '12:00',
+      usuario: { full_name: 'Luis Fernández', email: 'luis.fernandez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    },
+    {
+      id: '29',
+      fecha: '2024-07-31',
+      hora_inicio: '15:00',
+      hora_fin: '17:00',
+      usuario: { full_name: 'Sofía López', email: 'sofia.lopez@email.com' },
+      estado_pago: 'pagado',
+      tarifa_aplicada: 2500,
+      duracion_horas: 2
+    }
+  ];
 
   const meses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -37,16 +344,62 @@ export const HistorialBalance: React.FC = () => {
 
   const años = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
 
+  // Obtener semanas del mes seleccionado
+  const obtenerSemanasDelMes = () => {
+    const primerDia = new Date(añoSeleccionado, mesSeleccionado, 1);
+    const ultimoDia = new Date(añoSeleccionado, mesSeleccionado + 1, 0);
+    const semanas = [];
+    
+    let fechaActual = new Date(primerDia);
+    let semanaActual = 1;
+    
+    while (fechaActual <= ultimoDia) {
+      const inicioSemana = new Date(fechaActual);
+      const finSemana = new Date(fechaActual);
+      finSemana.setDate(finSemana.getDate() + 6);
+      
+      if (finSemana > ultimoDia) {
+        finSemana.setTime(ultimoDia.getTime());
+      }
+      
+      semanas.push({
+        numero: semanaActual,
+        inicio: inicioSemana,
+        fin: finSemana,
+        label: `Semana ${semanaActual} (${inicioSemana.getDate()}-${finSemana.getDate()})`
+      });
+      
+      fechaActual.setDate(fechaActual.getDate() + 7);
+      semanaActual++;
+    }
+    
+    return semanas;
+  };
+
+  // Obtener días del mes seleccionado
+  const obtenerDiasDelMes = () => {
+    const ultimoDia = new Date(añoSeleccionado, mesSeleccionado + 1, 0);
+    const dias = [];
+    
+    for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
+      const fecha = new Date(añoSeleccionado, mesSeleccionado, dia);
+      dias.push({
+        numero: dia,
+        fecha: fecha,
+        label: `${dia} de ${meses[mesSeleccionado]}`
+      });
+    }
+    
+    return dias;
+  };
+
   // Cargar datos al montar el componente
   useEffect(() => {
-    // Por defecto mostrar mes anterior
-    const mesAnterior = new Date().getMonth() === 0 ? 11 : new Date().getMonth() - 1;
-    const añoAnterior = new Date().getMonth() === 0 ? new Date().getFullYear() - 1 : new Date().getFullYear();
+    // Por defecto mostrar julio 2024 (datos simulados)
+    setMesSeleccionado(6); // Julio (0-indexed)
+    setAñoSeleccionado(2024);
     
-    setMesSeleccionado(mesAnterior);
-    setAñoSeleccionado(añoAnterior);
-    
-    cargarDatosHistorial(añoAnterior, mesAnterior);
+    cargarDatosHistorial(2024, 6);
     cargarTarifaActual();
   }, []);
 
@@ -61,14 +414,34 @@ export const HistorialBalance: React.FC = () => {
 
   const cargarDatosHistorial = async (año: number, mes: number) => {
     try {
-      // Obtener turnos del período
+      // Verificar si es julio 2024 para usar datos simulados
+      if (año === 2024 && mes === 6) { // mes 6 = julio (0-indexed)
+        // Usar datos simulados de julio
+        setTurnosIndividuales(turnosSimuladosJulio);
+        
+        // Calcular resumen mensual
+        const resumen = HistorialService.calcularResumenMensual(turnosSimuladosJulio);
+        setResumenMensual(resumen);
+        
+        // Agrupar por día (para mantener compatibilidad)
+        const resumenDiario = HistorialService.agruparTurnosPorDia(turnosSimuladosJulio);
+        setResumenDiario(resumenDiario);
+        
+        console.log('📊 Cargando datos simulados de julio 2024');
+        return;
+      }
+      
+      // Obtener turnos del período (datos reales)
       const turnos = await HistorialService.obtenerTurnosPeriodo(año, mes);
+      
+      // Guardar turnos individuales
+      setTurnosIndividuales(turnos);
       
       // Calcular resumen mensual
       const resumen = HistorialService.calcularResumenMensual(turnos);
       setResumenMensual(resumen);
       
-      // Agrupar por día
+      // Agrupar por día (para mantener compatibilidad)
       const resumenDiario = HistorialService.agruparTurnosPorDia(turnos);
       setResumenDiario(resumenDiario);
     } catch (error) {
@@ -80,6 +453,7 @@ export const HistorialBalance: React.FC = () => {
         cantidad_clientes: 0
       });
       setResumenDiario([]);
+      setTurnosIndividuales([]);
     }
   };
 
@@ -97,7 +471,37 @@ export const HistorialBalance: React.FC = () => {
 
   const exportarDatos = () => {
     const nombreArchivo = `historial-${meses[mesSeleccionado]}-${añoSeleccionado}.csv`;
-    HistorialService.exportarCSV(resumenDiario, nombreArchivo);
+    
+    // Crear CSV con turnos individuales
+    const headers = ['Fecha', 'Día', 'Alumno', 'Email', 'Horario', 'Duración', 'Estado Pago', 'Tarifa por Hora', 'Costo Total'];
+    const datosCSV = turnosIndividualesFiltrados.map(turno => [
+      new Date(turno.fecha).toLocaleDateString('es-ES'),
+      new Date(turno.fecha).toLocaleDateString('es-ES', { weekday: 'long' }),
+      turno.usuario.full_name,
+      turno.usuario.email,
+      `${turno.hora_inicio} - ${turno.hora_fin}`,
+      `${turno.duracion_horas}h`,
+      turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente',
+      `$${turno.tarifa_aplicada.toLocaleString()}`,
+      `$${(turno.tarifa_aplicada * turno.duracion_horas).toLocaleString()}`
+    ]);
+    
+    const csvContent = [headers, ...datosCSV]
+      .map(row => row.join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+      const url = URL.createObjectURL(blob);
+      link.setAttribute('href', url);
+      link.setAttribute('download', nombreArchivo);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
   };
 
   const turnosFiltrados = resumenDiario.map(dia => ({
@@ -107,6 +511,41 @@ export const HistorialBalance: React.FC = () => {
       turno.usuario.email.toLowerCase().includes(terminoBusqueda.toLowerCase())
     )
   }));
+
+  // Filtrar turnos individuales según criterios
+  const turnosIndividualesFiltrados = turnosIndividuales.filter(turno => {
+    // Filtro por búsqueda
+    const coincideBusqueda = 
+      turno.usuario.full_name.toLowerCase().includes(terminoBusqueda.toLowerCase()) ||
+      turno.usuario.email.toLowerCase().includes(terminoBusqueda.toLowerCase());
+    
+    if (!coincideBusqueda) return false;
+    
+    // Filtro por semana
+    if (filtroSemana !== 'todas') {
+      const semanaSeleccionada = parseInt(filtroSemana);
+      const semanas = obtenerSemanasDelMes();
+      const semana = semanas.find(s => s.numero === semanaSeleccionada);
+      if (semana) {
+        const fechaTurno = new Date(turno.fecha);
+        if (fechaTurno < semana.inicio || fechaTurno > semana.fin) return false;
+      }
+    }
+    
+    // Filtro por día
+    if (filtroDia !== 'todos') {
+      const diaSeleccionado = parseInt(filtroDia);
+      const fechaTurno = new Date(turno.fecha);
+      if (fechaTurno.getDate() !== diaSeleccionado) return false;
+    }
+    
+    // Filtro por estado de pago
+    if (filtroPago !== 'todos') {
+      if (turno.estado_pago !== filtroPago) return false;
+    }
+    
+    return true;
+  });
 
   const actualizarTarifa = async () => {
     try {
@@ -220,20 +659,82 @@ export const HistorialBalance: React.FC = () => {
       {/* Búsqueda y exportación */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col md:flex-row gap-4 justify-between">
-            <div className="flex-1 relative max-w-md">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nombre o email..."
-                value={terminoBusqueda}
-                onChange={(e) => filtrarPorUsuario(e.target.value)}
-                className="pl-10"
-              />
+          <div className="space-y-4">
+            {/* Filtros principales */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Filtro por semana */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Semana</label>
+                <Select value={filtroSemana} onValueChange={setFiltroSemana}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todas las semanas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todas">Todas las semanas</SelectItem>
+                    {obtenerSemanasDelMes().map(semana => (
+                      <SelectItem key={semana.numero} value={semana.numero.toString()}>
+                        {semana.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Filtro por día */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Día</label>
+                <Select value={filtroDia} onValueChange={setFiltroDia}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los días" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos los días</SelectItem>
+                    {obtenerDiasDelMes().map(dia => (
+                      <SelectItem key={dia.numero} value={dia.numero.toString()}>
+                        {dia.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Filtro por estado de pago */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Estado de Pago</label>
+                <Select value={filtroPago} onValueChange={setFiltroPago}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos los pagos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos los pagos</SelectItem>
+                    <SelectItem value="pagado">Pagado</SelectItem>
+                    <SelectItem value="pendiente">Pendiente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {/* Búsqueda por nombre/email */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Buscar Alumno</label>
+                <div className="relative">
+                  <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Nombre o email..."
+                    value={terminoBusqueda}
+                    onChange={(e) => filtrarPorUsuario(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
             </div>
-            <Button onClick={exportarDatos} variant="outline" className="flex items-center gap-2">
-              <Download className="h-4 w-4" />
-              Exportar a CSV
-            </Button>
+            
+            {/* Botón de exportación */}
+            <div className="flex justify-end">
+              <Button onClick={exportarDatos} variant="outline" className="flex items-center gap-2">
+                <Download className="h-4 w-4" />
+                Exportar a CSV
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -242,6 +743,17 @@ export const HistorialBalance: React.FC = () => {
       <Card>
         <CardHeader>
           <CardTitle>Historial Mensual - {meses[mesSeleccionado]} {añoSeleccionado}</CardTitle>
+          <div className="text-sm text-muted-foreground">
+            {turnosIndividualesFiltrados.length} turnos encontrados
+            {añoSeleccionado === 2024 && mesSeleccionado === 6 && (
+              <span className="ml-2 inline-flex items-center gap-1">
+                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
+                  📊 Datos Simulados
+                </Badge>
+                <span className="text-xs">(29 turnos, 8 clientes únicos)</span>
+              </span>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -249,89 +761,68 @@ export const HistorialBalance: React.FC = () => {
               <thead>
                 <tr className="border-b">
                   <th className="text-left p-3 font-medium">Fecha</th>
-                  <th className="text-left p-3 font-medium">Ingresos Diarios</th>
-                  <th className="text-left p-3 font-medium">Cantidad de Turnos</th>
-                  <th className="text-left p-3 font-medium">Horas Totales</th>
-                  <th className="text-left p-3 font-medium">Acciones</th>
+                  <th className="text-left p-3 font-medium">Alumno</th>
+                  <th className="text-left p-3 font-medium">Horario</th>
+                  <th className="text-left p-3 font-medium">Duración</th>
+                  <th className="text-left p-3 font-medium">Estado de Pago</th>
+                  <th className="text-left p-3 font-medium">Costo</th>
                 </tr>
               </thead>
               <tbody>
-                {turnosFiltrados.map((dia) => (
-                  <React.Fragment key={dia.fecha}>
-                    <tr className="border-b hover:bg-muted/50 cursor-pointer" 
-                        onClick={() => toggleFechaExpandida(dia.fecha)}>
-                      <td className="p-3">
-                        <div className="flex items-center gap-2">
-                          {fechaExpandida === dia.fecha ? (
-                            <ChevronDown className="h-4 w-4" />
-                          ) : (
-                            <ChevronRight className="h-4 w-4" />
-                          )}
-                          {new Date(dia.fecha).getDate()} de {meses[mesSeleccionado]}
+                {turnosIndividualesFiltrados.map((turno) => (
+                  <tr key={turno.id} className="border-b hover:bg-muted/50">
+                    <td className="p-3">
+                      <div className="text-sm">
+                        <div className="font-medium">
+                          {new Date(turno.fecha).getDate()} de {meses[mesSeleccionado]}
                         </div>
-                      </td>
-                      <td className="p-3">
-                        <span className={`font-medium ${dia.ingresos_diarios > 0 ? 'text-green-600' : 'text-muted-foreground'}`}>
-                          ${dia.ingresos_diarios.toLocaleString()}
-                        </span>
-                      </td>
-                      <td className="p-3">{dia.cantidad_turnos}</td>
-                      <td className="p-3">{dia.horas_totales}h</td>
-                      <td className="p-3">
-                        <Button variant="ghost" size="sm">
-                          {fechaExpandida === dia.fecha ? 'Ocultar' : 'Ver Detalle'}
-                        </Button>
-                      </td>
-                    </tr>
-                    
-                    {/* Vista expandida del día */}
-                    {fechaExpandida === dia.fecha && (
-                      <tr>
-                        <td colSpan={5} className="p-0">
-                          <div className="bg-muted/30 p-4">
-                            <h4 className="font-medium mb-3">Turnos del {new Date(dia.fecha).getDate()} de {meses[mesSeleccionado]}</h4>
-                            {dia.turnos.length > 0 ? (
-                              <div className="space-y-3">
-                                {dia.turnos.map((turno) => (
-                                  <div key={turno.id} className="flex items-center justify-between p-3 bg-background rounded-lg border">
-                                    <div className="flex-1">
-                                      <p className="font-medium">{turno.usuario.full_name}</p>
-                                      <p className="text-sm text-muted-foreground">{turno.usuario.email}</p>
-                                      <p className="text-sm text-muted-foreground">
-                                        {turno.hora_inicio} - {turno.hora_fin} ({turno.duracion_horas}h)
-                                      </p>
-                                    </div>
-                                    <div className="flex items-center gap-3">
-                                      <Badge variant={turno.estado_pago === 'pagado' ? 'default' : 'secondary'}>
-                                        {turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente'}
-                                      </Badge>
-                                      <span className="font-medium">
-                                        ${(turno.tarifa_aplicada * turno.duracion_horas).toLocaleString()}
-                                      </span>
-                                    </div>
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-muted-foreground text-center py-4">
-                                No hay turnos registrados para este día
-                              </p>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </React.Fragment>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(turno.fecha).toLocaleDateString('es-ES', { weekday: 'long' })}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div>
+                        <div className="font-medium">{turno.usuario.full_name}</div>
+                        <div className="text-sm text-muted-foreground">{turno.usuario.email}</div>
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div className="text-sm">
+                        {turno.hora_inicio} - {turno.hora_fin}
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <div className="text-sm">
+                        {turno.duracion_horas}h
+                      </div>
+                    </td>
+                    <td className="p-3">
+                      <Badge variant={turno.estado_pago === 'pagado' ? 'default' : 'secondary'}>
+                        {turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente'}
+                      </Badge>
+                    </td>
+                    <td className="p-3">
+                      <div className="font-medium text-green-600">
+                        ${(turno.tarifa_aplicada * turno.duracion_horas).toLocaleString()}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        ${turno.tarifa_aplicada.toLocaleString()}/h
+                      </div>
+                    </td>
+                  </tr>
                 ))}
+                
+                {turnosIndividualesFiltrados.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="text-center py-8">
+                      <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                      <p className="text-muted-foreground">No hay turnos para los filtros seleccionados</p>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-            
-            {turnosFiltrados.length === 0 && (
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No hay datos para el período seleccionado</p>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
