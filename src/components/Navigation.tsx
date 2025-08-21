@@ -3,10 +3,15 @@ import { useAuthContext } from '../contexts/AuthContext'
 import { Button } from './ui/button'
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from './ui/dropdown-menu'
-import { LogOut, User, Settings } from 'lucide-react'
+import { 
+  LogOut, 
+  User, 
+  Crown, 
+  Shield,
+  Wallet
+} from 'lucide-react';
 import { useAdmin } from '@/hooks/useAdmin'
 import { useNavigate } from 'react-router-dom'
-import { Crown, Shield } from 'lucide-react'
 
 export const Navigation: React.FC = () => {
   const { user, signOut } = useAuthContext()
@@ -30,6 +35,11 @@ export const Navigation: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16 relative">
           <div className="w-32 h-12">
+            {isAdmin && (
+              <div className="flex items-center h-full">
+                <span className="text-lg font-medium text-muted-foreground">Admin panel</span>
+              </div>
+            )}
           </div>
 
           <div className="absolute left-1/2 transform -translate-x-1/2">
@@ -67,14 +77,18 @@ export const Navigation: React.FC = () => {
                   <span>Perfil</span>
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="mr-2 h-4 w-4" />
+                  <Shield className="mr-2 h-4 w-4" />
                   <span>Configuración</span>
                 </DropdownMenuItem>
                 {isAdmin && (
                   <>
                     <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={() => navigate('/admin/historial')}>
+                      <Wallet className="mr-2 h-4 w-4" />
+                      <span>Historial y Balance</span>
+                    </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/admin')}>
-                      <Crown className="mr-2 h-4 w-4" />
+                      <Shield className="mr-2 h-4 w-4" />
                       <span>Panel de Administración</span>
                     </DropdownMenuItem>
                     <DropdownMenuItem onClick={() => navigate('/admin/users')}>

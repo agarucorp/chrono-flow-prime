@@ -14,7 +14,9 @@ import {
   Trash2,
   Eye,
   EyeOff,
-  Settings
+  Settings,
+  Clock,
+  Wallet
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,8 +34,11 @@ import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Footer } from '@/components/Footer';
+import { HistorialBalance } from '@/components/HistorialBalance';
+import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 
 export default function Admin() {
+  const { activeTab, handleTabChange } = useAdminNavigation();
   const { 
     isAdmin, 
     isLoading, 
@@ -134,19 +139,13 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground mb-2">
-            Panel de Administración
-          </h1>
-          <p className="text-muted-foreground">
-            Gestión centralizada de usuarios y turnos del sistema.
-          </p>
-        </div>
-
         {/* Tabs principales */}
-        <Tabs defaultValue="usuarios" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="historial" className="flex items-center space-x-2">
+              <Wallet className="h-4 w-4" />
+              <span>Historial y Balance</span>
+            </TabsTrigger>
             <TabsTrigger value="usuarios" className="flex items-center space-x-2">
               <Users className="h-4 w-4" />
               <span>Usuarios</span>
@@ -161,47 +160,13 @@ export default function Admin() {
             </TabsTrigger>
           </TabsList>
 
+          {/* Tab de Historial y Balance */}
+          <TabsContent value="historial" className="mt-6">
+            <HistorialBalance />
+          </TabsContent>
+
           {/* Tab de Usuarios */}
           <TabsContent value="usuarios" className="mt-6">
-            {/* Stats Cards */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Usuarios</CardTitle>
-                  <Users className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{allUsers.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Usuarios registrados en el sistema
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Administradores</CardTitle>
-                  <Crown className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{adminUsers.length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Usuarios con permisos de admin
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Clientes</CardTitle>
-                  <User className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{allUsers.filter(u => u.role === 'client').length}</div>
-                  <p className="text-xs text-muted-foreground">
-                    Usuarios con rol de cliente
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
 
             {/* Search and Filters */}
             <Card className="mb-6">
