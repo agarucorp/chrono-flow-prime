@@ -34,6 +34,9 @@ export const HistorialBalance: React.FC = () => {
   const [filtroDia, setFiltroDia] = useState<string>('todos');
   const [filtroPago, setFiltroPago] = useState<string>('todos');
 
+  // Duración fija para todas las clases (en horas)
+  const duracionClaseFija = 2;
+
   // Datos simulados de julio 2024 (TEMPORAL - BORRAR DESPUÉS)
   const turnosSimuladosJulio: Turno[] = [
     // Semana 1 (1-7 julio)
@@ -419,8 +422,14 @@ export const HistorialBalance: React.FC = () => {
         // Usar datos simulados de julio
         setTurnosIndividuales(turnosSimuladosJulio);
         
-        // Calcular resumen mensual
-        const resumen = HistorialService.calcularResumenMensual(turnosSimuladosJulio);
+        // Calcular resumen mensual con duración fija
+        const resumen = {
+          ingresos_totales: turnosSimuladosJulio
+            .filter(t => t.estado_pago === 'pagado')
+            .reduce((total, turno) => total + (turno.tarifa_aplicada * duracionClaseFija), 0),
+          total_horas: turnosSimuladosJulio.length * duracionClaseFija,
+          cantidad_clientes: new Set(turnosSimuladosJulio.map(t => t.usuario.email)).size
+        };
         setResumenMensual(resumen);
         
         // Agrupar por día (para mantener compatibilidad)
@@ -457,10 +466,6 @@ export const HistorialBalance: React.FC = () => {
     }
   };
 
-  const handleCambioPeriodo = () => {
-    cargarDatosHistorial(añoSeleccionado, mesSeleccionado);
-  };
-
   const toggleFechaExpandida = (fecha: string) => {
     setFechaExpandida(fechaExpandida === fecha ? null : fecha);
   };
@@ -473,17 +478,17 @@ export const HistorialBalance: React.FC = () => {
     const nombreArchivo = `historial-${meses[mesSeleccionado]}-${añoSeleccionado}.csv`;
     
     // Crear CSV con turnos individuales
-    const headers = ['Fecha', 'Día', 'Alumno', 'Email', 'Horario', 'Duración', 'Estado Pago', 'Tarifa por Hora', 'Costo Total'];
+    const headers = ['Fecha', 'Día', 'Alumno', 'Email', 'Horario', 'Duración', 'Estado Pago', 'Tarifa por Hora', 'Total'];
     const datosCSV = turnosIndividualesFiltrados.map(turno => [
       new Date(turno.fecha).toLocaleDateString('es-ES'),
       new Date(turno.fecha).toLocaleDateString('es-ES', { weekday: 'long' }),
       turno.usuario.full_name,
       turno.usuario.email,
       `${turno.hora_inicio} - ${turno.hora_fin}`,
-      `${turno.duracion_horas}h`,
+      `${duracionClaseFija}h`,
       turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente',
       `$${turno.tarifa_aplicada.toLocaleString()}`,
-      `$${(turno.tarifa_aplicada * turno.duracion_horas).toLocaleString()}`
+      `$${(turno.tarifa_aplicada * duracionClaseFija).toLocaleString()}`
     ]);
     
     const csvContent = [headers, ...datosCSV]
@@ -575,7 +580,11 @@ export const HistorialBalance: React.FC = () => {
           <div className="flex gap-4 items-center">
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Año:</span>
-              <Select value={añoSeleccionado.toString()} onValueChange={(value) => setAñoSeleccionado(parseInt(value))}>
+              <Select value={añoSeleccionado.toString()} onValueChange={(value) => {
+                const nuevoAño = parseInt(value);
+                setAñoSeleccionado(nuevoAño);
+                cargarDatosHistorial(nuevoAño, mesSeleccionado);
+              }}>
                 <SelectTrigger className="w-24">
                   <SelectValue />
                 </SelectTrigger>
@@ -589,7 +598,11 @@ export const HistorialBalance: React.FC = () => {
             
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Mes:</span>
-              <Select value={mesSeleccionado.toString()} onValueChange={(value) => setMesSeleccionado(parseInt(value))}>
+              <Select value={mesSeleccionado.toString()} onValueChange={(value) => {
+                const nuevoMes = parseInt(value);
+                setMesSeleccionado(nuevoMes);
+                cargarDatosHistorial(añoSeleccionado, nuevoMes);
+              }}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
                 </SelectTrigger>
@@ -600,10 +613,6 @@ export const HistorialBalance: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            
-            <Button onClick={handleCambioPeriodo} variant="outline">
-              Cargar Datos
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -763,9 +772,8 @@ export const HistorialBalance: React.FC = () => {
                   <th className="text-left p-3 font-medium">Fecha</th>
                   <th className="text-left p-3 font-medium">Alumno</th>
                   <th className="text-left p-3 font-medium">Horario</th>
-                  <th className="text-left p-3 font-medium">Duración</th>
                   <th className="text-left p-3 font-medium">Estado de Pago</th>
-                  <th className="text-left p-3 font-medium">Costo</th>
+                  <th className="text-left p-3 font-medium">Total</th>
                 </tr>
               </thead>
               <tbody>
@@ -793,18 +801,13 @@ export const HistorialBalance: React.FC = () => {
                       </div>
                     </td>
                     <td className="p-3">
-                      <div className="text-sm">
-                        {turno.duracion_horas}h
-                      </div>
-                    </td>
-                    <td className="p-3">
                       <Badge variant={turno.estado_pago === 'pagado' ? 'default' : 'secondary'}>
                         {turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente'}
                       </Badge>
                     </td>
                     <td className="p-3">
                       <div className="font-medium text-green-600">
-                        ${(turno.tarifa_aplicada * turno.duracion_horas).toLocaleString()}
+                        ${(turno.tarifa_aplicada * duracionClaseFija).toLocaleString()}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         ${turno.tarifa_aplicada.toLocaleString()}/h
