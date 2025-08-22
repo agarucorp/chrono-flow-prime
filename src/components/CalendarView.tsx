@@ -29,9 +29,10 @@ interface Turno {
 
 interface CalendarViewProps {
   onTurnoReservado?: () => void; // Callback para notificar cuando se reserva un turno
+  isAdminView?: boolean; // Nueva prop para identificar si es vista de admin
 }
 
-export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
+export const CalendarView = ({ onTurnoReservado, isAdminView = false }: CalendarViewProps) => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const { isAdmin } = useAdmin();
@@ -404,7 +405,8 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
         horaFin,
         turnosDisponibles: 3 - turnosOcupados.length,
         totalSlots: 3,
-        estado: turnosOcupados.length < 3 ? 'disponible' : 'no_disponible'
+        estado: turnosOcupados.length < 3 ? 'disponible' : 'no_disponible',
+        turnosOcupados: turnosOcupados
       });
     }
 
@@ -412,6 +414,126 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
     const amSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) < 12);
     const pmSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) >= 12);
 
+    // Si es vista de admin, mostrar información de turnos reservados
+    if (isAdminView) {
+      return (
+        <div className="space-y-6">
+          {/* Horarios AM */}
+          {amSlots.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">AM</h4>
+              <div className="space-y-3">
+                {amSlots.map((slot, index) => (
+                  <Card key={`am-${index}`} className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-foreground">
+                            {slot.horaInicio} - {slot.horaFin}
+                          </span>
+                        </div>
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          {slot.turnosOcupados.length}/3 Reservado{slot.turnosOcupados.length !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                      
+                      {slot.turnosOcupados.length > 0 ? (
+                        <div className="space-y-2">
+                          {slot.turnosOcupados.map((turno, turnoIndex) => (
+                            <div key={turnoIndex} className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm font-medium text-foreground">
+                                  {turno.cliente_nombre}
+                                </span>
+                              </div>
+                              <div className="text-xs text-blue-600">
+                                ID: {turno.cliente_id?.slice(0, 8)}...
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-3 text-sm text-muted-foreground">
+                          No hay turnos reservados en este horario
+                        </div>
+                      )}
+                      
+                      {slot.turnosDisponibles > 0 && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <div className="text-xs text-blue-600 font-medium">
+                            {slot.turnosDisponibles} slot{slot.turnosDisponibles !== 1 ? 's' : ''} disponible{slot.turnosDisponibles !== 1 ? 's' : ''}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Horarios PM */}
+          {pmSlots.length > 0 && (
+            <div>
+              <h4 className="text-sm font-medium text-muted-foreground mb-3">PM</h4>
+              <div className="space-y-3">
+                {pmSlots.map((slot, index) => (
+                  <Card key={`pm-${index}`} className="border-l-4 border-l-blue-500">
+                    <CardContent className="p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <Clock className="h-4 w-4 text-blue-600" />
+                          <span className="font-medium text-foreground">
+                            {slot.horaInicio} - {slot.horaFin}
+                          </span>
+                        </div>
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          {slot.turnosOcupados.length}/3 Reservado{slot.turnosOcupados.length !== 1 ? 's' : ''}
+                        </Badge>
+                      </div>
+                      
+                      {slot.turnosOcupados.length > 0 ? (
+                        <div className="space-y-2">
+                          {slot.turnosOcupados.map((turno, turnoIndex) => (
+                            <div key={turnoIndex} className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200">
+                              <div className="flex items-center gap-2">
+                                <User className="h-4 w-4 text-blue-600" />
+                                <span className="text-sm font-medium text-foreground">
+                                  {turno.cliente_nombre}
+                                </span>
+                              </div>
+                              <div className="text-xs text-blue-600">
+                                ID: {turno.cliente_id?.slice(0, 8)}...
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center py-3 text-sm text-muted-foreground">
+                          No hay turnos reservados en este horario
+                        </div>
+                      )}
+                      
+                      {slot.turnosDisponibles > 0 && (
+                        <div className="mt-3 pt-3 border-t border-blue-200">
+                          <div className="text-xs text-blue-600 font-medium">
+                            {slot.turnosDisponibles} slot{slot.turnosDisponibles !== 1 ? 's' : ''} disponible{slot.turnosDisponibles !== 1 ? '' : ''}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // Vista normal para clientes (código existente)
     return (
       <div className="space-y-6">
         {/* Horarios AM */}
@@ -504,13 +626,14 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5" />
-              <span>Reservar Entrenamiento</span>
+              <span>{isAdminView ? 'Vista de Turnos Reservados' : 'Reservar Entrenamiento'}</span>
             </CardTitle>
-            
-
           </div>
-          
-
+          {isAdminView && (
+            <CardDescription>
+              Visualiza los turnos reservados por día y horario
+            </CardDescription>
+          )}
         </CardHeader>
         
         <CardContent>
@@ -561,7 +684,7 @@ export const CalendarView = ({ onTurnoReservado }: CalendarViewProps) => {
             <div className="space-y-4">
               <div className="text-center">
                 <h3 className="text-lg font-semibold mb-2">
-                  Horarios Disponibles para {currentDate.toLocaleDateString('es-ES', { 
+                  {isAdminView ? 'Turnos Reservados para' : 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', { 
                     weekday: 'long', 
                     day: 'numeric', 
                     month: 'long' 

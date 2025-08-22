@@ -592,7 +592,7 @@ export default function Admin() {
 
           {/* Tab de Calendario */}
           <TabsContent value="calendario" className="mt-6">
-            <CalendarView />
+            <CalendarView isAdminView={true} />
           </TabsContent>
         </Tabs>
       </div>
