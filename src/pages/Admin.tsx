@@ -38,6 +38,8 @@ import { Footer } from '@/components/Footer';
 import { HistorialBalance } from '@/components/HistorialBalance';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AdminChart } from '@/components/AdminChart';
+import { useAdminMetrics } from '@/hooks/useAdminMetrics';
 
 export default function Admin() {
   const { activeTab, handleTabChange } = useAdminNavigation();
@@ -59,6 +61,31 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
+  
+  // Estados para el análisis de tendencia
+  const [metricType, setMetricType] = useState<'ingresos' | 'horas' | 'usuarios' | 'pagos'>('ingresos');
+  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
+  const [selectedMonth, setSelectedMonth] = useState('julio');
+  const [selectedYear, setSelectedYear] = useState('2024');
+  
+  // Hook para métricas del negocio
+  const { metrics, isLoading: metricsLoading, getChartData } = useAdminMetrics(selectedMonth, selectedYear);
+  
+  // Función para obtener descripción de métricas
+  function getMetricDescription(type: string, value: number): string {
+    switch (type) {
+      case 'ingresos':
+        return value > 35000 ? 'Excelente' : value > 30000 ? 'Bueno' : 'Regular';
+      case 'horas':
+        return value > 50 ? 'Alta ocupación' : value > 40 ? 'Ocupación media' : 'Baja ocupación';
+      case 'usuarios':
+        return value > 10 ? 'Alto crecimiento' : value > 5 ? 'Crecimiento medio' : 'Crecimiento bajo';
+      case 'pagos':
+        return value > 95 ? 'Excelente' : value > 90 ? 'Bueno' : 'Necesita atención';
+      default:
+        return '';
+    }
+  }
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -169,6 +196,59 @@ export default function Admin() {
           {/* Tab de Balance */}
           <TabsContent value="balance" className="mt-6">
             <div className="space-y-6">
+              {/* Filtro de período */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Seleccionar Período
+                  </CardTitle>
+                  <CardDescription>
+                    Elige el mes y año para visualizar los indicadores
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-4 items-center">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Año:</span>
+                                             <Select value={selectedYear} onValueChange={setSelectedYear}>
+                        <SelectTrigger className="w-24">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="2023">2023</SelectItem>
+                          <SelectItem value="2024">2024</SelectItem>
+                          <SelectItem value="2025">2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">Mes:</span>
+                                             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                        <SelectTrigger className="w-32">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="enero">Enero</SelectItem>
+                          <SelectItem value="febrero">Febrero</SelectItem>
+                          <SelectItem value="marzo">Marzo</SelectItem>
+                          <SelectItem value="abril">Abril</SelectItem>
+                          <SelectItem value="mayo">Mayo</SelectItem>
+                          <SelectItem value="junio">Junio</SelectItem>
+                          <SelectItem value="julio">Julio</SelectItem>
+                          <SelectItem value="agosto">Agosto</SelectItem>
+                          <SelectItem value="septiembre">Septiembre</SelectItem>
+                          <SelectItem value="octubre">Octubre</SelectItem>
+                          <SelectItem value="noviembre">Noviembre</SelectItem>
+                          <SelectItem value="diciembre">Diciembre</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* Métricas del mes - Panel de KPIs */}
               <Card>
                 <CardHeader>
@@ -177,7 +257,7 @@ export default function Admin() {
                     Indicadores Clave del Período
                   </CardTitle>
                   <CardDescription>
-                    Métricas financieras y operativas del mes actual
+                    Métricas financieras y operativas del mes seleccionado
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -196,9 +276,9 @@ export default function Admin() {
                             +12%
                           </Badge>
                         </div>
-                        <div className="text-2xl font-bold text-foreground mb-1">
-                          $130,000
-                        </div>
+                                                 <div className="text-2xl font-bold text-foreground mb-1">
+                           ${metrics.ingresos.reduce((a, b) => a + b, 0).toLocaleString()}
+                         </div>
                         <div className="text-xs text-muted-foreground">
                           87% del objetivo mensual
                         </div>
@@ -219,9 +299,9 @@ export default function Admin() {
                             +8%
                           </Badge>
                         </div>
-                        <div className="text-2xl font-bold text-foreground mb-1">
-                          58h
-                        </div>
+                                                 <div className="text-2xl font-bold text-foreground mb-1">
+                           {metrics.horas.reduce((a, b) => a + b, 0)}h
+                         </div>
                         <div className="text-xs text-muted-foreground">
                           73% de ocupación mensual
                         </div>
@@ -242,9 +322,9 @@ export default function Admin() {
                             +15%
                           </Badge>
                         </div>
-                        <div className="text-2xl font-bold text-foreground mb-1">
-                          8
-                        </div>
+                                                 <div className="text-2xl font-bold text-foreground mb-1">
+                           {metrics.usuarios.reduce((a, b) => a + b, 0)}
+                         </div>
                         <div className="text-xs text-muted-foreground">
                           67% del objetivo de crecimiento
                         </div>
@@ -254,113 +334,97 @@ export default function Admin() {
                 </CardContent>
               </Card>
 
-              {/* Gráfico Interactivo de Métricas */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
-                    Análisis de Tendencia
-                  </CardTitle>
-                  <CardDescription>
-                    Visualización de métricas por semana del mes actual
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Controles del gráfico */}
-                    <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-muted-foreground">Visualizar:</span>
-                        <Select value="ingresos" onValueChange={() => {}}>
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="ingresos">Ingresos</SelectItem>
-                            <SelectItem value="horas">Horas</SelectItem>
-                            <SelectItem value="usuarios">Usuarios</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      
-                      <div className="flex items-center gap-1 bg-muted rounded-lg p-1">
-                        <Button variant="default" size="sm" className="h-8 px-3 text-xs">
-                          Líneas
-                        </Button>
-                        <Button variant="ghost" size="sm" className="h-8 px-3 text-xs">
-                          Barras
-                        </Button>
-                      </div>
-                    </div>
-                    
-                    {/* Gráfico de Líneas */}
-                    <div className="h-64 bg-muted/50 rounded-lg border border-border flex items-center justify-center">
-                      <div className="text-center">
-                        <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                          <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                          </svg>
-                        </div>
-                        <h4 className="text-lg font-semibold text-foreground mb-2">Gráfico Interactivo</h4>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Visualización de Julio 2024
-                        </p>
-                        
-                        {/* Datos simulados del gráfico */}
-                        <div className="grid grid-cols-4 gap-4 text-xs">
-                          <div className="text-center">
-                            <div className="font-semibold text-primary">Semana 1</div>
-                            <div className="text-muted-foreground">$32,500</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-semibold text-primary">Semana 2</div>
-                            <div className="text-muted-foreground">$28,000</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-semibold text-primary">Semana 3</div>
-                            <div className="text-muted-foreground">$35,000</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="font-semibold text-primary">Semana 4</div>
-                            <div className="text-muted-foreground">$34,500</div>
-                          </div>
-                        </div>
-                        
-                        <div className="mt-4 text-xs text-muted-foreground">
-                          💡 Pasa el cursor sobre los puntos para ver detalles
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Leyenda y estadísticas adicionales */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <Card className="border-l-4 border-l-green-500">
-                        <CardContent className="p-4">
-                          <div className="text-sm font-medium text-muted-foreground mb-1">Mejor Día</div>
-                          <div className="text-lg font-bold text-foreground">15 Julio</div>
-                          <div className="text-sm text-green-600">$12,500</div>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-4">
-                          <div className="text-sm font-medium text-muted-foreground mb-1">Promedio Diario</div>
-                          <div className="text-lg font-bold text-foreground">$4,194</div>
-                          <div className="text-sm text-blue-600">Por día</div>
-                        </CardContent>
-                      </Card>
-                      <Card className="border-l-4 border-l-purple-500">
-                        <CardContent className="p-4">
-                          <div className="text-sm font-medium text-muted-foreground mb-1">Tendencia</div>
-                          <div className="text-lg font-bold text-foreground">↗️ +5.2%</div>
-                          <div className="text-sm text-purple-600">vs semana anterior</div>
-                        </CardContent>
-                      </Card>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+                             {/* Gráfico Interactivo de Métricas */}
+               <Card>
+                 <CardHeader>
+                   <CardTitle className="flex items-center gap-2">
+                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                     </svg>
+                     Análisis de Métricas del Negocio
+                   </CardTitle>
+                   <CardDescription>
+                     Visualización interactiva de las métricas clave del mes seleccionado
+                   </CardDescription>
+                 </CardHeader>
+                 <CardContent>
+                   <div className="space-y-6">
+                     {/* Controles del gráfico */}
+                     <div className="flex items-center gap-4">
+                       <div className="flex items-center gap-2">
+                         <span className="text-sm font-medium text-muted-foreground">Métrica:</span>
+                         <Select value={metricType} onValueChange={(value: 'ingresos' | 'horas' | 'usuarios' | 'pagos') => setMetricType(value)}>
+                           <SelectTrigger className="w-40">
+                             <SelectValue placeholder="Seleccionar métrica" />
+                           </SelectTrigger>
+                           <SelectContent>
+                             <SelectItem value="ingresos">Ingresos ($)</SelectItem>
+                             <SelectItem value="horas">Horas Reservadas</SelectItem>
+                             <SelectItem value="usuarios">Nuevos Usuarios</SelectItem>
+                             <SelectItem value="pagos">Estado de Pagos (%)</SelectItem>
+                           </SelectContent>
+                         </Select>
+                       </div>
+                       
+                       <div className="flex items-center gap-2">
+                         <span className="text-sm font-medium text-muted-foreground">Tipo:</span>
+                         <div className="flex gap-1">
+                           <Button
+                             variant={chartType === 'bar' ? 'default' : 'outline'}
+                             size="sm"
+                             onClick={() => setChartType('bar')}
+                           >
+                             Barras
+                           </Button>
+                           <Button
+                             variant={chartType === 'line' ? 'default' : 'outline'}
+                             size="sm"
+                             onClick={() => setChartType('line')}
+                           >
+                             Líneas
+                           </Button>
+                         </div>
+                       </div>
+                     </div>
+                     
+                     {/* Gráfico Interactivo */}
+                     {metricsLoading ? (
+                       <div className="h-80 bg-muted/50 rounded-lg border border-border flex items-center justify-center">
+                         <div className="text-center">
+                           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
+                           <p className="text-muted-foreground">Cargando métricas...</p>
+                         </div>
+                       </div>
+                     ) : (
+                       <AdminChart
+                         metricType={metricType}
+                         chartType={chartType}
+                         data={getChartData(metricType, chartType)}
+                       />
+                     )}
+                     
+                     {/* Estadísticas del gráfico */}
+                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                       {metrics.labels.map((semana, index) => (
+                         <Card key={semana} className="border-l-4 border-l-primary">
+                           <CardContent className="p-4">
+                             <div className="text-sm font-medium text-muted-foreground mb-1">{semana}</div>
+                             <div className="text-lg font-bold text-foreground">
+                               {metricType === 'ingresos' && `$${metrics.ingresos[index].toLocaleString()}`}
+                               {metricType === 'horas' && `${metrics.horas[index]}h`}
+                               {metricType === 'usuarios' && metrics.usuarios[index]}
+                               {metricType === 'pagos' && `${metrics.pagos[index]}%`}
+                             </div>
+                             <div className="text-xs text-muted-foreground">
+                               {getMetricDescription(metricType, metrics[metricType][index])}
+                             </div>
+                           </CardContent>
+                         </Card>
+                       ))}
+                     </div>
+                   </div>
+                 </CardContent>
+               </Card>
 
               {/* Resumen ejecutivo */}
               <Card>
@@ -375,10 +439,10 @@ export default function Admin() {
                     <div className="space-y-4">
                       <h4 className="font-semibold text-foreground">Rendimiento Financiero</h4>
                       <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Ingresos Totales:</span>
-                          <span className="font-semibold text-green-600">$130,000</span>
-                        </div>
+                                                 <div className="flex justify-between items-center">
+                           <span className="text-sm text-muted-foreground">Ingresos Totales:</span>
+                           <span className="font-semibold text-green-600">${metrics.ingresos.reduce((a, b) => a + b, 0).toLocaleString()}</span>
+                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Gastos Operativos:</span>
                           <span className="font-semibold text-red-600">$45,000</span>
@@ -393,14 +457,14 @@ export default function Admin() {
                     <div className="space-y-4">
                       <h4 className="font-semibold text-foreground">Métricas Operativas</h4>
                       <div className="space-y-3">
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Ocupación Promedio:</span>
-                          <span className="font-semibold text-blue-600">73%</span>
-                        </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Clientes Activos:</span>
-                          <span className="font-semibold text-purple-600">24</span>
-                        </div>
+                                                 <div className="flex justify-between items-center">
+                           <span className="text-sm text-muted-foreground">Ocupación Promedio:</span>
+                           <span className="font-semibold text-blue-600">{Math.round((metrics.horas.reduce((a, b) => a + b, 0) / 160) * 100)}%</span>
+                         </div>
+                                                 <div className="flex justify-between items-center">
+                           <span className="text-sm text-muted-foreground">Clientes Activos:</span>
+                           <span className="font-semibold text-purple-600">{metrics.usuarios.reduce((a, b) => a + b, 0)}</span>
+                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-sm text-muted-foreground">Satisfacción:</span>
                           <span className="font-semibold text-green-600">4.8/5.0</span>

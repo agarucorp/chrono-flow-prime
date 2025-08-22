@@ -29,9 +29,9 @@ export const AppointmentSystem = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
-                          <div className="w-8 h-8">
-              <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
-            </div>
+              <div className="w-32 h-12">
+                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+              </div>
                              <div>
                  <p className="text-sm text-muted-foreground">Sistema de Gestión de Turnos</p>
                </div>
