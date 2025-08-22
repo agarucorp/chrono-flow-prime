@@ -57,14 +57,6 @@ const App = () => (
                   </>
                 </ProtectedAdminRoute>
               } />
-              <Route path="/admin/historial" element={
-                <ProtectedAdminRoute>
-                  <>
-                    <Navigation />
-                    <Admin />
-                  </>
-                </ProtectedAdminRoute>
-              } />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

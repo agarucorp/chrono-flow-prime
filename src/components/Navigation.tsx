@@ -83,7 +83,7 @@ export const Navigation: React.FC = () => {
                 {isAdmin && (
                   <>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate('/admin/historial')}>
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
                       <Wallet className="mr-2 h-4 w-4" />
                       <span>Historial y Balance</span>
                     </DropdownMenuItem>
@@ -91,7 +91,7 @@ export const Navigation: React.FC = () => {
                       <Shield className="mr-2 h-4 w-4" />
                       <span>Panel de Administración</span>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate('/admin/users')}>
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
                       <Shield className="mr-2 h-4 w-4" />
                       <span>Gestionar Usuarios</span>
                     </DropdownMenuItem>
