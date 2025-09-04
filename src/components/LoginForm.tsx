@@ -8,7 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useAdmin } from "@/hooks/useAdmin";
 import { supabase } from "@/lib/supabase";
-import { useNavigate } from "react-router-dom";
 import { useNotifications } from "@/hooks/useNotifications";
 import { RecoverPasswordForm } from "./RecoverPasswordForm";
 
@@ -17,10 +16,9 @@ interface LoginFormProps {
 }
 
 export const LoginForm = ({ onLogin }: LoginFormProps) => {
-  const { signIn, signUp, user } = useAuthContext();
-  const navigate = useNavigate();
+  const { signIn, signUp, signOut, user } = useAuthContext();
   const { showSuccess, showError, showInfo, showWarning, showLoading, dismissToast } = useNotifications();
-  const { canBeAdmin } = useAdmin(); // ✅ Hook para verificar si un email puede ser admin
+  // const { canBeAdmin } = useAdmin(); // ✅ Hook para verificar si un email puede ser admin - Temporalmente deshabilitado
   const [credentials, setCredentials] = useState({
     email: "",
     password: ""
@@ -43,47 +41,13 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false); // ✅ Estado para mostrar/ocultar contraseña
 
-  // Redirección automática según el rol del usuario
+  // Mostrar mensaje de éxito cuando el usuario esté autenticado
   useEffect(() => {
     if (user && user.email_confirmed_at) {
-      console.log('🔍 Usuario autenticado y confirmado, verificando rol...');
-      
-      // Verificar rol y redirigir
-      const checkRoleAndRedirect = async () => {
-        try {
-          // ✅ Consulta más simple - solo verificar si el usuario actual es admin
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .eq('role', 'admin')
-            .maybeSingle(); // ✅ Usar maybeSingle para evitar errores si no hay resultados
-
-          if (error) {
-            console.error('Error verificando rol:', error);
-            console.log('🔄 Redirigiendo a /turnos por error');
-            navigate('/turnos'); // Por defecto a turnos
-            return;
-          }
-
-          // ✅ Si data existe, es admin; si no, es cliente
-          if (data && data.role === 'admin') {
-            console.log('👑 Usuario es ADMIN, redirigiendo a /admin');
-            navigate('/admin');
-          } else {
-            console.log('👤 Usuario es CLIENTE, redirigiendo a /turnos');
-            navigate('/turnos');
-          }
-        } catch (err) {
-          console.error('Error inesperado:', err);
-          console.log('🔄 Redirigiendo a /turnos por error inesperado');
-          navigate('/turnos'); // Por defecto a turnos
-        }
-      };
-
-      checkRoleAndRedirect();
+      console.log('🔍 Usuario autenticado y confirmado');
+      // No redirigir, solo mostrar mensaje de éxito
     }
-  }, [user, navigate]);
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,9 +64,9 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         dismissToast(loadingToast);
         
         if (result.success) {
-          showSuccess("¡Bienvenido!", "Sesión iniciada correctamente");
+          showSuccess("¡Bienvenido!", "Sesión iniciada correctamente. El sistema está en desarrollo.");
           onLogin();
-          // ✅ NO redirigir manualmente - el useEffect se encargará automáticamente
+          // No redirigir, solo mostrar mensaje de éxito
         } else {
           showError("Error al iniciar sesión", result.error || "Credenciales incorrectas");
           setError(result.error || 'Error al iniciar sesión');
@@ -149,33 +113,32 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         const result = await signUp(registerData.email, registerData.password);
         
         if (result.success && result.user) {
-          // ✅ Determinar el rol según el email
-          const userRole = canBeAdmin(registerData.email) ? 'admin' : 'client';
+          // ✅ Determinar el rol según el email - Temporalmente todos son clientes
+          const userRole = 'client'; // Temporalmente todos son clientes
           
-          // Crear perfil extendido en la tabla profiles
+          // Actualizar el perfil creado automáticamente por el trigger
           const { error: profileError } = await supabase
             .from('profiles')
-            .insert({
-              id: result.user.id,
-              email: registerData.email,
+            .update({
               full_name: `${registerData.firstName} ${registerData.lastName}`,
               first_name: registerData.firstName,
               last_name: registerData.lastName,
               phone: registerData.phone,
               gender: registerData.gender,
-              birth_date: registerData.birthDate?.toISOString(),
+              birth_date: registerData.birthDate?.toISOString().split('T')[0],
               role: userRole // ✅ Rol asignado automáticamente
-            });
+            })
+            .eq('id', result.user.id);
 
           dismissToast(loadingToast);
 
           if (profileError) {
-            console.error('Error creando perfil:', profileError);
+            console.error('Error actualizando perfil:', profileError);
             showError(
-              "Error al crear perfil", 
-              "Usuario creado pero hubo un problema con el perfil. Contacte soporte."
+              "Error al actualizar perfil", 
+              "Usuario creado pero hubo un problema actualizando el perfil. Contacte soporte."
             );
-            setError('Usuario creado pero error al crear perfil. Contacte soporte.');
+            setError('Usuario creado pero error al actualizar perfil. Contacte soporte.');
           } else {
             // ✅ Usuario creado exitosamente - mostrar toast y volver al login
             const roleMessage = userRole === 'admin' 
@@ -244,15 +207,26 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     setCredentials({ email: "", password: "" });
   };
 
-  // Si ya está autenticado Y confirmado Y se solicita redirección, mostrar mensaje
-  const shouldRedirect = user && user.email_confirmed_at;
-  if (shouldRedirect && user && user.email_confirmed_at) {
+  // Mostrar mensaje de éxito si el usuario está autenticado
+  if (user && user.email_confirmed_at) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold mb-2">Redirigiendo...</h2>
-          <p className="text-muted-foreground">Ya estás autenticado, te llevamos a la sección de turnos.</p>
+          <div className="w-32 h-32 mb-6 mx-auto">
+            <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
+          </div>
+          <h2 className="text-2xl font-bold mb-2 text-green-600">¡Sesión Iniciada!</h2>
+          <p className="text-muted-foreground mb-4">Has iniciado sesión correctamente.</p>
+          <p className="text-sm text-muted-foreground mb-6">El sistema está en desarrollo. Próximamente estarán disponibles las funcionalidades de gestión de turnos.</p>
+          <button 
+            onClick={() => {
+              // Cerrar sesión
+              signOut();
+            }}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          >
+            Cerrar Sesión
+          </button>
         </div>
       </div>
     );
@@ -447,8 +421,8 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
-                      {/* ✅ Indicador de email admin */}
-                      {registerData.email && canBeAdmin(registerData.email) && (
+                      {/* ✅ Indicador de email admin - Temporalmente deshabilitado */}
+                      {/* {registerData.email && canBeAdmin(registerData.email) && (
                         <div className="absolute right-3 top-3">
                           <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
                             <svg 
@@ -460,14 +434,14 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                             </svg>
                           </div>
                         </div>
-                      )}
+                      )} */}
                     </div>
-                    {/* ✅ Mensaje informativo para emails admin */}
-                    {registerData.email && canBeAdmin(registerData.email) && (
+                    {/* ✅ Mensaje informativo para emails admin - Temporalmente deshabilitado */}
+                    {/* {registerData.email && canBeAdmin(registerData.email) && (
                       <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded-md border border-yellow-200">
                         ✨ Este email puede ser configurado como administrador del sistema
                       </p>
-                    )}
+                    )} */}
                   </div>
 
                   <div className="space-y-2">

@@ -1,13 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://placeholder.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'placeholder_key'
+// Configuración de Supabase - Proyecto real
+const supabaseUrl = 'https://bihqdptdkgdfztufrmlm.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpaHFkcHRka2dkZnp0dWZybWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5MjQzODAsImV4cCI6MjA3MjUwMDM4MH0.MK6KTQmWLT60qNMoik4Em7KmeaOA3efoUb2rJtNoH7I'
 
-// Solo mostrar error en consola, no fallar la aplicación
-if (!import.meta.env.VITE_SUPABASE_URL || !import.meta.env.VITE_SUPABASE_ANON_KEY) {
-  console.warn('⚠️ Faltan las variables de entorno de Supabase. Usando valores placeholder.')
-  console.warn('Crea un archivo .env con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY')
-}
+// Verificar configuración
+console.log('🔗 Conectando a Supabase:', supabaseUrl)
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {

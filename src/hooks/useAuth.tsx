@@ -85,12 +85,13 @@ export const useAuth = () => {
         email,
         password,
         options: {
-          emailRedirectTo: 'http://localhost:8080'
+          emailRedirectTo: `${window.location.origin}/login`
         }
       })
       
       if (error) throw error
       
+      // No establecer el usuario como autenticado hasta que confirme el email
       setAuthState({
         user: data.user,
         loading: false,
@@ -131,7 +132,7 @@ export const useAuth = () => {
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
       
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://localhost:8080/reset-password'
+        redirectTo: `${window.location.origin}/reset-password`
       })
       
       if (error) throw error

@@ -31,7 +31,7 @@ export const useAdmin = () => {
           .from('profiles')
           .select('role')
           .eq('id', user.id)
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error('Error verificando rol de admin:', error);
