@@ -5,12 +5,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/lib/supabase";
+import { useAuthContext } from "@/contexts/AuthContext";
 
 interface LoginFormProps {
   onLogin: () => void;
 }
 
 export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
+  const { signIn, signUp } = useAuthContext();
+  
   const [credentials, setCredentials] = useState({
     email: "",
     password: ""
@@ -37,17 +41,25 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     setError(null);
     
     if (!isRegisterMode) {
-      // Login simple
+      // Login real con Supabase
       try {
         setIsLoading(true);
         console.log("Intentando login con:", credentials.email);
-        // Simular login exitoso
-        setTimeout(() => {
-          onLogin();
-          window.location.href = '/dashboard';
-        }, 1000);
+        
+        const { error } = await signIn(credentials.email, credentials.password);
+        
+        if (error) {
+          console.error('Error en login:', error);
+          setError(error.message || 'Error al iniciar sesión');
+          return;
+        }
+        
+        console.log('Login exitoso');
+        onLogin();
+        window.location.href = '/user';
       } catch (err) {
-        setError('Error al iniciar sesión');
+        console.error('Error inesperado en login:', err);
+        setError('Error inesperado al iniciar sesión');
       } finally {
         setIsLoading(false);
       }
@@ -77,25 +89,48 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       try {
         setIsLoading(true);
         console.log("Registrando usuario:", registerData.email);
-        // Simular registro exitoso
-        setTimeout(() => {
-          setError(null);
-          setIsRegisterMode(false);
-          setCurrentStep(1);
-          setRegisterData({
-            firstName: "",
-            lastName: "",
-            phone: "",
-            gender: "",
-            birthDate: undefined,
-            email: "",
-            confirmEmail: "",
-            password: "",
-            confirmPassword: ""
-          });
-        }, 1000);
+        
+        // Crear usuario en Supabase Auth
+        const { data: authData, error: authError } = await signUp(
+          registerData.email, 
+          registerData.password,
+          {
+            first_name: registerData.firstName,
+            last_name: registerData.lastName,
+            phone: registerData.phone,
+            gender: registerData.gender,
+            birth_date: registerData.birthDate?.toISOString().split('T')[0]
+          }
+        );
+        
+        if (authError) {
+          console.error('Error en registro:', authError);
+          setError(authError.message || 'Error al crear la cuenta');
+          return;
+        }
+        
+        console.log('Registro exitoso:', authData);
+        setError(null);
+        setIsRegisterMode(false);
+        setCurrentStep(1);
+        setRegisterData({
+          firstName: "",
+          lastName: "",
+          phone: "",
+          gender: "",
+          birthDate: undefined,
+          email: "",
+          confirmEmail: "",
+          password: "",
+          confirmPassword: ""
+        });
+        
+        // Mostrar mensaje de éxito
+        alert('¡Cuenta creada exitosamente! Revisa tu email para confirmar tu cuenta.');
+        
       } catch (err) {
-        setError('Error al crear la cuenta');
+        console.error('Error inesperado en registro:', err);
+        setError('Error inesperado al crear la cuenta');
       } finally {
         setIsLoading(false);
       }

@@ -1,13 +1,137 @@
+import { useState, useEffect } from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { LoginFormSimple } from "./components/LoginFormSimple";
 import { TurnoReservation } from "./components/TurnoReservation";
-import { Calendar, Clock, User, Settings, LogOut } from "lucide-react";
+import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
+import { RecurringScheduleView } from "./components/RecurringScheduleView";
+import { useAuthContext } from "./contexts/AuthContext";
+import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+
+// Componente Dashboard que usa el contexto de autenticación
+const Dashboard = () => {
+  const { user, signOut } = useAuthContext();
+  const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
+  const [showRecurringModal, setShowRecurringModal] = useState(false);
+  const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
+  
+  // Función para obtener las iniciales del usuario
+  const getInitials = (email: string) => {
+    if (!email) return 'U';
+    const parts = email.split('@')[0].split('.');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return email[0].toUpperCase();
+  };
+
+  // Función para obtener el nombre del usuario
+  const getUserName = (email: string) => {
+    if (!email) return 'Usuario';
+    const name = email.split('@')[0];
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      window.location.href = '/login';
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  };
+
+  const handleRecurringSetupComplete = () => {
+    setShowRecurringModal(false);
+    setHasCompletedSetup(true);
+  };
+
+  // Mostrar modal de configuración si es la primera vez
+  useEffect(() => {
+    if (!firstTimeLoading && isFirstTime && !hasCompletedSetup) {
+      setShowRecurringModal(true);
+    }
+  }, [isFirstTime, firstTimeLoading, hasCompletedSetup]);
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-card border-b shadow-card">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo centrado */}
+            <div className="flex-1 flex justify-center">
+              <div className="w-32 h-12">
+                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+              </div>
+            </div>
+            
+            {/* Menú de usuario */}
+            <div className="flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="flex items-center space-x-2 h-9 px-3 hover:bg-muted"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                      {getInitials(user?.email || '')}
+                    </div>
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <div className="px-3 py-2">
+                    <p className="text-sm font-medium">{getUserName(user?.email || '')}</p>
+                    <p className="text-xs text-muted-foreground">{user?.email}</p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem className="cursor-pointer">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Configurar Perfil
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem 
+                    className="cursor-pointer text-destructive focus:text-destructive"
+                    onClick={handleSignOut}
+                  >
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Cerrar Sesión
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {firstTimeLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+          </div>
+        ) : (
+          <RecurringScheduleView />
+        )}
+      </main>
+
+      {/* Modal de configuración de horarios recurrentes para primera vez */}
+      <RecurringScheduleModal
+        isOpen={showRecurringModal}
+        onClose={() => setShowRecurringModal(false)}
+        onComplete={handleRecurringSetupComplete}
+      />
+    </div>
+  );
+};
 
 const App = () => {
   console.log("App renderizando...");
@@ -25,47 +149,7 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
-            <Route path="/dashboard" element={
-              <div className="min-h-screen bg-background">
-                {/* Header */}
-                <header className="bg-card border-b shadow-card">
-                  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-                    <div className="flex justify-between items-center h-16">
-                      <div className="flex items-center space-x-4">
-                        <div className="w-32 h-12">
-                          <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
-                        </div>
-                        <div>
-                          <p className="text-sm text-muted-foreground">Sistema de Gestión de Turnos</p>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center space-x-4">
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-foreground">Usuario</p>
-                          <p className="text-xs text-muted-foreground">Cliente</p>
-                        </div>
-                        
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => window.location.href = '/login'}
-                          className="h-9 text-destructive hover:bg-destructive/10"
-                        >
-                          <LogOut className="h-4 w-4 mr-2" />
-                          Salir
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </header>
-
-                {/* Main Content */}
-                <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-                  <TurnoReservation />
-                </main>
-              </div>
-            } />
+            <Route path="/user" element={<Dashboard />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

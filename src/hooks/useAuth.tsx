@@ -77,7 +77,7 @@ export const useAuth = () => {
     }
   }
 
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, metadata?: any) => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
       
@@ -85,7 +85,8 @@ export const useAuth = () => {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`
+          emailRedirectTo: `${window.location.origin}/login`,
+          data: metadata
         }
       })
       
