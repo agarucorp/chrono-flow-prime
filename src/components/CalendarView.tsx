@@ -347,7 +347,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     }
 
     return (
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1 w-full max-w-full">
         {days.map(({ date, isCurrentMonth }, index) => {
           const dayTurnos = getTurnosForDate(date);
           const isToday = date.toDateString() === today.toDateString();
@@ -357,13 +357,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           return (
             <div
               key={index}
-              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer ${
+              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 ${
                 isCurrentMonth ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/30'
               } ${isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'}`}
               onClick={() => !isWeekend && handleDateSelect(date)}
             >
               <SelectedDayMarker isSelected={isSelected} />
-              <div className={`text-sm font-medium relative z-10 ${
+              <div className={`text-xs font-medium relative z-10 truncate ${
                 isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
               }`}>
                 {date.getDate()}
@@ -421,14 +421,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           {/* Horarios AM */}
           {amSlots.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">AM</h4>
+              <h4 className="text-xs font-medium text-muted-foreground mb-3">AM</h4>
               <div className="space-y-3">
                 {amSlots.map((slot, index) => (
                   <Card key={`am-${index}`} className="border-l-4 border-l-blue-500">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-blue-600" />
                           <span className="font-medium text-foreground">
                             {slot.horaInicio} - {slot.horaFin}
                           </span>
@@ -454,19 +453,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <div className="text-center py-3 text-sm text-muted-foreground">
-                          No hay turnos reservados en este horario
-                        </div>
-                      )}
+                      ) : null}
                       
-                      {slot.turnosDisponibles > 0 && (
-                        <div className="mt-3 pt-3 border-t border-blue-200">
-                          <div className="text-xs text-blue-600 font-medium">
-                            {slot.turnosDisponibles} slot{slot.turnosDisponibles !== 1 ? 's' : ''} disponible{slot.turnosDisponibles !== 1 ? 's' : ''}
-                          </div>
-                        </div>
-                      )}
                     </CardContent>
                   </Card>
                 ))}
@@ -477,14 +465,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           {/* Horarios PM */}
           {pmSlots.length > 0 && (
             <div>
-              <h4 className="text-sm font-medium text-muted-foreground mb-3">PM</h4>
+              <h4 className="text-xs font-medium text-muted-foreground mb-3">PM</h4>
               <div className="space-y-3">
                 {pmSlots.map((slot, index) => (
                   <Card key={`pm-${index}`} className="border-l-4 border-l-blue-500">
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 text-blue-600" />
                           <span className="font-medium text-foreground">
                             {slot.horaInicio} - {slot.horaFin}
                           </span>
@@ -510,11 +497,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             </div>
                           ))}
                         </div>
-                      ) : (
-                        <div className="text-center py-3 text-sm text-muted-foreground">
-                          No hay turnos reservados en este horario
-                        </div>
-                      )}
+                      ) : null}
                       
                       {slot.turnosDisponibles > 0 && (
                         <div className="mt-3 pt-3 border-t border-blue-200">
@@ -539,13 +522,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         {/* Horarios AM */}
         {amSlots.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">AM</h4>
-            <div className="grid grid-cols-2 gap-3">
+            <h4 className="text-xs font-medium text-muted-foreground mb-3">AM</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {amSlots.map((slot, index) => (
                 <Button
                   key={`am-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-14 justify-center px-4 transition-all duration-200 ${
+                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${
                     slot.estado === 'disponible' 
                       ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
@@ -553,17 +536,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className={`h-4 w-4 mr-2 ${
+                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${
                       slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
                     }`} />
-                    <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
+                    <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   {slot.estado === 'disponible' && (
                     <Badge 
                       variant="secondary"
-                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
-                      {`${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`}
+                      {`${slot.turnosDisponibles}/3`}
                     </Badge>
                   )}
                 </Button>
@@ -575,13 +558,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         {/* Horarios PM */}
         {pmSlots.length > 0 && (
           <div>
-            <h4 className="text-sm font-medium text-muted-foreground mb-3">PM</h4>
-            <div className="grid grid-cols-2 gap-3">
+            <h4 className="text-xs font-medium text-muted-foreground mb-3">PM</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {pmSlots.map((slot, index) => (
                 <Button
                   key={`pm-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-14 justify-center px-4 transition-all duration-200 ${
+                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${
                     slot.estado === 'disponible' 
                       ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
@@ -589,17 +572,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className={`h-4 w-4 mr-2 ${
+                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${
                       slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
                     }`} />
-                    <span className="font-medium">{slot.horaInicio} - {slot.horaFin}</span>
+                    <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   {slot.estado === 'disponible' && (
                     <Badge 
                       variant="secondary"
-                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                      className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
-                      {`${slot.turnosDisponibles}/3 Disponible${slot.turnosDisponibles > 1 ? 's' : ''}`}
+                      {`${slot.turnosDisponibles}/3`}
                     </Badge>
                   )}
                 </Button>
@@ -620,40 +603,37 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   }
 
   return (
-    <div>
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center space-x-2">
-              <Calendar className="h-5 w-5" />
-              <span>{isAdminView ? 'Vista de Turnos Reservados' : 'Reservar Entrenamiento'}</span>
-            </CardTitle>
-          </div>
-          {isAdminView && (
-            <CardDescription>
-              Visualiza los turnos reservados por día y horario
-            </CardDescription>
+    <div className="w-full max-w-full">
+      <Card className="w-full max-w-full">
+        <CardHeader className="w-full max-w-full">
+          {!isAdminView && (
+            <div className="flex items-center justify-between w-full max-w-full">
+              <CardTitle className="flex items-center space-x-2 min-w-0">
+                <Calendar className="h-5 w-5 flex-shrink-0" />
+                <span className="truncate">Reservar Entrenamiento</span>
+              </CardTitle>
+            </div>
           )}
         </CardHeader>
         
-        <CardContent>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <CardContent className="w-full max-w-full">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 w-full max-w-full">
                           {/* Calendario pequeño a la izquierda */}
-            <div className="space-y-4">
-              <div className="text-center mb-4">
-                <div className="flex items-center justify-between mb-2">
+            <div className="space-y-4 w-full max-w-full">
+              <div className="text-center mb-4 w-full max-w-full">
+                <div className="flex items-center justify-between mb-2 w-full max-w-full">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => navigateDate('prev')}
+                    className="flex-shrink-0"
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   
-                  <h3 className="text-xl font-bold text-foreground bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent">
+                  <h3 className="text-lg font-bold text-foreground bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent truncate px-2">
                     {currentDate.toLocaleDateString('es-ES', { 
-                      month: 'long', 
-                      year: 'numeric' 
+                      month: 'long'
                     }).replace(/^\w/, c => c.toUpperCase())}
                   </h3>
                   
@@ -661,6 +641,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     variant="outline"
                     size="sm"
                     onClick={() => navigateDate('next')}
+                    className="flex-shrink-0"
                   >
                     <ChevronRight className="h-4 w-4" />
                   </Button>
@@ -668,23 +649,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               </div>
               
               {/* Días de la semana */}
-              <div className="grid grid-cols-7 gap-1 mb-3">
+              <div className="grid grid-cols-7 gap-1 mb-3 w-full max-w-full">
                 {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                  <div key={day} className="p-2 text-center text-sm font-semibold text-foreground bg-muted/30 rounded-md">
+                  <div key={day} className="p-2 text-center text-xs font-semibold text-foreground bg-muted/30 rounded-md min-w-0">
                     {day}
                   </div>
                 ))}
               </div>
               
               {/* Calendario de días */}
-              {renderCompactCalendar()}
+              <div className="w-full max-w-full">
+                {renderCompactCalendar()}
+              </div>
             </div>
             
             {/* Horarios disponibles a la derecha */}
-            <div className="space-y-4">
-              <div className="text-center">
-                <h3 className="text-lg font-semibold mb-2">
-                  {isAdminView ? 'Turnos Reservados para' : 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', { 
+            <div className="space-y-4 w-full max-w-full">
+              <div className="text-center w-full max-w-full">
+                <h3 className="text-sm sm:text-base font-semibold mb-2 truncate">
+                  {!isAdminView && 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', { 
                     weekday: 'long', 
                     day: 'numeric', 
                     month: 'long' 
@@ -692,7 +675,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 </h3>
               </div>
               
-              {renderAvailableTimeSlots()}
+              <div className="w-full max-w-full overflow-x-auto">
+                {renderAvailableTimeSlots()}
+              </div>
             </div>
           </div>
         </CardContent>

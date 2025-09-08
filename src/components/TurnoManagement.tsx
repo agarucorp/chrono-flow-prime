@@ -237,22 +237,24 @@ export const TurnoManagement = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Settings className="h-5 w-5" />
-            <span>Gestión de Turnos y Horarios</span>
+    <div className="space-y-6 w-full max-w-full">
+      <Card className="w-full max-w-full">
+        <CardHeader className="w-full max-w-full">
+          <CardTitle className="flex items-center space-x-2 w-full max-w-full">
+            <Settings className="h-5 w-5 flex-shrink-0" />
+            <span className="text-sm sm:text-base truncate">Gestión de Turnos y Horarios</span>
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="horarios" className="w-full">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="horarios">Horarios</TabsTrigger>
-              <TabsTrigger value="dias">Días Laborables</TabsTrigger>
-              <TabsTrigger value="especiales">Días Especiales</TabsTrigger>
-              <TabsTrigger value="acciones">Acciones</TabsTrigger>
-            </TabsList>
+        <CardContent className="w-full max-w-full">
+          <Tabs defaultValue="horarios" className="w-full max-w-full">
+            <div className="w-full max-w-full overflow-x-auto">
+              <TabsList className="grid w-full grid-cols-4 min-w-0">
+                <TabsTrigger value="horarios" className="text-xs sm:text-sm min-w-0">Horarios</TabsTrigger>
+                <TabsTrigger value="dias" className="text-xs sm:text-sm min-w-0">Días Laborables</TabsTrigger>
+                <TabsTrigger value="especiales" className="text-xs sm:text-sm min-w-0">Días Especiales</TabsTrigger>
+                <TabsTrigger value="acciones" className="text-xs sm:text-sm min-w-0">Acciones</TabsTrigger>
+              </TabsList>
+            </div>
 
             {/* Configuración de Horarios */}
             <TabsContent value="horarios" className="mt-4">
@@ -264,15 +266,15 @@ export const TurnoManagement = () => {
                   </Label>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   {horariosDisponibles.map((horario, index) => (
-                    <Card key={index} className={`p-4 transition-all duration-200 ${
+                    <Card key={index} className={`p-3 sm:p-4 transition-all duration-200 ${
                       horario.activo 
                         ? 'border-green-300 bg-green-50 dark:bg-green-950 dark:border-green-700' 
                         : 'border-gray-200 bg-gray-50 dark:bg-gray-800 dark:border-gray-600'
                     }`}>
                       <div className="flex items-center justify-between mb-2">
-                        <span className={`font-medium text-sm ${
+                        <span className={`font-medium text-xs sm:text-sm ${
                           horario.activo 
                             ? 'text-green-800 dark:text-green-200' 
                             : 'text-gray-600 dark:text-gray-400'
@@ -282,13 +284,14 @@ export const TurnoManagement = () => {
                         <Switch
                           checked={horario.activo}
                           onCheckedChange={() => toggleHorario(horario.hora_inicio)}
+                          className="scale-75 sm:scale-100"
                         />
                       </div>
-                      <Badge variant={horario.activo ? 'default' : 'secondary'} className={
+                      <Badge variant={horario.activo ? 'default' : 'secondary'} className={`text-xs ${
                         horario.activo 
                           ? 'bg-green-600 hover:bg-green-700 text-white' 
                           : 'bg-gray-500 hover:bg-gray-600 text-white'
-                      }>
+                      }`}>
                         {horario.activo ? 'Activo' : 'Inactivo'}
                       </Badge>
                     </Card>
@@ -354,12 +357,13 @@ export const TurnoManagement = () => {
             {/* Días Especiales */}
             <TabsContent value="especiales" className="mt-4">
               <div className="space-y-4">
-                <div className="flex items-center space-x-4">
+                <div className="flex flex-col sm:flex-row gap-4">
                   <Input
                     type="date"
                     value={nuevoDiaEspecial.fecha}
                     onChange={(e) => setNuevoDiaEspecial({ ...nuevoDiaEspecial, fecha: e.target.value })}
                     placeholder="Fecha"
+                    className="w-full sm:w-auto"
                   />
                   <Input
                     value={nuevoDiaEspecial.nombre}
@@ -370,13 +374,13 @@ export const TurnoManagement = () => {
                   <select
                     value={nuevoDiaEspecial.tipo}
                     onChange={(e) => setNuevoDiaEspecial({ ...nuevoDiaEspecial, tipo: e.target.value as any })}
-                    className="px-3 py-2 border rounded-md"
+                    className="px-3 py-2 border rounded-md w-full sm:w-auto"
                   >
                     <option value="cerrado">Cerrado</option>
                     <option value="medio_dia">Medio día</option>
                     <option value="feriado">Feriado normal</option>
                   </select>
-                  <Button onClick={agregarDiaEspecial} size="sm">
+                  <Button onClick={agregarDiaEspecial} size="sm" className="w-full sm:w-auto">
                     <Plus className="h-4 w-4 mr-2" />
                     Agregar
                   </Button>
@@ -415,15 +419,15 @@ export const TurnoManagement = () => {
             {/* Acciones */}
             <TabsContent value="acciones" className="mt-4">
               <div className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Card className="p-4">
                     <div className="text-center space-y-3">
                       <Users className="h-8 w-8 mx-auto text-blue-500" />
-                      <h3 className="font-medium">Generar Turnos</h3>
-                      <p className="text-sm text-muted-foreground">
+                      <h3 className="font-medium text-sm sm:text-base">Generar Turnos</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Crea turnos para los próximos 30 días según la configuración actual
                       </p>
-                      <Button onClick={generarTurnos} className="w-full">
+                      <Button onClick={generarTurnos} className="w-full text-xs sm:text-sm">
                         <Plus className="h-4 w-4 mr-2" />
                         Generar Turnos
                       </Button>
@@ -433,14 +437,14 @@ export const TurnoManagement = () => {
                   <Card className="p-4">
                     <div className="text-center space-y-3">
                       <Trash2 className="h-8 w-8 mx-auto text-red-500" />
-                      <h3 className="font-medium">Limpiar Turnos</h3>
-                      <p className="text-sm text-muted-foreground">
+                      <h3 className="font-medium text-sm sm:text-base">Limpiar Turnos</h3>
+                      <p className="text-xs sm:text-sm text-muted-foreground">
                         Elimina todos los turnos existentes (¡Cuidado!)
                       </p>
                       <Button 
                         variant="destructive" 
                         onClick={limpiarTurnos}
-                        className="w-full"
+                        className="w-full text-xs sm:text-sm"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
                         Limpiar Turnos
@@ -450,7 +454,7 @@ export const TurnoManagement = () => {
                 </div>
 
                 <div className="flex justify-end">
-                  <Button onClick={guardarConfiguracion} className="w-full md:w-auto">
+                  <Button onClick={guardarConfiguracion} className="w-full sm:w-auto text-xs sm:text-sm">
                     <Save className="h-4 w-4 mr-2" />
                     Guardar Configuración
                   </Button>

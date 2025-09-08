@@ -8,6 +8,10 @@ export interface AdminUser {
   full_name: string;
   role: 'client' | 'admin';
   created_at: string;
+  horarios_recurrentes?: {
+    turno_nombre: string;
+    dias_semana: string[];
+  }[];
 }
 
 export const useAdmin = () => {
@@ -50,6 +54,35 @@ export const useAdmin = () => {
     checkAdminStatus();
   }, [user]);
 
+  // Obtener horarios recurrentes de un usuario específico
+  const fetchUserHorarios = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select(`
+          turno_id,
+          dias_semana,
+          turnos (
+            nombre
+          )
+        `)
+        .eq('usuario_id', userId);
+
+      if (error) {
+        console.warn('Error obteniendo horarios:', error.message);
+        return [];
+      }
+
+      return data?.map(hr => ({
+        turno_nombre: (hr.turnos as any)?.nombre || 'Turno sin nombre',
+        dias_semana: hr.dias_semana || []
+      })) || [];
+    } catch (err) {
+      console.error('Error inesperado obteniendo horarios:', err);
+      return [];
+    }
+  };
+
   // Obtener todos los usuarios (solo para admins)
   const fetchAllUsers = async () => {
     if (!isAdmin) return;
@@ -65,7 +98,18 @@ export const useAdmin = () => {
         return;
       }
 
-      setAllUsers(data || []);
+      // Obtener horarios para cada usuario de manera individual
+      const usersWithHorarios = await Promise.all(
+        (data || []).map(async (user) => {
+          const horarios = await fetchUserHorarios(user.id);
+          return {
+            ...user,
+            horarios_recurrentes: horarios
+          };
+        })
+      );
+
+      setAllUsers(usersWithHorarios);
     } catch (err) {
       console.error('Error inesperado obteniendo usuarios:', err);
     }

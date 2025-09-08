@@ -60,8 +60,16 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
-  const [filterPeriod, setFilterPeriod] = useState<'all' | '2024-01' | '2024-02' | '2024-03' | '2024-04' | '2024-05' | '2024-06' | '2024-07' | '2024-08' | '2024-09' | '2024-10' | '2024-11' | '2024-12' | '2025-01' | '2025-02' | '2025-03' | '2025-04' | '2025-05' | '2025-06' | '2025-07' | '2025-08' | '2025-09' | '2025-10' | '2025-11' | '2025-12'>('all');
-  const [filterPaymentStatus, setFilterPaymentStatus] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
+  // Obtener el mes actual en formato YYYY-MM
+  const getCurrentMonth = () => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    return `${year}-${month}`;
+  };
+
+  const [filterPeriod, setFilterPeriod] = useState<'all' | '2024-09' | '2024-10' | '2024-11' | '2024-12' | '2025-01' | '2025-02' | '2025-03' | '2025-04' | '2025-05' | '2025-06' | '2025-07' | '2025-08' | '2025-09' | '2025-10' | '2025-11' | '2025-12'>(getCurrentMonth() as any);
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<'all' | 'paid' | 'pending'>('all');
   
 
   // Función para obtener las iniciales del usuario
@@ -190,25 +198,25 @@ export default function Admin() {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden w-full max-w-full">
       {/* Header */}
-      <header className="bg-card border-b shadow-card">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+      <header className="bg-card border-b shadow-card w-full">
+        <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16 w-full">
             {/* Logo centrado */}
-            <div className="flex-1 flex justify-center">
-              <div className="w-32 h-12">
+            <div className="flex-1 flex justify-center min-w-0">
+              <div className="w-32 h-12 flex-shrink-0">
                 <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
               </div>
             </div>
             
             {/* Menú de usuario */}
-            <div className="flex items-center">
+            <div className="flex items-center flex-shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="relative h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                    className="relative h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors flex-shrink-0"
                   >
                     <span className="text-sm font-medium text-primary">
                       {getInitials(user?.email || '')}
@@ -234,250 +242,147 @@ export default function Admin() {
         </div>
       </header>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="w-full max-w-full px-4 py-8 mx-auto">
         {/* Tabs principales */}
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="usuarios" className="flex items-center space-x-2">
-              <Users className="h-4 w-4" />
-              <span>Usuarios</span>
-            </TabsTrigger>
-            <TabsTrigger value="turnos" className="flex items-center space-x-2">
-              <Settings className="h-4 w-4" />
-              <span>Gestión Turnos</span>
-            </TabsTrigger>
-            <TabsTrigger value="calendario" className="flex items-center space-x-2">
-              <Calendar className="h-4 w-4" />
-              <span>Calendario</span>
-            </TabsTrigger>
-          </TabsList>
+        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
+          <div className="w-full max-w-full overflow-x-auto">
+            <TabsList className="grid w-full grid-cols-3 min-w-0">
+              <TabsTrigger value="usuarios" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
+                <Users className="hidden sm:block h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Usuarios</span>
+              </TabsTrigger>
+              <TabsTrigger value="turnos" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
+                <Settings className="hidden sm:block h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Config</span>
+              </TabsTrigger>
+              <TabsTrigger value="calendario" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
+                <Calendar className="hidden sm:block h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Agenda</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
 
 
 
           {/* Tab de Usuarios */}
-          <TabsContent value="usuarios" className="mt-6">
+          <TabsContent value="usuarios" className="mt-6 w-full max-w-full">
 
             {/* Search and Filters */}
             <Card className="mb-6">
               <CardContent className="pt-6">
                 <div className="space-y-4">
                   {/* Búsqueda */}
-                  <div className="flex flex-col md:flex-row gap-4">
+                  <div className="flex flex-col gap-4">
                     <div className="flex-1 relative">
                       <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
+                        id="search-users"
+                        name="search-users"
                         placeholder="Buscar usuarios por nombre o email..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10"
+                        className="pl-10 w-full"
                       />
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant={filterRole === 'all' ? 'default' : 'outline'}
-                        onClick={() => setFilterRole('all')}
-                        size="sm"
-                      >
-                        Todos
-                      </Button>
-                      <Button
-                        variant={filterRole === 'admin' ? 'default' : 'outline'}
-                        onClick={() => setFilterRole('admin')}
-                        size="sm"
-                      >
-                        <Shield className="w-4 h-4 mr-2" />
-                        Admins
-                      </Button>
-                      <Button
-                        variant={filterRole === 'client' ? 'default' : 'outline'}
-                        onClick={() => setFilterRole('client')}
-                        size="sm"
-                      >
-                        <User className="w-4 h-4 mr-2" />
-                        Clientes
-                      </Button>
                     </div>
                   </div>
 
                   {/* Filtros adicionales */}
-                  <div className="flex flex-col md:flex-row gap-4">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Período:</span>
-                      <Select value={filterPeriod} onValueChange={(value: any) => setFilterPeriod(value)}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Seleccionar período" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos los períodos</SelectItem>
-                          <SelectItem value="2024-01">Enero 2024</SelectItem>
-                          <SelectItem value="2024-02">Febrero 2024</SelectItem>
-                          <SelectItem value="2024-03">Marzo 2024</SelectItem>
-                          <SelectItem value="2024-04">Abril 2024</SelectItem>
-                          <SelectItem value="2024-05">Mayo 2024</SelectItem>
-                          <SelectItem value="2024-06">Junio 2024</SelectItem>
-                          <SelectItem value="2024-07">Julio 2024</SelectItem>
-                          <SelectItem value="2024-08">Agosto 2024</SelectItem>
-                          <SelectItem value="2024-09">Septiembre 2024</SelectItem>
-                          <SelectItem value="2024-10">Octubre 2024</SelectItem>
-                          <SelectItem value="2024-11">Noviembre 2024</SelectItem>
-                          <SelectItem value="2024-12">Diciembre 2024</SelectItem>
-                          <SelectItem value="2025-01">Enero 2025</SelectItem>
-                          <SelectItem value="2025-02">Febrero 2025</SelectItem>
-                          <SelectItem value="2025-03">Marzo 2025</SelectItem>
-                          <SelectItem value="2025-04">Abril 2025</SelectItem>
-                          <SelectItem value="2025-05">Mayo 2025</SelectItem>
-                          <SelectItem value="2025-06">Junio 2025</SelectItem>
-                          <SelectItem value="2025-07">Julio 2025</SelectItem>
-                          <SelectItem value="2025-08">Agosto 2025</SelectItem>
-                          <SelectItem value="2025-09">Septiembre 2025</SelectItem>
-                          <SelectItem value="2025-10">Octubre 2025</SelectItem>
-                          <SelectItem value="2025-11">Noviembre 2025</SelectItem>
-                          <SelectItem value="2025-12">Diciembre 2025</SelectItem>
-                        </SelectContent>
-                      </Select>
+                  <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Período:</span>
+                        <Select value={filterPeriod} onValueChange={(value: any) => setFilterPeriod(value)}>
+                          <SelectTrigger className="w-full sm:w-48">
+                            <SelectValue placeholder="Seleccionar período" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos los períodos</SelectItem>
+                            <SelectItem value="2024-09">Septiembre 2024</SelectItem>
+                            <SelectItem value="2024-10">Octubre 2024</SelectItem>
+                            <SelectItem value="2024-11">Noviembre 2024</SelectItem>
+                            <SelectItem value="2024-12">Diciembre 2024</SelectItem>
+                            <SelectItem value="2025-01">Enero 2025</SelectItem>
+                            <SelectItem value="2025-02">Febrero 2025</SelectItem>
+                            <SelectItem value="2025-03">Marzo 2025</SelectItem>
+                            <SelectItem value="2025-04">Abril 2025</SelectItem>
+                            <SelectItem value="2025-05">Mayo 2025</SelectItem>
+                            <SelectItem value="2025-06">Junio 2025</SelectItem>
+                            <SelectItem value="2025-07">Julio 2025</SelectItem>
+                            <SelectItem value="2025-08">Agosto 2025</SelectItem>
+                            <SelectItem value="2025-09">Septiembre 2025</SelectItem>
+                            <SelectItem value="2025-10">Octubre 2025</SelectItem>
+                            <SelectItem value="2025-11">Noviembre 2025</SelectItem>
+                            <SelectItem value="2025-12">Diciembre 2025</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
+                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Estado de Pago:</span>
+                        <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
+                          <SelectTrigger className="w-full sm:w-48">
+                            <SelectValue placeholder="Seleccionar estado" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todos los estados</SelectItem>
+                            <SelectItem value="paid">Pagado</SelectItem>
+                            <SelectItem value="pending">Pendiente</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-muted-foreground">Estado de Pago:</span>
-                      <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Seleccionar estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="all">Todos los estados</SelectItem>
-                          <SelectItem value="paid">Pagado</SelectItem>
-                          <SelectItem value="pending">Pendiente</SelectItem>
-                          <SelectItem value="overdue">Vencido</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="flex gap-2 ml-auto">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSearchTerm('');
-                          setFilterRole('all');
-                          setFilterPeriod('all');
-                          setFilterPaymentStatus('all');
-                        }}
-                      >
-                        Limpiar Filtros
-                      </Button>
-                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Resumen de filtros activos */}
-            {(filterRole !== 'all' || filterPeriod !== 'all' || filterPaymentStatus !== 'all' || searchTerm) && (
-              <Card className="mb-4">
-                <CardContent className="pt-4">
-                  <div className="flex flex-wrap gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Filtros activos:</span>
-                    {filterRole !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        Rol: {filterRole === 'admin' ? 'Administradores' : 'Clientes'}
-                      </Badge>
-                    )}
-                    {filterPeriod !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        Período: {
-                          filterPeriod === '2024-01' ? 'Enero 2024' :
-                          filterPeriod === '2024-02' ? 'Febrero 2024' :
-                          filterPeriod === '2024-03' ? 'Marzo 2024' :
-                          filterPeriod === '2024-04' ? 'Abril 2024' :
-                          filterPeriod === '2024-05' ? 'Mayo 2024' :
-                          filterPeriod === '2024-06' ? 'Junio 2024' :
-                          filterPeriod === '2024-07' ? 'Julio 2024' :
-                          filterPeriod === '2024-08' ? 'Agosto 2024' :
-                          filterPeriod === '2024-09' ? 'Septiembre 2024' :
-                          filterPeriod === '2024-10' ? 'Octubre 2024' :
-                          filterPeriod === '2024-11' ? 'Noviembre 2024' :
-                          filterPeriod === '2024-12' ? 'Diciembre 2024' :
-                          filterPeriod === '2025-01' ? 'Enero 2025' :
-                          filterPeriod === '2025-02' ? 'Febrero 2025' :
-                          filterPeriod === '2025-03' ? 'Marzo 2025' :
-                          filterPeriod === '2025-04' ? 'Abril 2025' :
-                          filterPeriod === '2025-05' ? 'Mayo 2025' :
-                          filterPeriod === '2025-06' ? 'Junio 2025' :
-                          filterPeriod === '2025-07' ? 'Julio 2025' :
-                          filterPeriod === '2025-08' ? 'Agosto 2025' :
-                          filterPeriod === '2025-09' ? 'Septiembre 2025' :
-                          filterPeriod === '2025-10' ? 'Octubre 2025' :
-                          filterPeriod === '2025-11' ? 'Noviembre 2025' :
-                          'Diciembre 2025'
-                        }
-                      </Badge>
-                    )}
-                    {filterPaymentStatus !== 'all' && (
-                      <Badge variant="secondary" className="text-xs">
-                        Pago: {
-                          filterPaymentStatus === 'paid' ? 'Pagado' :
-                          filterPaymentStatus === 'pending' ? 'Pendiente' :
-                          'Vencido'
-                        }
-                      </Badge>
-                    )}
-                    {searchTerm && (
-                      <Badge variant="secondary" className="text-xs">
-                        Búsqueda: "{searchTerm}"
-                      </Badge>
-                    )}
-                    <Badge variant="outline" className="text-xs">
-                      {filteredUsers.length} usuario{filteredUsers.length !== 1 ? 's' : ''} encontrado{filteredUsers.length !== 1 ? 's' : ''}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Users Table */}
-            <Card>
-              <CardHeader>
+            <Card className="w-full max-w-full">
+              <CardHeader className="w-full max-w-full">
               </CardHeader>
-              <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full">
+              <CardContent className="p-0 w-full max-w-full">
+                {/* Vista de escritorio - Tabla completa */}
+                <div className="hidden md:block overflow-x-auto w-full max-w-full">
+                  <table className="w-full min-w-[600px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-medium">Usuario</th>
-                        <th className="text-left p-3 font-medium">Email</th>
-                        <th className="text-left p-3 font-medium">Rol</th>
-                        <th className="text-left p-3 font-medium">Fecha</th>
-                        <th className="text-left p-3 font-medium">Acciones</th>
+                        <th className="text-left p-3 font-medium min-w-[200px]">Usuario</th>
+                        <th className="text-left p-3 font-medium min-w-[200px]">Email</th>
+                        <th className="text-left p-3 font-medium min-w-[100px]">Rol</th>
+                        <th className="text-left p-3 font-medium min-w-[100px]">Fecha</th>
+                        <th className="text-left p-3 font-medium min-w-[120px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {filteredUsers.map((user) => (
                         <tr key={user.id} className="border-b hover:bg-muted/50">
                           <td className="p-3">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
                                 {user.role === 'admin' ? (
                                   <Crown className="w-4 h-4 text-yellow-600" />
                                 ) : (
                                   <User className="w-4 h-4 text-primary" />
                                 )}
                               </div>
-                              <div>
-                                <p className="font-medium">{user.full_name}</p>
-                                <p className="text-sm text-muted-foreground">ID: {user.id.slice(0, 8)}...</p>
+                              <div className="min-w-0 flex-1">
+                                <p className="font-medium truncate">{user.full_name}</p>
+                                <p className="text-sm text-muted-foreground truncate">ID: {user.id.slice(0, 8)}...</p>
                               </div>
                             </div>
                           </td>
                           <td className="p-3">
-                            <p className="text-sm">{user.email}</p>
+                            <p className="text-sm truncate max-w-[180px]" title={user.email}>{user.email}</p>
                           </td>
                           <td className="p-3">
                             <Badge 
                               variant={user.role === 'admin' ? 'default' : 'secondary'}
-                              className={user.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}
+                              className={`${user.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''} text-xs`}
                             >
-                              {user.role === 'admin' ? 'Administrador' : 'Cliente'}
+                              {user.role === 'admin' ? 'Admin' : 'Cliente'}
                             </Badge>
                           </td>
                           <td className="p-3">
@@ -486,11 +391,12 @@ export default function Admin() {
                             </p>
                           </td>
                           <td className="p-3">
-                            <div className="flex items-center space-x-2">
+                            <div className="flex items-center space-x-1">
                               <Button 
                                 variant="outline" 
                                 size="sm" 
                                 onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}
+                                className="h-8 w-8 p-0"
                               >
                                 <Eye className="w-4 h-4" />
                               </Button>
@@ -541,25 +447,83 @@ export default function Admin() {
                       ))}
                     </tbody>
                   </table>
-                  
-                  {filteredUsers.length === 0 && (
-                    <div className="text-center py-8">
-                      <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                      <p className="text-muted-foreground">No se encontraron usuarios</p>
-                    </div>
-                  )}
                 </div>
+
+                {/* Vista móvil - Cards */}
+                <div className="md:hidden space-y-4 p-4">
+                  {filteredUsers.map((user) => (
+                    <Card key={user.id} className="w-full max-w-full">
+                      <CardContent className="p-4 w-full max-w-full">
+                        <div className="flex items-center justify-between w-full max-w-full">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-medium truncate">{user.full_name}</p>
+                          </div>
+                          <div className="flex items-center space-x-1 flex-shrink-0">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                  <span className="sr-only">Abrir menú</span>
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}>
+                                  <Eye className="w-4 h-4 mr-2" />
+                                  Ver Detalles
+                                </DropdownMenuItem>
+                                {user.role === 'client' && canBeAdmin(user.email) && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRoleChange(user.id, 'admin')}
+                                    className="text-yellow-600"
+                                  >
+                                    <Crown className="w-4 h-4 mr-2" />
+                                    Hacer Administrador
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                {user.role === 'admin' && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleRoleChange(user.id, 'client')}
+                                    className="text-blue-600"
+                                  >
+                                    <User className="w-4 h-4 mr-2" />
+                                    Hacer Cliente
+                                  </DropdownMenuItem>
+                                )}
+                                
+                                <DropdownMenuItem
+                                  onClick={() => handleDeleteUser(user.id, user.full_name)}
+                                  className="text-red-600"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" />
+                                  Eliminar Usuario
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+                
+                {filteredUsers.length === 0 && (
+                  <div className="text-center py-8">
+                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                    <p className="text-muted-foreground">No se encontraron usuarios</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>
 
           {/* Tab de Gestión de Turnos */}
-          <TabsContent value="turnos" className="mt-6">
+          <TabsContent value="turnos" className="mt-6 w-full max-w-full">
             <TurnoManagement />
           </TabsContent>
 
           {/* Tab de Calendario */}
-          <TabsContent value="calendario" className="mt-6">
+          <TabsContent value="calendario" className="mt-6 w-full max-w-full">
             <CalendarView isAdminView={true} />
           </TabsContent>
         </Tabs>
@@ -604,8 +568,28 @@ export default function Admin() {
                 </p>
               </div>
               <div>
-                <label className="text-sm font-medium">ID de Usuario</label>
-                <p className="text-sm text-muted-foreground font-mono">{selectedUser.id}</p>
+                <label className="text-sm font-medium">Días de Asistencia</label>
+                <p className="text-sm text-muted-foreground">
+                  {selectedUser.horarios_recurrentes && selectedUser.horarios_recurrentes.length > 0 
+                    ? selectedUser.horarios_recurrentes.map(horario => {
+                        const dias = horario.dias_semana || [];
+                        const diasNombres = dias.map(dia => {
+                          const diasMap = {
+                            'lunes': 'Lunes',
+                            'martes': 'Martes', 
+                            'miércoles': 'Miércoles',
+                            'jueves': 'Jueves',
+                            'viernes': 'Viernes',
+                            'sábado': 'Sábado',
+                            'domingo': 'Domingo'
+                          };
+                          return diasMap[dia] || dia;
+                        }).join(', ');
+                        return `${horario.turno_nombre}: ${diasNombres}`;
+                      }).join(' | ')
+                    : 'Sin horarios asignados'
+                  }
+                </p>
               </div>
             </CardContent>
             <div className="p-6 pt-0 flex justify-end">
