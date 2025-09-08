@@ -16,8 +16,7 @@ import {
   EyeOff,
   Settings,
   Clock,
-  Wallet,
-  DollarSign
+  LogOut
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +26,8 @@ import {
   DropdownMenu, 
   DropdownMenuContent, 
   DropdownMenuItem, 
-  DropdownMenuTrigger 
+  DropdownMenuTrigger,
+  DropdownMenuSeparator
 } from '@/components/ui/dropdown-menu';
 import { useAdmin, AdminUser } from '@/hooks/useAdmin';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -35,13 +35,12 @@ import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Footer } from '@/components/Footer';
-import { HistorialBalance } from '@/components/HistorialBalance';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AdminChart } from '@/components/AdminChart';
-import { useAdminMetrics } from '@/hooks/useAdminMetrics';
+import { useAuthContext } from '@/contexts/AuthContext';
 
 export default function Admin() {
+  const { user, signOut } = useAuthContext();
   const { activeTab, handleTabChange } = useAdminNavigation();
   const { 
     isAdmin, 
@@ -61,31 +60,43 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
+  const [filterPeriod, setFilterPeriod] = useState<'all' | '2024-01' | '2024-02' | '2024-03' | '2024-04' | '2024-05' | '2024-06' | '2024-07' | '2024-08' | '2024-09' | '2024-10' | '2024-11' | '2024-12' | '2025-01' | '2025-02' | '2025-03' | '2025-04' | '2025-05' | '2025-06' | '2025-07' | '2025-08' | '2025-09' | '2025-10' | '2025-11' | '2025-12'>('all');
+  const [filterPaymentStatus, setFilterPaymentStatus] = useState<'all' | 'paid' | 'pending' | 'overdue'>('all');
   
-  // Estados para el análisis de tendencia
-  const [metricType, setMetricType] = useState<'ingresos' | 'horas' | 'usuarios' | 'pagos'>('ingresos');
-  const [chartType, setChartType] = useState<'bar' | 'line'>('bar');
-  const [selectedMonth, setSelectedMonth] = useState('julio');
-  const [selectedYear, setSelectedYear] = useState('2024');
-  
-  // Hook para métricas del negocio
-  const { metrics, isLoading: metricsLoading, getChartData } = useAdminMetrics(selectedMonth, selectedYear);
-  
-  // Función para obtener descripción de métricas
-  function getMetricDescription(type: string, value: number): string {
-    switch (type) {
-      case 'ingresos':
-        return value > 35000 ? 'Excelente' : value > 30000 ? 'Bueno' : 'Regular';
-      case 'horas':
-        return value > 50 ? 'Alta ocupación' : value > 40 ? 'Ocupación media' : 'Baja ocupación';
-      case 'usuarios':
-        return value > 10 ? 'Alto crecimiento' : value > 5 ? 'Crecimiento medio' : 'Crecimiento bajo';
-      case 'pagos':
-        return value > 95 ? 'Excelente' : value > 90 ? 'Bueno' : 'Necesita atención';
-      default:
-        return '';
+
+  // Función para obtener las iniciales del usuario
+  const getInitials = (email: string) => {
+    if (!email) return 'A';
+    const parts = email.split('@')[0].split('.');
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
     }
-  }
+    return email[0].toUpperCase();
+  };
+
+  // Función para obtener el nombre del usuario
+  const getUserName = (email: string) => {
+    if (!email) return 'Admin';
+    const name = email.split('@')[0];
+    // Separar por punto y capitalizar cada parte
+    const parts = name.split('.');
+    if (parts.length >= 2) {
+      return parts.map(part => 
+        part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      ).join(' ');
+    }
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      // La redirección se maneja automáticamente en el contexto
+    } catch (error) {
+      console.error('Error al cerrar sesión:', error);
+    }
+  };
+  
 
   // Cargar datos al montar el componente
   useEffect(() => {
@@ -95,14 +106,27 @@ export default function Admin() {
     }
   }, [isAdmin, fetchAllUsers, fetchAdminUsers]);
 
-  // Filtrar usuarios según búsqueda y filtro
+  // Filtrar usuarios según búsqueda y filtros
   const filteredUsers = allUsers.filter(user => {
     const matchesSearch = user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     
-    return matchesSearch && matchesRole;
+    // Filtro de período por mes específico
+    let matchesPeriod = true;
+    if (filterPeriod !== 'all') {
+      const [year, month] = filterPeriod.split('-');
+      const userDate = new Date(user.created_at);
+      matchesPeriod = userDate.getFullYear() === parseInt(year) &&
+                     userDate.getMonth() + 1 === parseInt(month);
+    }
+    
+    // Por ahora, el filtro de estado de pago no está implementado
+    // Se puede agregar cuando se conecte con la tabla de pagos
+    const matchesPaymentStatus = true; // TODO: Implementar filtro de estado de pago
+    
+    return matchesSearch && matchesRole && matchesPeriod && matchesPaymentStatus;
   });
 
   // Cambiar rol de usuario
@@ -167,18 +191,53 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="bg-card border-b shadow-card">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            {/* Logo centrado */}
+            <div className="flex-1 flex justify-center">
+              <div className="w-32 h-12">
+                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+              </div>
+            </div>
+            
+            {/* Menú de usuario */}
+            <div className="flex items-center">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    className="relative h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors"
+                  >
+                    <span className="text-sm font-medium text-primary">
+                      {getInitials(user?.email || '')}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <div className="flex flex-col space-y-1 p-2">
+                    <p className="text-sm font-medium leading-none">{getUserName(user?.email || '')}</p>
+                    <p className="text-xs leading-none text-muted-foreground">
+                      {user?.email}
+                    </p>
+                  </div>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Cerrar Sesión</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+        </div>
+      </header>
+
       <div className="container mx-auto px-4 py-8">
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="balance" className="flex items-center space-x-2">
-              <DollarSign className="h-4 w-4" />
-              <span>Balance</span>
-            </TabsTrigger>
-            <TabsTrigger value="historial" className="flex items-center space-x-2">
-              <Wallet className="h-4 w-4" />
-              <span>Historial</span>
-            </TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="usuarios" className="flex items-center space-x-2">
               <Users className="h-4 w-4" />
               <span>Usuarios</span>
@@ -193,294 +252,8 @@ export default function Admin() {
             </TabsTrigger>
           </TabsList>
 
-          {/* Tab de Balance */}
-          <TabsContent value="balance" className="mt-6">
-            <div className="space-y-6">
-              {/* Filtro de período */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Seleccionar Período
-                  </CardTitle>
-                  <CardDescription>
-                    Elige el mes y año para visualizar los indicadores
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex gap-4 items-center">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Año:</span>
-                                             <Select value={selectedYear} onValueChange={setSelectedYear}>
-                        <SelectTrigger className="w-24">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="2023">2023</SelectItem>
-                          <SelectItem value="2024">2024</SelectItem>
-                          <SelectItem value="2025">2025</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium">Mes:</span>
-                                             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="enero">Enero</SelectItem>
-                          <SelectItem value="febrero">Febrero</SelectItem>
-                          <SelectItem value="marzo">Marzo</SelectItem>
-                          <SelectItem value="abril">Abril</SelectItem>
-                          <SelectItem value="mayo">Mayo</SelectItem>
-                          <SelectItem value="junio">Junio</SelectItem>
-                          <SelectItem value="julio">Julio</SelectItem>
-                          <SelectItem value="agosto">Agosto</SelectItem>
-                          <SelectItem value="septiembre">Septiembre</SelectItem>
-                          <SelectItem value="octubre">Octubre</SelectItem>
-                          <SelectItem value="noviembre">Noviembre</SelectItem>
-                          <SelectItem value="diciembre">Diciembre</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
 
-              {/* Métricas del mes - Panel de KPIs */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5" />
-                    Indicadores Clave del Período
-                  </CardTitle>
-                  <CardDescription>
-                    Métricas financieras y operativas del mes seleccionado
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    {/* KPI 1: Ingresos Netos */}
-                    <Card className="border-l-4 border-l-green-500">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="p-2 bg-green-100 rounded-lg">
-                              <DollarSign className="h-5 w-5 text-green-600" />
-                            </div>
-                            <span className="text-sm font-medium text-muted-foreground">Ingresos Netos</span>
-                          </div>
-                          <Badge variant="secondary" className="bg-green-100 text-green-800">
-                            +12%
-                          </Badge>
-                        </div>
-                                                 <div className="text-2xl font-bold text-foreground mb-1">
-                           ${metrics.ingresos.reduce((a, b) => a + b, 0).toLocaleString()}
-                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          87% del objetivo mensual
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    {/* KPI 2: Horas Reservadas */}
-                    <Card className="border-l-4 border-l-blue-500">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="p-2 bg-blue-100 rounded-lg">
-                              <Clock className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <span className="text-sm font-medium text-muted-foreground">Horas Reservadas</span>
-                          </div>
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                            +8%
-                          </Badge>
-                        </div>
-                                                 <div className="text-2xl font-bold text-foreground mb-1">
-                           {metrics.horas.reduce((a, b) => a + b, 0)}h
-                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          73% de ocupación mensual
-                        </div>
-                      </CardContent>
-                    </Card>
-                    
-                    {/* KPI 3: Nuevos Usuarios */}
-                    <Card className="border-l-4 border-l-purple-500">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="p-2 bg-purple-100 rounded-lg">
-                              <Users className="h-5 w-5 text-purple-600" />
-                            </div>
-                            <span className="text-sm font-medium text-muted-foreground">Nuevos Usuarios</span>
-                          </div>
-                          <Badge variant="secondary" className="bg-purple-100 text-purple-800">
-                            +15%
-                          </Badge>
-                        </div>
-                                                 <div className="text-2xl font-bold text-foreground mb-1">
-                           {metrics.usuarios.reduce((a, b) => a + b, 0)}
-                         </div>
-                        <div className="text-xs text-muted-foreground">
-                          67% del objetivo de crecimiento
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </div>
-                </CardContent>
-              </Card>
 
-                             {/* Gráfico Interactivo de Métricas */}
-               <Card>
-                 <CardHeader>
-                   <CardTitle className="flex items-center gap-2">
-                     <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                     </svg>
-                     Análisis de Métricas del Negocio
-                   </CardTitle>
-                   <CardDescription>
-                     Visualización interactiva de las métricas clave del mes seleccionado
-                   </CardDescription>
-                 </CardHeader>
-                 <CardContent>
-                   <div className="space-y-6">
-                     {/* Controles del gráfico */}
-                     <div className="flex items-center gap-4">
-                       <div className="flex items-center gap-2">
-                         <span className="text-sm font-medium text-muted-foreground">Métrica:</span>
-                         <Select value={metricType} onValueChange={(value: 'ingresos' | 'horas' | 'usuarios' | 'pagos') => setMetricType(value)}>
-                           <SelectTrigger className="w-40">
-                             <SelectValue placeholder="Seleccionar métrica" />
-                           </SelectTrigger>
-                           <SelectContent>
-                             <SelectItem value="ingresos">Ingresos ($)</SelectItem>
-                             <SelectItem value="horas">Horas Reservadas</SelectItem>
-                             <SelectItem value="usuarios">Nuevos Usuarios</SelectItem>
-                             <SelectItem value="pagos">Estado de Pagos (%)</SelectItem>
-                           </SelectContent>
-                         </Select>
-                       </div>
-                       
-                       <div className="flex items-center gap-2">
-                         <span className="text-sm font-medium text-muted-foreground">Tipo:</span>
-                         <div className="flex gap-1">
-                           <Button
-                             variant={chartType === 'bar' ? 'default' : 'outline'}
-                             size="sm"
-                             onClick={() => setChartType('bar')}
-                           >
-                             Barras
-                           </Button>
-                           <Button
-                             variant={chartType === 'line' ? 'default' : 'outline'}
-                             size="sm"
-                             onClick={() => setChartType('line')}
-                           >
-                             Líneas
-                           </Button>
-                         </div>
-                       </div>
-                     </div>
-                     
-                     {/* Gráfico Interactivo */}
-                     {metricsLoading ? (
-                       <div className="h-80 bg-muted/50 rounded-lg border border-border flex items-center justify-center">
-                         <div className="text-center">
-                           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto mb-4"></div>
-                           <p className="text-muted-foreground">Cargando métricas...</p>
-                         </div>
-                       </div>
-                     ) : (
-                       <AdminChart
-                         metricType={metricType}
-                         chartType={chartType}
-                         data={getChartData(metricType, chartType)}
-                       />
-                     )}
-                     
-                     {/* Estadísticas del gráfico */}
-                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                       {metrics.labels.map((semana, index) => (
-                         <Card key={semana} className="border-l-4 border-l-primary">
-                           <CardContent className="p-4">
-                             <div className="text-sm font-medium text-muted-foreground mb-1">{semana}</div>
-                             <div className="text-lg font-bold text-foreground">
-                               {metricType === 'ingresos' && `$${metrics.ingresos[index].toLocaleString()}`}
-                               {metricType === 'horas' && `${metrics.horas[index]}h`}
-                               {metricType === 'usuarios' && metrics.usuarios[index]}
-                               {metricType === 'pagos' && `${metrics.pagos[index]}%`}
-                             </div>
-                             <div className="text-xs text-muted-foreground">
-                               {getMetricDescription(metricType, metrics[metricType][index])}
-                             </div>
-                           </CardContent>
-                         </Card>
-                       ))}
-                     </div>
-                   </div>
-                 </CardContent>
-               </Card>
-
-              {/* Resumen ejecutivo */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Resumen Ejecutivo</CardTitle>
-                  <CardDescription>
-                    Vista general del rendimiento financiero y operativo
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-foreground">Rendimiento Financiero</h4>
-                      <div className="space-y-3">
-                                                 <div className="flex justify-between items-center">
-                           <span className="text-sm text-muted-foreground">Ingresos Totales:</span>
-                           <span className="font-semibold text-green-600">${metrics.ingresos.reduce((a, b) => a + b, 0).toLocaleString()}</span>
-                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Gastos Operativos:</span>
-                          <span className="font-semibold text-red-600">$45,000</span>
-                        </div>
-                        <div className="flex justify-between items-center border-t pt-2">
-                          <span className="text-sm font-medium text-foreground">Beneficio Neto:</span>
-                          <span className="font-bold text-foreground">$85,000</span>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-4">
-                      <h4 className="font-semibold text-foreground">Métricas Operativas</h4>
-                      <div className="space-y-3">
-                                                 <div className="flex justify-between items-center">
-                           <span className="text-sm text-muted-foreground">Ocupación Promedio:</span>
-                           <span className="font-semibold text-blue-600">{Math.round((metrics.horas.reduce((a, b) => a + b, 0) / 160) * 100)}%</span>
-                         </div>
-                                                 <div className="flex justify-between items-center">
-                           <span className="text-sm text-muted-foreground">Clientes Activos:</span>
-                           <span className="font-semibold text-purple-600">{metrics.usuarios.reduce((a, b) => a + b, 0)}</span>
-                         </div>
-                        <div className="flex justify-between items-center">
-                          <span className="text-sm text-muted-foreground">Satisfacción:</span>
-                          <span className="font-semibold text-green-600">4.8/5.0</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-
-          {/* Tab de Historial y Balance */}
-          <TabsContent value="historial" className="mt-6">
-            <HistorialBalance />
-          </TabsContent>
 
           {/* Tab de Usuarios */}
           <TabsContent value="usuarios" className="mt-6">
@@ -488,52 +261,183 @@ export default function Admin() {
             {/* Search and Filters */}
             <Card className="mb-6">
               <CardContent className="pt-6">
-                <div className="flex flex-col md:flex-row gap-4">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar usuarios por nombre o email..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10"
-                    />
+                <div className="space-y-4">
+                  {/* Búsqueda */}
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex-1 relative">
+                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar usuarios por nombre o email..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="pl-10"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant={filterRole === 'all' ? 'default' : 'outline'}
+                        onClick={() => setFilterRole('all')}
+                        size="sm"
+                      >
+                        Todos
+                      </Button>
+                      <Button
+                        variant={filterRole === 'admin' ? 'default' : 'outline'}
+                        onClick={() => setFilterRole('admin')}
+                        size="sm"
+                      >
+                        <Shield className="w-4 h-4 mr-2" />
+                        Admins
+                      </Button>
+                      <Button
+                        variant={filterRole === 'client' ? 'default' : 'outline'}
+                        onClick={() => setFilterRole('client')}
+                        size="sm"
+                      >
+                        <User className="w-4 h-4 mr-2" />
+                        Clientes
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button
-                      variant={filterRole === 'all' ? 'default' : 'outline'}
-                      onClick={() => setFilterRole('all')}
-                      size="sm"
-                    >
-                      Todos
-                    </Button>
-                    <Button
-                      variant={filterRole === 'admin' ? 'default' : 'outline'}
-                      onClick={() => setFilterRole('admin')}
-                      size="sm"
-                    >
-                      <Shield className="w-4 h-4 mr-2" />
-                      Admins
-                    </Button>
-                    <Button
-                      variant={filterRole === 'client' ? 'default' : 'outline'}
-                      onClick={() => setFilterRole('client')}
-                      size="sm"
-                    >
-                      <User className="w-4 h-4 mr-2" />
-                      Clientes
-                    </Button>
+
+                  {/* Filtros adicionales */}
+                  <div className="flex flex-col md:flex-row gap-4">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Período:</span>
+                      <Select value={filterPeriod} onValueChange={(value: any) => setFilterPeriod(value)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Seleccionar período" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los períodos</SelectItem>
+                          <SelectItem value="2024-01">Enero 2024</SelectItem>
+                          <SelectItem value="2024-02">Febrero 2024</SelectItem>
+                          <SelectItem value="2024-03">Marzo 2024</SelectItem>
+                          <SelectItem value="2024-04">Abril 2024</SelectItem>
+                          <SelectItem value="2024-05">Mayo 2024</SelectItem>
+                          <SelectItem value="2024-06">Junio 2024</SelectItem>
+                          <SelectItem value="2024-07">Julio 2024</SelectItem>
+                          <SelectItem value="2024-08">Agosto 2024</SelectItem>
+                          <SelectItem value="2024-09">Septiembre 2024</SelectItem>
+                          <SelectItem value="2024-10">Octubre 2024</SelectItem>
+                          <SelectItem value="2024-11">Noviembre 2024</SelectItem>
+                          <SelectItem value="2024-12">Diciembre 2024</SelectItem>
+                          <SelectItem value="2025-01">Enero 2025</SelectItem>
+                          <SelectItem value="2025-02">Febrero 2025</SelectItem>
+                          <SelectItem value="2025-03">Marzo 2025</SelectItem>
+                          <SelectItem value="2025-04">Abril 2025</SelectItem>
+                          <SelectItem value="2025-05">Mayo 2025</SelectItem>
+                          <SelectItem value="2025-06">Junio 2025</SelectItem>
+                          <SelectItem value="2025-07">Julio 2025</SelectItem>
+                          <SelectItem value="2025-08">Agosto 2025</SelectItem>
+                          <SelectItem value="2025-09">Septiembre 2025</SelectItem>
+                          <SelectItem value="2025-10">Octubre 2025</SelectItem>
+                          <SelectItem value="2025-11">Noviembre 2025</SelectItem>
+                          <SelectItem value="2025-12">Diciembre 2025</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-muted-foreground">Estado de Pago:</span>
+                      <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
+                        <SelectTrigger className="w-48">
+                          <SelectValue placeholder="Seleccionar estado" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Todos los estados</SelectItem>
+                          <SelectItem value="paid">Pagado</SelectItem>
+                          <SelectItem value="pending">Pendiente</SelectItem>
+                          <SelectItem value="overdue">Vencido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex gap-2 ml-auto">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSearchTerm('');
+                          setFilterRole('all');
+                          setFilterPeriod('all');
+                          setFilterPaymentStatus('all');
+                        }}
+                      >
+                        Limpiar Filtros
+                      </Button>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
+            {/* Resumen de filtros activos */}
+            {(filterRole !== 'all' || filterPeriod !== 'all' || filterPaymentStatus !== 'all' || searchTerm) && (
+              <Card className="mb-4">
+                <CardContent className="pt-4">
+                  <div className="flex flex-wrap gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Filtros activos:</span>
+                    {filterRole !== 'all' && (
+                      <Badge variant="secondary" className="text-xs">
+                        Rol: {filterRole === 'admin' ? 'Administradores' : 'Clientes'}
+                      </Badge>
+                    )}
+                    {filterPeriod !== 'all' && (
+                      <Badge variant="secondary" className="text-xs">
+                        Período: {
+                          filterPeriod === '2024-01' ? 'Enero 2024' :
+                          filterPeriod === '2024-02' ? 'Febrero 2024' :
+                          filterPeriod === '2024-03' ? 'Marzo 2024' :
+                          filterPeriod === '2024-04' ? 'Abril 2024' :
+                          filterPeriod === '2024-05' ? 'Mayo 2024' :
+                          filterPeriod === '2024-06' ? 'Junio 2024' :
+                          filterPeriod === '2024-07' ? 'Julio 2024' :
+                          filterPeriod === '2024-08' ? 'Agosto 2024' :
+                          filterPeriod === '2024-09' ? 'Septiembre 2024' :
+                          filterPeriod === '2024-10' ? 'Octubre 2024' :
+                          filterPeriod === '2024-11' ? 'Noviembre 2024' :
+                          filterPeriod === '2024-12' ? 'Diciembre 2024' :
+                          filterPeriod === '2025-01' ? 'Enero 2025' :
+                          filterPeriod === '2025-02' ? 'Febrero 2025' :
+                          filterPeriod === '2025-03' ? 'Marzo 2025' :
+                          filterPeriod === '2025-04' ? 'Abril 2025' :
+                          filterPeriod === '2025-05' ? 'Mayo 2025' :
+                          filterPeriod === '2025-06' ? 'Junio 2025' :
+                          filterPeriod === '2025-07' ? 'Julio 2025' :
+                          filterPeriod === '2025-08' ? 'Agosto 2025' :
+                          filterPeriod === '2025-09' ? 'Septiembre 2025' :
+                          filterPeriod === '2025-10' ? 'Octubre 2025' :
+                          filterPeriod === '2025-11' ? 'Noviembre 2025' :
+                          'Diciembre 2025'
+                        }
+                      </Badge>
+                    )}
+                    {filterPaymentStatus !== 'all' && (
+                      <Badge variant="secondary" className="text-xs">
+                        Pago: {
+                          filterPaymentStatus === 'paid' ? 'Pagado' :
+                          filterPaymentStatus === 'pending' ? 'Pendiente' :
+                          'Vencido'
+                        }
+                      </Badge>
+                    )}
+                    {searchTerm && (
+                      <Badge variant="secondary" className="text-xs">
+                        Búsqueda: "{searchTerm}"
+                      </Badge>
+                    )}
+                    <Badge variant="outline" className="text-xs">
+                      {filteredUsers.length} usuario{filteredUsers.length !== 1 ? 's' : ''} encontrado{filteredUsers.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
             {/* Users Table */}
             <Card>
               <CardHeader>
-                <CardTitle>Gestión de Usuarios</CardTitle>
-                <CardDescription>
-                  Administra roles y permisos de los usuarios del sistema
-                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="overflow-x-auto">

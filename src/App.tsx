@@ -9,19 +9,24 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
+import { useAdminRedirect } from "./hooks/useAdminRedirect";
 import { Calendar, Clock, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
+import Admin from "./pages/Admin";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
   const { user, signOut } = useAuthContext();
   const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
+  const { isAdmin, isChecking } = useAdminRedirect();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const navigate = useNavigate();
+  const [profileOpen, setProfileOpen] = useState(false);
   
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -37,6 +42,13 @@ const Dashboard = () => {
   const getUserName = (email: string) => {
     if (!email) return 'Usuario';
     const name = email.split('@')[0];
+    // Separar por punto y capitalizar cada parte
+    const parts = name.split('.');
+    if (parts.length >= 2) {
+      return parts.map(part => 
+        part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
+      ).join(' ');
+    }
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
@@ -80,12 +92,11 @@ const Dashboard = () => {
                 <DropdownMenuTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="flex items-center space-x-2 h-9 px-3 hover:bg-muted"
+                    className="h-9 w-9 p-0 hover:bg-muted rounded-full"
                   >
                     <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
                       {getInitials(user?.email || '')}
                     </div>
-                    <ChevronDown className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-56">
@@ -94,7 +105,7 @@ const Dashboard = () => {
                     <p className="text-xs text-muted-foreground">{user?.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer">
+                  <DropdownMenuItem className="cursor-pointer" onClick={() => setProfileOpen(true)}>
                     <Settings className="h-4 w-4 mr-2" />
                     Configurar Perfil
                   </DropdownMenuItem>
@@ -115,14 +126,27 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {firstTimeLoading ? (
+        {firstTimeLoading || isChecking ? (
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">
+                {isChecking ? 'Verificando permisos de administrador...' : 'Cargando...'}
+              </p>
+            </div>
           </div>
         ) : (
           <RecurringScheduleView />
         )}
       </main>
+
+      {/* Perfil del usuario */}
+      <ProfileSettingsDialog
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        userId={user?.id ?? null}
+        email={user?.email ?? null}
+      />
 
       {/* Modal de configuración de horarios recurrentes para primera vez */}
       <RecurringScheduleModal
@@ -146,16 +170,17 @@ const App = () => {
     >
       <TooltipProvider>
         <Toaster />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Navigate to="/login" replace />} />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Navigate to="/login" replace />} />
             <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
             <Route path="/user" element={<Dashboard />} />
-          </Routes>
-        </BrowserRouter>
+            <Route path="/admin" element={<Admin />} />
+            </Routes>
+          </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
-  );
+);
 };
 
 export default App;

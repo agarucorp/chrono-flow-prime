@@ -149,7 +149,8 @@ export const useAdmin = () => {
   const canBeAdmin = (email: string): boolean => {
     const adminEmails = [
       'gastondigilio@gmail.com',
-      'fede.rz87@gmail.com' // ✅ Nuevo email admin
+      'fede.rz87@gmail.com',
+      'agaru.corp@gmail.com' // ✅ Email admin principal
     ];
     return adminEmails.includes(email.toLowerCase());
   };
