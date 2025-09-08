@@ -4,6 +4,16 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate } from 'date-fns';
@@ -31,6 +41,7 @@ export const RecurringScheduleView = () => {
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClase, setSelectedClase] = useState<ClaseDelDia | null>(null);
   const [showModal, setShowModal] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
@@ -130,17 +141,21 @@ export const RecurringScheduleView = () => {
     setShowModal(true);
   };
 
-  const handleCancelarClase = async () => {
+  const handleCancelarClase = () => {
+    // Abrir confirmación primero
+    setConfirmOpen(true);
+  };
+
+  const handleConfirmarCancelacion = async () => {
     if (!selectedClase) return;
-    
     try {
-      // Aquí iría la lógica para cancelar la clase
-      console.log('Cancelando clase:', selectedClase.id);
-      // Por ahora solo cerramos el modal
+      // TODO: Integrar con servicio real de cancelación
+      console.log('Confirmado: cancelar clase', selectedClase.id);
+      setConfirmOpen(false);
       setShowModal(false);
       setSelectedClase(null);
     } catch (error) {
-      console.error('Error cancelando clase:', error);
+      console.error('Error confirmando cancelación:', error);
     }
   };
 
@@ -341,6 +356,28 @@ export const RecurringScheduleView = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Confirmación de cancelación con advertencia 24hs */}
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar cancelación</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Deseas cancelar esta clase?
+              <br />
+              <span className="block mt-2 text-amber-600 dark:text-amber-400">
+                Importante: si cancelas con menos de 24 horas de antelación, se cobrará el valor total de la clase.
+              </span>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Volver</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmarCancelacion} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Confirmar cancelación
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
