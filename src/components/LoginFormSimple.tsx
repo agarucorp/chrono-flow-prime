@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -14,6 +15,7 @@ interface LoginFormProps {
 
 export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const { signIn, signUp } = useAuthContext();
+  const navigate = useNavigate();
   
   const [credentials, setCredentials] = useState({
     email: "",
@@ -56,7 +58,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         
         console.log('Login exitoso');
         onLogin();
-        window.location.href = '/user';
+        navigate('/user');
       } catch (err) {
         console.error('Error inesperado en login:', err);
         setError('Error inesperado al iniciar sesión');

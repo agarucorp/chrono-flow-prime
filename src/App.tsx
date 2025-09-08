@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
@@ -21,6 +21,7 @@ const Dashboard = () => {
   const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
+  const navigate = useNavigate();
   
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -42,7 +43,7 @@ const Dashboard = () => {
   const handleSignOut = async () => {
     try {
       await signOut();
-      window.location.href = '/login';
+      navigate('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
     }
