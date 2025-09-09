@@ -15,3 +15,4 @@ FROM information_schema.columns
 WHERE table_name = 'horarios_recurrentes_usuario' 
 AND table_schema = 'public'
 ORDER BY ordinal_position;
+

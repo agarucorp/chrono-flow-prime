@@ -211,7 +211,12 @@ export const RecurringScheduleView = () => {
     <div className="space-y-6">
       {/* Header con navegación del mes */}
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold">Mis Clases</h2>
+        <div className="flex items-center space-x-4">
+          <h2 className="text-2xl font-bold">Mis Clases</h2>
+          <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+            Turnos disponibles
+          </button>
+        </div>
         <div className="flex items-center space-x-4">
           <Button
             variant="outline"

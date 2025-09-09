@@ -1,5 +1,5 @@
 import { useAuthContext } from "@/contexts/AuthContext";
-import Navigation from "@/components/Navigation";
+import { Navigation } from "@/components/Navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -24,7 +24,12 @@ const UserDashboard = () => {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
             <CardHeader>
-              <CardTitle>Mis Turnos</CardTitle>
+              <div className="flex items-center justify-between w-full">
+                <CardTitle>Mis Clases</CardTitle>
+                <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
+                  Turnos disponibles
+                </button>
+              </div>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="reservar" className="w-full">
