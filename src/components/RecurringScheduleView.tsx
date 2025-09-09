@@ -46,6 +46,20 @@ export const RecurringScheduleView = () => {
   const [showTurnosCancelados, setShowTurnosCancelados] = useState(false);
   const [turnosCancelados, setTurnosCancelados] = useState<any[]>([]);
   const [loadingTurnosCancelados, setLoadingTurnosCancelados] = useState(false);
+  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles'>('mis-clases');
+
+  // Función para formatear horas sin segundos
+  const formatTime = (timeString: string) => {
+    if (!timeString) return '';
+    return timeString.substring(0, 5); // Toma solo HH:mm
+  };
+
+  // Cargar turnos cancelados cuando se cambie a la vista de turnos disponibles
+  useEffect(() => {
+    if (activeView === 'turnos-disponibles' && turnosCancelados.length === 0) {
+      cargarTurnosCancelados();
+    }
+  }, [activeView]);
 
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
@@ -58,98 +72,11 @@ export const RecurringScheduleView = () => {
     { numero: 6, nombre: 'Sábado', nombreCorto: 'Sáb' }
   ], []);
 
-  // Generar clases para el mes actual
-  const clasesDelMes = useMemo(() => {
-    const clases: ClaseDelDia[] = [];
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    
-    horariosRecurrentes.forEach(horario => {
-      const days = eachDayOfInterval({ start, end });
-      days.forEach(dia => {
-        if (getDay(dia) === horario.dia_semana) {
-          clases.push({
-            id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
-            dia,
-            horario
-          });
-        }
-      });
-    });
-    
-    return clases;
-  }, [horariosRecurrentes, currentMonth]);
-
-  // Función para obtener clases de un día específico
-  const getClasesDelDia = (dia: Date) => {
-    return clasesDelMes.filter(clase => isSameDay(clase.dia, dia));
-  };
-
-  // Generar días del mes actual (solo días con clases)
-  const diasDelMes = useMemo(() => {
-    const start = startOfMonth(currentMonth);
-    const end = endOfMonth(currentMonth);
-    const days = eachDayOfInterval({ start, end });
-    
-    // Filtrar solo días que tienen clases
-    return days.filter(dia => {
-      const clasesDelDia = getClasesDelDia(dia);
-      return clasesDelDia.length > 0;
-    });
-  }, [currentMonth, clasesDelMes]);
-
-  useEffect(() => {
-    if (user && !hasLoaded) {
-      fetchHorariosRecurrentes();
-      cargarClasesCanceladas();
-    } else if (!user) {
-      setLoading(false);
-      setHasLoaded(true);
-    }
-  }, [user, hasLoaded]);
-
-  const cargarClasesCanceladas = async () => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('turnos_cancelados')
-        .select('*')
-        .eq('cliente_id', user.id);
-
-      if (error) {
-        console.error('Error cargando clases canceladas:', error);
-        return;
-      }
-
-      // Marcar las clases canceladas en horariosRecurrentes
-      if (data && data.length > 0) {
-        setHorariosRecurrentes(prev => 
-          prev.map(horario => {
-            const esCancelada = data.some(cancelacion => 
-              cancelacion.turno_hora_inicio === horario.hora_inicio &&
-              cancelacion.turno_hora_fin === horario.hora_fin
-            );
-            return esCancelada ? { ...horario, cancelada: true, activo: false } : horario;
-          })
-        );
-      }
-    } catch (error) {
-      console.error('Error cargando clases canceladas:', error);
-    }
-  };
-
-  useEffect(() => {
-    if (showTurnosCancelados && user) {
-      cargarTurnosCancelados();
-    }
-  }, [showTurnosCancelados, user]);
-
-  const fetchHorariosRecurrentes = async () => {
-    if (!user) return;
+  // Cargar horarios recurrentes del usuario
+  const cargarHorariosRecurrentes = async () => {
+    if (!user?.id) return;
 
     try {
-      setLoading(true);
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
         .select('id, dia_semana, hora_inicio, hora_fin, activo')
@@ -159,182 +86,149 @@ export const RecurringScheduleView = () => {
         .order('hora_inicio', { ascending: true });
 
       if (error) {
-        console.error('Error cargando horarios recurrentes:', error);
-        if (error.code === 'PGRST116' || error.message.includes('relation') || error.message.includes('does not exist')) {
-          console.log('Tabla horarios_recurrentes_usuario no existe aún');
-          setHorariosRecurrentes([]);
-        } else {
-          throw error;
-        }
-      } else {
-        setHorariosRecurrentes(data || []);
+        console.error('Error al cargar horarios recurrentes:', error);
+        return;
       }
+
+      setHorariosRecurrentes(data || []);
     } catch (error) {
-      console.error('Error inesperado:', error);
-      setHorariosRecurrentes([]);
-    } finally {
-      setLoading(false);
-      setHasLoaded(true);
+      console.error('Error al cargar horarios recurrentes:', error);
     }
   };
 
-  const handleClaseClick = (clase: ClaseDelDia) => {
-    // No permitir abrir modal si la clase ya está cancelada
-    if (clase.horario.cancelada) {
-      return;
-    }
-    setSelectedClase(clase);
-    setShowModal(true);
-  };
+  // Cargar turnos cancelados disponibles
+  const cargarTurnosCancelados = async () => {
+    if (!user?.id) return;
 
-  const handleCancelarClase = () => {
-    // Abrir confirmación primero
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmarCancelacion = async () => {
-    if (!selectedClase || !user) return;
-    
-    // Verificar si la clase ya fue cancelada
-    if (selectedClase.horario.cancelada) {
-      alert('Esta clase ya fue cancelada anteriormente');
-      setConfirmOpen(false);
-      setShowModal(false);
-      setSelectedClase(null);
-      return;
-    }
-    
+    setLoadingTurnosCancelados(true);
     try {
-      console.log('Iniciando cancelación de clase:', selectedClase);
-      
-      // Verificar si ya existe una cancelación para esta clase
-      const { data: cancelacionExistente } = await supabase
+      const { data, error } = await supabase
         .from('turnos_cancelados')
         .select('*')
-        .eq('cliente_id', user.id)
-        .eq('turno_fecha', format(selectedClase.dia, 'yyyy-MM-dd'))
-        .eq('turno_hora_inicio', selectedClase.horario.hora_inicio)
-        .eq('turno_hora_fin', selectedClase.horario.hora_fin);
-
-      if (cancelacionExistente && cancelacionExistente.length > 0) {
-        alert('Esta clase ya fue cancelada anteriormente');
-        setConfirmOpen(false);
-        setShowModal(false);
-        setSelectedClase(null);
-        return;
-      }
-      
-      // Datos para insertar (sin turno_id para evitar foreign key constraint)
-      const datosCancelacion = {
-        cliente_id: user.id,
-        turno_fecha: format(selectedClase.dia, 'yyyy-MM-dd'),
-        turno_hora_inicio: selectedClase.horario.hora_inicio,
-        turno_hora_fin: selectedClase.horario.hora_fin,
-        servicio: 'Clase Individual',
-        tipo_cancelacion: 'usuario',
-        motivo_cancelacion: `Cancelado por el usuario: ${user.email}`
-      };
-      
-      console.log('Datos a insertar:', datosCancelacion);
-      
-      // Insertar en la tabla turnos_cancelados
-      const { data, error } = await supabase
-        .from('turnos_cancelados')
-        .insert(datosCancelacion)
-        .select();
+        .eq('disponible', true)
+        .order('turno_fecha', { ascending: true });
 
       if (error) {
-        console.error('Error insertando cancelación:', error);
-        alert('Error al cancelar la clase: ' + JSON.stringify(error));
+        console.error('Error al cargar turnos cancelados:', error);
         return;
       }
 
-      console.log('Cancelación insertada:', data);
-
-      // Marcar la clase como cancelada y desactivarla
-      setHorariosRecurrentes(prev => 
-        prev.map(horario => 
-          horario.id === selectedClase.horario.id 
-            ? { ...horario, cancelada: true, activo: false }
-            : horario
-        )
-      );
-
-      // Recargar turnos cancelados
-      await cargarTurnosCancelados();
-
-      setConfirmOpen(false);
-      setShowModal(false);
-      setSelectedClase(null);
-      
-      console.log('Clase cancelada exitosamente');
-      alert('Clase cancelada exitosamente');
+      setTurnosCancelados(data || []);
     } catch (error) {
-      console.error('Error confirmando cancelación:', error);
-      alert('Error al cancelar la clase: ' + error);
-    }
-  };
-
-  const cargarTurnosCancelados = async () => {
-    if (!user) {
-      console.log('No hay usuario autenticado');
-      return;
-    }
-    
-    console.log('Cargando turnos cancelados para usuario:', user.id);
-    setLoadingTurnosCancelados(true);
-    
-    try {
-      // Primero probar una consulta simple
-      const { data, error } = await supabase
-        .from('turnos_cancelados')
-        .select('*');
-
-      if (error) {
-        console.error('Error cargando turnos cancelados:', error);
-        alert('Error cargando turnos cancelados: ' + JSON.stringify(error));
-        return;
-      }
-
-      console.log('Todos los turnos cancelados:', data);
-      
-      // Filtrar por cliente_id en el frontend
-      const turnosDelUsuario = data?.filter(turno => turno.cliente_id === user.id) || [];
-      console.log('Turnos del usuario:', turnosDelUsuario);
-      
-      setTurnosCancelados(turnosDelUsuario);
-    } catch (error) {
-      console.error('Error cargando turnos cancelados:', error);
-      alert('Error cargando turnos cancelados: ' + error);
+      console.error('Error al cargar turnos cancelados:', error);
     } finally {
       setLoadingTurnosCancelados(false);
     }
   };
 
-  const handlePreviousMonth = () => {
-    const today = new Date();
-    const currentMonthStart = startOfMonth(currentMonth);
-    const todayMonthStart = startOfMonth(today);
-    
-    // Solo permitir navegar si no es el mes actual
-    if (currentMonthStart.getTime() > todayMonthStart.getTime()) {
-      setCurrentMonth(prev => subMonths(prev, 1));
+  // Cargar datos iniciales
+  useEffect(() => {
+    if (user?.id && !hasLoaded) {
+      cargarHorariosRecurrentes();
+      setHasLoaded(true);
+      setLoading(false);
     }
+  }, [user?.id, hasLoaded]);
+
+  // Generar días del mes actual
+  const diasDelMes = useMemo(() => {
+    const start = startOfMonth(currentMonth);
+    const end = endOfMonth(currentMonth);
+    return eachDayOfInterval({ start, end });
+  }, [currentMonth]);
+
+  // Obtener clases del día
+  const getClasesDelDia = (dia: Date) => {
+    const diaSemana = dia.getDay();
+    return horariosRecurrentes
+      .filter(horario => horario.dia_semana === diaSemana)
+      .map(horario => ({
+        id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+        dia,
+        horario
+      }));
+  };
+
+  // Manejar click en clase
+  const handleClaseClick = (clase: ClaseDelDia) => {
+    if (clase.horario.cancelada) return;
+    setSelectedClase(clase);
+    setShowModal(true);
+  };
+
+  // Manejar cancelación de clase
+  const handleCancelarClase = async (clase: ClaseDelDia) => {
+    if (!user?.id) return;
+
+    try {
+      // Verificar si ya existe una cancelación para este turno
+      const { data: cancelacionExistente } = await supabase
+        .from('turnos_cancelados')
+        .select('id')
+        .eq('usuario_id', user.id)
+        .eq('turno_fecha', format(selectedClase.dia, 'yyyy-MM-dd'))
+        .eq('turno_hora_inicio', selectedClase.horario.hora_inicio)
+        .eq('turno_hora_fin', selectedClase.horario.hora_fin);
+
+      if (cancelacionExistente && cancelacionExistente.length > 0) {
+        alert('Ya has cancelado este turno anteriormente');
+        return;
+      }
+
+      // Crear registro de cancelación
+      const { error } = await supabase
+        .from('turnos_cancelados')
+        .insert({
+          usuario_id: user.id,
+          turno_fecha: format(selectedClase.dia, 'yyyy-MM-dd'),
+          turno_hora_inicio: selectedClase.horario.hora_inicio,
+          turno_hora_fin: selectedClase.horario.hora_fin,
+          motivo_cancelacion: 'Cancelado por el usuario',
+          disponible: true,
+          fecha_cancelacion: new Date().toISOString()
+        });
+
+      if (error) {
+        console.error('Error al cancelar turno:', error);
+        alert('Error al cancelar el turno');
+        return;
+      }
+
+      // Marcar horario como cancelado localmente
+      setHorariosRecurrentes(prev => 
+        prev.map(h => 
+          h.id === selectedClase.horario.id 
+            ? { ...h, cancelada: true }
+            : h
+        )
+      );
+
+      setShowModal(false);
+      setConfirmOpen(false);
+      alert('Turno cancelado exitosamente');
+    } catch (error) {
+      console.error('Error al cancelar turno:', error);
+      alert('Error al cancelar el turno');
+    }
+  };
+
+  // Manejar confirmación de cancelación
+  const handleConfirmarCancelacion = () => {
+    if (selectedClase) {
+      handleCancelarClase(selectedClase);
+    }
+  };
+
+  // Navegación del mes
+  const handlePreviousMonth = () => {
+    setCurrentMonth(prev => subMonths(prev, 1));
   };
 
   const handleNextMonth = () => {
-    const today = new Date();
-    const nextMonth = addMonths(today, 1);
-    const currentMonthStart = startOfMonth(currentMonth);
-    const nextMonthStart = startOfMonth(nextMonth);
-    
-    // Solo permitir navegar al mes siguiente
-    if (currentMonthStart.getTime() < nextMonthStart.getTime()) {
-      setCurrentMonth(prev => addMonths(prev, 1));
-    }
+    setCurrentMonth(prev => addMonths(prev, 1));
   };
 
-  // Verificar si se puede navegar a meses anteriores o siguientes
+  // Verificar si se puede navegar al mes anterior
   const canNavigatePrevious = () => {
     const today = new Date();
     const currentMonthStart = startOfMonth(currentMonth);
@@ -342,6 +236,7 @@ export const RecurringScheduleView = () => {
     return currentMonthStart.getTime() > todayMonthStart.getTime();
   };
 
+  // Verificar si se puede navegar al mes siguiente
   const canNavigateNext = () => {
     const today = new Date();
     const nextMonth = addMonths(today, 1);
@@ -349,7 +244,6 @@ export const RecurringScheduleView = () => {
     const nextMonthStart = startOfMonth(nextMonth);
     return currentMonthStart.getTime() < nextMonthStart.getTime();
   };
-
 
   if (loading) {
     return (
@@ -361,52 +255,142 @@ export const RecurringScheduleView = () => {
 
   return (
     <div className="space-y-6">
-      {/* Header con navegación del mes */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <h2 className="text-2xl font-bold">Mis Clases</h2>
-          <div className="flex space-x-2">
-            <button 
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              onClick={() => setShowTurnosCancelados(!showTurnosCancelados)}
-            >
-              {showTurnosCancelados ? 'Ver Mis Clases' : 'Turnos disponibles'}
-            </button>
-            <button 
-              className="px-2 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
-              onClick={cargarTurnosCancelados}
-            >
-              Test DB
-            </button>
+      {/* Subnavbar */}
+      <div className="space-y-4">
+        <div className="flex justify-center">
+          <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+          <button
+            onClick={() => setActiveView('mis-clases')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'mis-clases'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Mis Clases
+          </button>
+          <button
+            onClick={() => setActiveView('turnos-disponibles')}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeView === 'turnos-disponibles'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Turnos Disponibles
+          </button>
           </div>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handlePreviousMonth}
-            disabled={!canNavigatePrevious()}
-            className="h-8 w-8 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <h3 className="text-lg font-semibold min-w-[200px] text-center">
-            {format(currentMonth, 'MMMM yyyy', { locale: es })}
-          </h3>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleNextMonth}
-            disabled={!canNavigateNext()}
-            className="h-8 w-8 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
-      {/* Vista de Turnos Cancelados */}
-      {showTurnosCancelados && (
+      {/* Contenido basado en la vista activa */}
+      {activeView === 'mis-clases' && (
+        <>
+          {/* Navegación del mes */}
+          <div className="flex items-center justify-center space-x-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handlePreviousMonth}
+              disabled={!canNavigatePrevious()}
+              className="h-8 w-8 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <h3 className="text-lg font-semibold min-w-[200px] text-center">
+              {format(currentMonth, 'MMMM yyyy', { locale: es })}
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleNextMonth}
+              disabled={!canNavigateNext()}
+              className="h-8 w-8 p-0 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+
+          {/* Calendario de Mis Clases */}
+          <Card>
+            <CardContent className="p-0">
+              {horariosRecurrentes.length === 0 ? (
+                <div className="p-8 text-center">
+                  <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                  <p className="text-muted-foreground">No tienes clases configuradas</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b bg-muted/50">
+                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Fecha</th>
+                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Día</th>
+                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Horario</th>
+                        <th className="p-4 text-center font-medium text-sm text-muted-foreground hidden md:table-cell">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diasDelMes.map((dia, index) => {
+                        const clasesDelDia = getClasesDelDia(dia);
+                        return clasesDelDia.map((clase, claseIndex) => (
+                          <tr 
+                            key={`${dia.getTime()}-${claseIndex}`} 
+                            className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors ${
+                              clase.horario.cancelada 
+                                ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
+                                : ''
+                            }`}
+                          >
+                            <td className="p-4">
+                              <div className="text-sm font-medium">
+                                {format(dia, 'dd/MM', { locale: es })}
+                              </div>
+                              {clase.horario.cancelada && (
+                                <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                  CANCELADA
+                                </div>
+                              )}
+                            </td>
+                            <td className="p-4">
+                              <div className="text-sm text-muted-foreground">
+                                {format(dia, 'EEEE', { locale: es })}
+                              </div>
+                            </td>
+                            <td className="p-4">
+                              <span className={`text-sm font-medium ${
+                                clase.horario.cancelada 
+                                  ? 'text-red-600 dark:text-red-400 line-through' 
+                                  : ''
+                              }`}>
+                                {formatTime(clase.horario.hora_inicio)} - {formatTime(clase.horario.hora_fin)}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center hidden md:table-cell">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleClaseClick(clase)}
+                                className="h-8 px-3"
+                                disabled={clase.horario.cancelada}
+                              >
+                                {clase.horario.cancelada ? 'Cancelada' : 'Ver Detalles'}
+                              </Button>
+                            </td>
+                          </tr>
+                        ));
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
+      )}
+
+      {/* Vista de Turnos Disponibles */}
+      {activeView === 'turnos-disponibles' && (
         <Card>
           <CardHeader>
             <CardTitle>Turnos Cancelados Disponibles</CardTitle>
@@ -429,8 +413,8 @@ export const RecurringScheduleView = () => {
                       <div>
                         <h3 className="font-semibold">{turno.servicio}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {turno.turno_fecha} - 
-                          {turno.turno_hora_inicio} a {turno.turno_hora_fin}
+                          {format(new Date(turno.turno_fecha), 'dd/MM', { locale: es })} - 
+                          {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Cancelado el {format(new Date(turno.fecha_cancelacion), 'dd/MM/yyyy HH:mm', { locale: es })}
@@ -453,91 +437,6 @@ export const RecurringScheduleView = () => {
         </Card>
       )}
 
-      {/* Agenda */}
-      {!showTurnosCancelados && (
-        <Card>
-        <CardContent className="p-0">
-          {horariosRecurrentes.length === 0 ? (
-            <div className="p-8 text-center">
-              <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No tienes clases configuradas</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b bg-muted/50">
-                    <th className="p-4 text-left font-medium text-sm text-muted-foreground">Fecha</th>
-                    <th className="p-4 text-left font-medium text-sm text-muted-foreground">Día</th>
-                    <th className="p-4 text-left font-medium text-sm text-muted-foreground">Horario</th>
-                    <th className="p-4 text-center font-medium text-sm text-muted-foreground">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {diasDelMes.map((dia, index) => {
-                    const clasesDelDia = getClasesDelDia(dia);
-                    return clasesDelDia.map((clase, claseIndex) => (
-                      <tr 
-                        key={`${dia.getTime()}-${claseIndex}`} 
-                        className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors ${
-                          clase.horario.cancelada 
-                            ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
-                            : ''
-                        }`}
-                      >
-                        <td className="p-4">
-                          <div className="text-sm font-medium">
-                            {format(dia, 'dd/MM/yyyy', { locale: es })}
-                          </div>
-                          {clase.horario.cancelada && (
-                            <div className="text-xs text-red-600 dark:text-red-400 font-medium">
-                              CANCELADA
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="text-sm text-muted-foreground">
-                            {format(dia, 'EEEE', { locale: es })}
-                          </div>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex items-center space-x-2">
-                            <Clock className={`h-4 w-4 ${
-                              clase.horario.cancelada 
-                                ? 'text-red-500' 
-                                : 'text-muted-foreground'
-                            }`} />
-                            <span className={`text-sm font-medium ${
-                              clase.horario.cancelada 
-                                ? 'text-red-600 dark:text-red-400 line-through' 
-                                : ''
-                            }`}>
-                              {clase.horario.hora_inicio} - {clase.horario.hora_fin}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="p-4 text-center">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleClaseClick(clase)}
-                            className="h-8 px-3"
-                            disabled={clase.horario.cancelada}
-                          >
-                            {clase.horario.cancelada ? 'Cancelada' : 'Ver Detalles'}
-                          </Button>
-                        </td>
-                      </tr>
-                    ));
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-      )}
-
       {/* Modal de detalles de la clase */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
         <DialogContent className="sm:max-w-md">
@@ -556,7 +455,7 @@ export const RecurringScheduleView = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Fecha</label>
-                  <p className="text-sm">{format(selectedClase.dia, 'dd/MM/yyyy', { locale: es })}</p>
+                  <p className="text-sm">{format(selectedClase.dia, 'dd/MM', { locale: es })}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Día</label>
@@ -567,21 +466,25 @@ export const RecurringScheduleView = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Hora de Inicio</label>
-                  <p className="text-sm">{selectedClase.horario.hora_inicio}</p>
+                  <p className="text-sm">{formatTime(selectedClase.horario.hora_inicio)}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Hora de Fin</label>
-                  <p className="text-sm">{selectedClase.horario.hora_fin}</p>
+                  <p className="text-sm">{formatTime(selectedClase.horario.hora_fin)}</p>
                 </div>
               </div>
 
               <div className="flex space-x-2 pt-4">
                 <Button
                   variant="destructive"
-                  onClick={handleCancelarClase}
+                  onClick={() => {
+                    setShowModal(false);
+                    setConfirmOpen(true);
+                  }}
+                  disabled={selectedClase.horario.cancelada}
                   className="flex-1"
                 >
-                  Cancelar Clase
+                  {selectedClase.horario.cancelada ? 'Ya Cancelada' : 'Cancelar Clase'}
                 </Button>
                 <Button
                   variant="outline"
@@ -596,17 +499,13 @@ export const RecurringScheduleView = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Confirmación de cancelación con advertencia 24hs */}
+      {/* Dialog de confirmación de cancelación */}
       <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar cancelación</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Deseas cancelar esta clase?
-              <br />
-              <span className="block mt-2 text-amber-600 dark:text-amber-400">
-                Importante: si cancelas con menos de 24 horas de antelación, se cobrará el valor total de la clase.
-              </span>
+              ¿Estás seguro de que quieres cancelar esta clase? Esta acción no se puede deshacer.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
