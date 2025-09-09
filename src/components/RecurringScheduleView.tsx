@@ -36,22 +36,53 @@ interface ClaseDelDia {
 
 export const RecurringScheduleView = () => {
   const { user } = useAuthContext();
-  const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>(() => {
+    // Recuperar horarios del localStorage
+    const saved = localStorage.getItem('horariosRecurrentes');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [loading, setLoading] = useState(() => {
+    // Solo mostrar loading si no hay datos guardados
+    const saved = localStorage.getItem('horariosRecurrentes');
+    return !saved;
+  });
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClase, setSelectedClase] = useState<ClaseDelDia | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [showTurnosCancelados, setShowTurnosCancelados] = useState(false);
-  const [turnosCancelados, setTurnosCancelados] = useState<any[]>([]);
+  const [turnosCancelados, setTurnosCancelados] = useState<any[]>(() => {
+    // Recuperar turnos cancelados del localStorage
+    const saved = localStorage.getItem('turnosCancelados');
+    return saved ? JSON.parse(saved) : [];
+  });
   const [loadingTurnosCancelados, setLoadingTurnosCancelados] = useState(false);
-  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles'>('mis-clases');
+  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles'>(() => {
+    // Recuperar la vista activa del localStorage
+    const savedView = localStorage.getItem('activeView');
+    return (savedView as 'mis-clases' | 'turnos-disponibles') || 'mis-clases';
+  });
+  const [clasesDelMes, setClasesDelMes] = useState<any[]>(() => {
+    // Recuperar clases del mes del localStorage
+    const saved = localStorage.getItem('clasesDelMes');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [lastLoadTime, setLastLoadTime] = useState<number>(() => {
+    // Recuperar timestamp de última carga
+    const saved = localStorage.getItem('lastLoadTime');
+    return saved ? parseInt(saved) : 0;
+  });
 
   // Función para formatear horas sin segundos
   const formatTime = (timeString: string) => {
     if (!timeString) return '';
     return timeString.substring(0, 5); // Toma solo HH:mm
+  };
+
+  // Función para cambiar la vista activa y guardarla en localStorage
+  const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles') => {
+    setActiveView(view);
+    localStorage.setItem('activeView', view);
   };
 
   // Cargar turnos cancelados cuando se cambie a la vista de turnos disponibles
@@ -73,9 +104,19 @@ export const RecurringScheduleView = () => {
   ], []);
 
   // Cargar horarios recurrentes del usuario
-  const cargarHorariosRecurrentes = async () => {
+  const cargarHorariosRecurrentes = async (forceReload = false) => {
     if (!user?.id) return;
 
+    // Verificar si necesitamos recargar (cada 5 minutos o si es forzado)
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    const shouldReload = forceReload || (now - lastLoadTime) > fiveMinutes;
+
+    if (!shouldReload && horariosRecurrentes.length > 0) {
+      return; // Usar datos del caché
+    }
+
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
@@ -91,29 +132,61 @@ export const RecurringScheduleView = () => {
       }
 
       setHorariosRecurrentes(data || []);
+      setLastLoadTime(now);
+      
+      // Guardar en localStorage
+      localStorage.setItem('horariosRecurrentes', JSON.stringify(data || []));
+      localStorage.setItem('lastLoadTime', now.toString());
     } catch (error) {
       console.error('Error al cargar horarios recurrentes:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   // Cargar turnos cancelados disponibles
-  const cargarTurnosCancelados = async () => {
+  const cargarTurnosCancelados = async (forceReload = false) => {
     if (!user?.id) return;
+
+    // Verificar si necesitamos recargar (cada 2 minutos o si es forzado)
+    const now = Date.now();
+    const twoMinutes = 2 * 60 * 1000;
+    const lastTurnosLoadTime = parseInt(localStorage.getItem('lastTurnosLoadTime') || '0');
+    const shouldReload = forceReload || (now - lastTurnosLoadTime) > twoMinutes;
+
+    if (!shouldReload && turnosCancelados.length > 0) {
+      return; // Usar datos del caché
+    }
 
     setLoadingTurnosCancelados(true);
     try {
+      // Obtener todos los turnos cancelados disponibles
       const { data, error } = await supabase
         .from('turnos_cancelados')
         .select('*')
-        .eq('disponible', true)
-        .order('turno_fecha', { ascending: true });
+        .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd')) // Solo fechas futuras
+        .order('turno_fecha', { ascending: true })
+        .order('turno_hora_inicio', { ascending: true });
 
       if (error) {
         console.error('Error al cargar turnos cancelados:', error);
         return;
       }
 
-      setTurnosCancelados(data || []);
+      // Eliminar duplicados basándose en fecha y horario
+      const turnosUnicos = data?.reduce((acc, turno) => {
+        const key = `${turno.turno_fecha}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+        if (!acc.find(t => `${t.turno_fecha}-${t.turno_hora_inicio}-${t.turno_hora_fin}` === key)) {
+          acc.push(turno);
+        }
+        return acc;
+      }, []) || [];
+
+      setTurnosCancelados(turnosUnicos);
+      
+      // Guardar en localStorage
+      localStorage.setItem('turnosCancelados', JSON.stringify(turnosUnicos));
+      localStorage.setItem('lastTurnosLoadTime', now.toString());
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);
     } finally {
@@ -123,12 +196,61 @@ export const RecurringScheduleView = () => {
 
   // Cargar datos iniciales
   useEffect(() => {
-    if (user?.id && !hasLoaded) {
+    if (user?.id) {
       cargarHorariosRecurrentes();
-      setHasLoaded(true);
-      setLoading(false);
     }
-  }, [user?.id, hasLoaded]);
+  }, [user?.id]);
+
+  // Cargar clases del mes
+  const cargarClasesDelMes = async (forceReload = false) => {
+    if (!user?.id || horariosRecurrentes.length === 0) return;
+
+    const monthKey = format(currentMonth, 'yyyy-MM');
+    const cachedKey = `clasesDelMes_${monthKey}`;
+    const lastLoadKey = `lastClasesLoadTime_${monthKey}`;
+    
+    // Verificar si necesitamos recargar (cada 3 minutos o si es forzado)
+    const now = Date.now();
+    const threeMinutes = 3 * 60 * 1000;
+    const lastClasesLoadTime = parseInt(localStorage.getItem(lastLoadKey) || '0');
+    const shouldReload = forceReload || (now - lastClasesLoadTime) > threeMinutes;
+
+    if (!shouldReload) {
+      const cached = localStorage.getItem(cachedKey);
+      if (cached) {
+        setClasesDelMes(JSON.parse(cached));
+        return; // Usar datos del caché
+      }
+    }
+
+    try {
+      const diasDelMes = eachDayOfInterval({ 
+        start: startOfMonth(currentMonth), 
+        end: endOfMonth(currentMonth) 
+      });
+
+      const todasLasClases = [];
+      for (const dia of diasDelMes) {
+        const clasesDelDia = await getClasesDelDia(dia);
+        todasLasClases.push(...clasesDelDia);
+      }
+
+      setClasesDelMes(todasLasClases);
+      
+      // Guardar en localStorage
+      localStorage.setItem(cachedKey, JSON.stringify(todasLasClases));
+      localStorage.setItem(lastLoadKey, now.toString());
+    } catch (error) {
+      console.error('Error al cargar clases del mes:', error);
+    }
+  };
+
+  // Cargar clases del mes cuando cambien los horarios o el mes
+  useEffect(() => {
+    if (horariosRecurrentes.length > 0) {
+      cargarClasesDelMes();
+    }
+  }, [horariosRecurrentes, currentMonth]);
 
   // Generar días del mes actual
   const diasDelMes = useMemo(() => {
@@ -138,15 +260,34 @@ export const RecurringScheduleView = () => {
   }, [currentMonth]);
 
   // Obtener clases del día
-  const getClasesDelDia = (dia: Date) => {
+  const getClasesDelDia = async (dia: Date) => {
     const diaSemana = dia.getDay();
-    return horariosRecurrentes
-      .filter(horario => horario.dia_semana === diaSemana)
-      .map(horario => ({
-        id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
-        dia,
-        horario
-      }));
+    const horariosDelDia = horariosRecurrentes.filter(horario => horario.dia_semana === diaSemana);
+    
+    // Verificar cancelaciones para cada horario en esta fecha específica
+    const clasesConCancelaciones = await Promise.all(
+      horariosDelDia.map(async (horario) => {
+        const { data: cancelacion } = await supabase
+          .from('turnos_cancelados')
+          .select('id')
+          .eq('cliente_id', user?.id)
+          .eq('turno_fecha', format(dia, 'yyyy-MM-dd'))
+          .eq('turno_hora_inicio', horario.hora_inicio)
+          .eq('turno_hora_fin', horario.hora_fin)
+          .single();
+
+        return {
+          id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+          dia,
+          horario: {
+            ...horario,
+            cancelada: !!cancelacion
+          }
+        };
+      })
+    );
+
+    return clasesConCancelaciones;
   };
 
   // Manejar click en clase
@@ -160,15 +301,22 @@ export const RecurringScheduleView = () => {
   const handleCancelarClase = async (clase: ClaseDelDia) => {
     if (!user?.id) return;
 
+    console.log('Cancelando clase:', {
+      cliente_id: user.id,
+      turno_fecha: format(clase.dia, 'yyyy-MM-dd'),
+      turno_hora_inicio: clase.horario.hora_inicio,
+      turno_hora_fin: clase.horario.hora_fin
+    });
+
     try {
       // Verificar si ya existe una cancelación para este turno
       const { data: cancelacionExistente } = await supabase
         .from('turnos_cancelados')
         .select('id')
-        .eq('usuario_id', user.id)
-        .eq('turno_fecha', format(selectedClase.dia, 'yyyy-MM-dd'))
-        .eq('turno_hora_inicio', selectedClase.horario.hora_inicio)
-        .eq('turno_hora_fin', selectedClase.horario.hora_fin);
+        .eq('cliente_id', user.id)
+        .eq('turno_fecha', format(clase.dia, 'yyyy-MM-dd'))
+        .eq('turno_hora_inicio', clase.horario.hora_inicio)
+        .eq('turno_hora_fin', clase.horario.hora_fin);
 
       if (cancelacionExistente && cancelacionExistente.length > 0) {
         alert('Ya has cancelado este turno anteriormente');
@@ -179,29 +327,23 @@ export const RecurringScheduleView = () => {
       const { error } = await supabase
         .from('turnos_cancelados')
         .insert({
-          usuario_id: user.id,
-          turno_fecha: format(selectedClase.dia, 'yyyy-MM-dd'),
-          turno_hora_inicio: selectedClase.horario.hora_inicio,
-          turno_hora_fin: selectedClase.horario.hora_fin,
+          cliente_id: user.id,
+          turno_fecha: format(clase.dia, 'yyyy-MM-dd'),
+          turno_hora_inicio: clase.horario.hora_inicio,
+          turno_hora_fin: clase.horario.hora_fin,
           motivo_cancelacion: 'Cancelado por el usuario',
-          disponible: true,
-          fecha_cancelacion: new Date().toISOString()
+          tipo_cancelacion: 'usuario',
+          servicio: 'Clase programada'
         });
 
       if (error) {
         console.error('Error al cancelar turno:', error);
-        alert('Error al cancelar el turno');
+        alert(`Error al cancelar el turno: ${error.message}`);
         return;
       }
 
-      // Marcar horario como cancelado localmente
-      setHorariosRecurrentes(prev => 
-        prev.map(h => 
-          h.id === selectedClase.horario.id 
-            ? { ...h, cancelada: true }
-            : h
-        )
-      );
+      // Recargar las clases del mes para reflejar el cambio (forzar recarga)
+      await cargarClasesDelMes(true);
 
       setShowModal(false);
       setConfirmOpen(false);
@@ -258,9 +400,9 @@ export const RecurringScheduleView = () => {
       {/* Subnavbar */}
       <div className="space-y-4">
         <div className="flex justify-center">
-          <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+        <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
           <button
-            onClick={() => setActiveView('mis-clases')}
+            onClick={() => handleViewChange('mis-clases')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeView === 'mis-clases'
                 ? 'bg-background text-foreground shadow-sm'
@@ -270,7 +412,7 @@ export const RecurringScheduleView = () => {
             Mis Clases
           </button>
           <button
-            onClick={() => setActiveView('turnos-disponibles')}
+            onClick={() => handleViewChange('turnos-disponibles')}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
               activeView === 'turnos-disponibles'
                 ? 'bg-background text-foreground shadow-sm'
@@ -279,7 +421,7 @@ export const RecurringScheduleView = () => {
           >
             Turnos Disponibles
           </button>
-          </div>
+        </div>
         </div>
       </div>
 
@@ -332,15 +474,18 @@ export const RecurringScheduleView = () => {
                     </thead>
                     <tbody>
                       {diasDelMes.map((dia, index) => {
-                        const clasesDelDia = getClasesDelDia(dia);
+                        const clasesDelDia = clasesDelMes.filter(clase => 
+                          isSameDay(clase.dia, dia)
+                        );
                         return clasesDelDia.map((clase, claseIndex) => (
                           <tr 
                             key={`${dia.getTime()}-${claseIndex}`} 
-                            className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors ${
+                            className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer ${
                               clase.horario.cancelada 
                                 ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
                                 : ''
                             }`}
+                            onClick={() => handleClaseClick(clase)}
                           >
                             <td className="p-4">
                               <div className="text-sm font-medium">
@@ -370,7 +515,10 @@ export const RecurringScheduleView = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => handleClaseClick(clase)}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleClaseClick(clase);
+                                }}
                                 className="h-8 px-3"
                                 disabled={clase.horario.cancelada}
                               >
@@ -411,17 +559,17 @@ export const RecurringScheduleView = () => {
                   <div key={turno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-semibold">{turno.servicio}</h3>
+                        <h3 className="font-semibold">Clase Disponible</h3>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(turno.turno_fecha), 'dd/MM', { locale: es })} - 
+                          {format(new Date(turno.turno_fecha), 'dd/MM/yyyy', { locale: es })} - 
                           {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          Cancelado el {format(new Date(turno.fecha_cancelacion), 'dd/MM/yyyy HH:mm', { locale: es })}
+                          Cancelado el {format(new Date(turno.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
                         </p>
                         {turno.motivo_cancelacion && (
                           <p className="text-xs text-muted-foreground italic">
-                            {turno.motivo_cancelacion}
+                            Motivo: {turno.motivo_cancelacion}
                           </p>
                         )}
                       </div>
@@ -445,9 +593,6 @@ export const RecurringScheduleView = () => {
               <Calendar className="h-5 w-5" />
               <span>Detalles de la Clase</span>
             </DialogTitle>
-            <DialogDescription>
-              Información completa de tu clase programada
-            </DialogDescription>
           </DialogHeader>
           
           {selectedClase && (
@@ -472,6 +617,13 @@ export const RecurringScheduleView = () => {
                   <label className="text-sm font-medium text-muted-foreground">Hora de Fin</label>
                   <p className="text-sm">{formatTime(selectedClase.horario.hora_fin)}</p>
                 </div>
+              </div>
+
+              {/* Aviso de política de cancelación */}
+              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                <p className="text-sm text-amber-800 dark:text-amber-200">
+                  <strong>Importante:</strong> si no cancelás la clase antes de las 24hs del comienzo de la misma, se te cobrará el 100% del valor.
+                </p>
               </div>
 
               <div className="flex space-x-2 pt-4">
