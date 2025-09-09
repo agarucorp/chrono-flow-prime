@@ -25,6 +25,7 @@ interface HorarioRecurrente {
   hora_inicio: string;
   hora_fin: string;
   activo: boolean;
+  cancelada?: boolean;
 }
 
 interface ClaseDelDia {
@@ -42,6 +43,9 @@ export const RecurringScheduleView = () => {
   const [selectedClase, setSelectedClase] = useState<ClaseDelDia | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [showTurnosCancelados, setShowTurnosCancelados] = useState(false);
+  const [turnosCancelados, setTurnosCancelados] = useState<any[]>([]);
+  const [loadingTurnosCancelados, setLoadingTurnosCancelados] = useState(false);
 
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
@@ -97,11 +101,49 @@ export const RecurringScheduleView = () => {
   useEffect(() => {
     if (user && !hasLoaded) {
       fetchHorariosRecurrentes();
+      cargarClasesCanceladas();
     } else if (!user) {
       setLoading(false);
       setHasLoaded(true);
     }
   }, [user, hasLoaded]);
+
+  const cargarClasesCanceladas = async () => {
+    if (!user) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('turnos_cancelados')
+        .select('*')
+        .eq('cliente_id', user.id);
+
+      if (error) {
+        console.error('Error cargando clases canceladas:', error);
+        return;
+      }
+
+      // Marcar las clases canceladas en horariosRecurrentes
+      if (data && data.length > 0) {
+        setHorariosRecurrentes(prev => 
+          prev.map(horario => {
+            const esCancelada = data.some(cancelacion => 
+              cancelacion.turno_hora_inicio === horario.hora_inicio &&
+              cancelacion.turno_hora_fin === horario.hora_fin
+            );
+            return esCancelada ? { ...horario, cancelada: true, activo: false } : horario;
+          })
+        );
+      }
+    } catch (error) {
+      console.error('Error cargando clases canceladas:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (showTurnosCancelados && user) {
+      cargarTurnosCancelados();
+    }
+  }, [showTurnosCancelados, user]);
 
   const fetchHorariosRecurrentes = async () => {
     if (!user) return;
@@ -137,6 +179,10 @@ export const RecurringScheduleView = () => {
   };
 
   const handleClaseClick = (clase: ClaseDelDia) => {
+    // No permitir abrir modal si la clase ya está cancelada
+    if (clase.horario.cancelada) {
+      return;
+    }
     setSelectedClase(clase);
     setShowModal(true);
   };
@@ -147,15 +193,121 @@ export const RecurringScheduleView = () => {
   };
 
   const handleConfirmarCancelacion = async () => {
-    if (!selectedClase) return;
-    try {
-      // TODO: Integrar con servicio real de cancelación
-      console.log('Confirmado: cancelar clase', selectedClase.id);
+    if (!selectedClase || !user) return;
+    
+    // Verificar si la clase ya fue cancelada
+    if (selectedClase.horario.cancelada) {
+      alert('Esta clase ya fue cancelada anteriormente');
       setConfirmOpen(false);
       setShowModal(false);
       setSelectedClase(null);
+      return;
+    }
+    
+    try {
+      console.log('Iniciando cancelación de clase:', selectedClase);
+      
+      // Verificar si ya existe una cancelación para esta clase
+      const { data: cancelacionExistente } = await supabase
+        .from('turnos_cancelados')
+        .select('*')
+        .eq('cliente_id', user.id)
+        .eq('turno_fecha', format(selectedClase.dia, 'yyyy-MM-dd'))
+        .eq('turno_hora_inicio', selectedClase.horario.hora_inicio)
+        .eq('turno_hora_fin', selectedClase.horario.hora_fin);
+
+      if (cancelacionExistente && cancelacionExistente.length > 0) {
+        alert('Esta clase ya fue cancelada anteriormente');
+        setConfirmOpen(false);
+        setShowModal(false);
+        setSelectedClase(null);
+        return;
+      }
+      
+      // Datos para insertar (sin turno_id para evitar foreign key constraint)
+      const datosCancelacion = {
+        cliente_id: user.id,
+        turno_fecha: format(selectedClase.dia, 'yyyy-MM-dd'),
+        turno_hora_inicio: selectedClase.horario.hora_inicio,
+        turno_hora_fin: selectedClase.horario.hora_fin,
+        servicio: 'Clase Individual',
+        tipo_cancelacion: 'usuario',
+        motivo_cancelacion: `Cancelado por el usuario: ${user.email}`
+      };
+      
+      console.log('Datos a insertar:', datosCancelacion);
+      
+      // Insertar en la tabla turnos_cancelados
+      const { data, error } = await supabase
+        .from('turnos_cancelados')
+        .insert(datosCancelacion)
+        .select();
+
+      if (error) {
+        console.error('Error insertando cancelación:', error);
+        alert('Error al cancelar la clase: ' + JSON.stringify(error));
+        return;
+      }
+
+      console.log('Cancelación insertada:', data);
+
+      // Marcar la clase como cancelada y desactivarla
+      setHorariosRecurrentes(prev => 
+        prev.map(horario => 
+          horario.id === selectedClase.horario.id 
+            ? { ...horario, cancelada: true, activo: false }
+            : horario
+        )
+      );
+
+      // Recargar turnos cancelados
+      await cargarTurnosCancelados();
+
+      setConfirmOpen(false);
+      setShowModal(false);
+      setSelectedClase(null);
+      
+      console.log('Clase cancelada exitosamente');
+      alert('Clase cancelada exitosamente');
     } catch (error) {
       console.error('Error confirmando cancelación:', error);
+      alert('Error al cancelar la clase: ' + error);
+    }
+  };
+
+  const cargarTurnosCancelados = async () => {
+    if (!user) {
+      console.log('No hay usuario autenticado');
+      return;
+    }
+    
+    console.log('Cargando turnos cancelados para usuario:', user.id);
+    setLoadingTurnosCancelados(true);
+    
+    try {
+      // Primero probar una consulta simple
+      const { data, error } = await supabase
+        .from('turnos_cancelados')
+        .select('*');
+
+      if (error) {
+        console.error('Error cargando turnos cancelados:', error);
+        alert('Error cargando turnos cancelados: ' + JSON.stringify(error));
+        return;
+      }
+
+      console.log('Todos los turnos cancelados:', data);
+      
+      // Filtrar por cliente_id en el frontend
+      const turnosDelUsuario = data?.filter(turno => turno.cliente_id === user.id) || [];
+      console.log('Turnos del usuario:', turnosDelUsuario);
+      
+      setTurnosCancelados(turnosDelUsuario);
+    } catch (error) {
+      console.error('Error cargando turnos cancelados:', error);
+      alert('Error cargando turnos cancelados: ' + error);
+    } finally {
+      setLoadingTurnosCancelados(false);
     }
   };
 
@@ -213,9 +365,20 @@ export const RecurringScheduleView = () => {
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
           <h2 className="text-2xl font-bold">Mis Clases</h2>
-          <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
-            Turnos disponibles
-          </button>
+          <div className="flex space-x-2">
+            <button 
+              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              onClick={() => setShowTurnosCancelados(!showTurnosCancelados)}
+            >
+              {showTurnosCancelados ? 'Ver Mis Clases' : 'Turnos disponibles'}
+            </button>
+            <button 
+              className="px-2 py-2 bg-green-500 text-white rounded hover:bg-green-600 text-xs"
+              onClick={cargarTurnosCancelados}
+            >
+              Test DB
+            </button>
+          </div>
         </div>
         <div className="flex items-center space-x-4">
           <Button
@@ -242,8 +405,57 @@ export const RecurringScheduleView = () => {
         </div>
       </div>
 
+      {/* Vista de Turnos Cancelados */}
+      {showTurnosCancelados && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Turnos Cancelados Disponibles</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loadingTurnosCancelados ? (
+              <div className="p-4 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Cargando turnos cancelados...</p>
+              </div>
+            ) : turnosCancelados.length === 0 ? (
+              <div className="p-4 text-center text-muted-foreground">
+                No hay turnos cancelados disponibles
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {turnosCancelados.map((turno) => (
+                  <div key={turno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h3 className="font-semibold">{turno.servicio}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {turno.turno_fecha} - 
+                          {turno.turno_hora_inicio} a {turno.turno_hora_fin}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Cancelado el {format(new Date(turno.fecha_cancelacion), 'dd/MM/yyyy HH:mm', { locale: es })}
+                        </p>
+                        {turno.motivo_cancelacion && (
+                          <p className="text-xs text-muted-foreground italic">
+                            {turno.motivo_cancelacion}
+                          </p>
+                        )}
+                      </div>
+                      <Badge variant="secondary">
+                        Disponible
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Agenda */}
-      <Card>
+      {!showTurnosCancelados && (
+        <Card>
         <CardContent className="p-0">
           {horariosRecurrentes.length === 0 ? (
             <div className="p-8 text-center">
@@ -265,11 +477,23 @@ export const RecurringScheduleView = () => {
                   {diasDelMes.map((dia, index) => {
                     const clasesDelDia = getClasesDelDia(dia);
                     return clasesDelDia.map((clase, claseIndex) => (
-                      <tr key={`${dia.getTime()}-${claseIndex}`} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                      <tr 
+                        key={`${dia.getTime()}-${claseIndex}`} 
+                        className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors ${
+                          clase.horario.cancelada 
+                            ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
+                            : ''
+                        }`}
+                      >
                         <td className="p-4">
                           <div className="text-sm font-medium">
                             {format(dia, 'dd/MM/yyyy', { locale: es })}
                           </div>
+                          {clase.horario.cancelada && (
+                            <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                              CANCELADA
+                            </div>
+                          )}
                         </td>
                         <td className="p-4">
                           <div className="text-sm text-muted-foreground">
@@ -278,8 +502,16 @@ export const RecurringScheduleView = () => {
                         </td>
                         <td className="p-4">
                           <div className="flex items-center space-x-2">
-                            <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-medium">
+                            <Clock className={`h-4 w-4 ${
+                              clase.horario.cancelada 
+                                ? 'text-red-500' 
+                                : 'text-muted-foreground'
+                            }`} />
+                            <span className={`text-sm font-medium ${
+                              clase.horario.cancelada 
+                                ? 'text-red-600 dark:text-red-400 line-through' 
+                                : ''
+                            }`}>
                               {clase.horario.hora_inicio} - {clase.horario.hora_fin}
                             </span>
                           </div>
@@ -290,8 +522,9 @@ export const RecurringScheduleView = () => {
                             size="sm"
                             onClick={() => handleClaseClick(clase)}
                             className="h-8 px-3"
+                            disabled={clase.horario.cancelada}
                           >
-                            Ver Detalles
+                            {clase.horario.cancelada ? 'Cancelada' : 'Ver Detalles'}
                           </Button>
                         </td>
                       </tr>
@@ -303,6 +536,7 @@ export const RecurringScheduleView = () => {
           )}
         </CardContent>
       </Card>
+      )}
 
       {/* Modal de detalles de la clase */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
