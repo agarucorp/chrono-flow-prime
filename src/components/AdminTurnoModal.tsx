@@ -191,6 +191,17 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         return;
       }
 
+      // Registrar disponibilidad en turnos_cancelados
+      await supabase
+        .from('turnos_cancelados')
+        .insert({
+          cliente_id: clienteId,
+          turno_fecha: turno.fecha,
+          turno_hora_inicio: turno.hora_inicio,
+          turno_hora_fin: turno.hora_fin,
+          tipo_cancelacion: 'admin'
+        });
+
       showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada exitosamente');
       
       // Recargar datos

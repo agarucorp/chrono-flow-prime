@@ -148,23 +148,15 @@ export const RecurringScheduleView = () => {
   const cargarTurnosCancelados = async (forceReload = false) => {
     if (!user?.id) return;
 
-    // Verificar si necesitamos recargar (cada 2 minutos o si es forzado)
-    const now = Date.now();
-    const twoMinutes = 2 * 60 * 1000;
-    const lastTurnosLoadTime = parseInt(localStorage.getItem('lastTurnosLoadTime') || '0');
-    const shouldReload = forceReload || (now - lastTurnosLoadTime) > twoMinutes;
-
-    if (!shouldReload && turnosCancelados.length > 0) {
-      return; // Usar datos del caché
-    }
+    // Siempre recargar desde BD para datos reales
 
     setLoadingTurnosCancelados(true);
     try {
       // Obtener todos los turnos cancelados disponibles
       const { data, error } = await supabase
-        .from('turnos_cancelados')
+        .from('turnos_disponibles')
         .select('*')
-        .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd')) // Solo fechas futuras
+        .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd'))
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
 
@@ -183,16 +175,30 @@ export const RecurringScheduleView = () => {
       }, []) || [];
 
       setTurnosCancelados(turnosUnicos);
-      
-      // Guardar en localStorage
-      localStorage.setItem('turnosCancelados', JSON.stringify(turnosUnicos));
-      localStorage.setItem('lastTurnosLoadTime', now.toString());
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);
     } finally {
       setLoadingTurnosCancelados(false);
     }
   };
+
+  // Suscripción en tiempo real a turnos_disponibles
+  useEffect(() => {
+    if (activeView !== 'turnos-disponibles') return;
+    const channel = supabase
+      .channel('turnos_disponibles_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
+        cargarTurnosCancelados(true);
+      })
+      .subscribe();
+
+    // Cargar inicialmente
+    cargarTurnosCancelados(true);
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [activeView]);
 
   // Cargar datos iniciales
   useEffect(() => {
@@ -331,9 +337,7 @@ export const RecurringScheduleView = () => {
           turno_fecha: format(clase.dia, 'yyyy-MM-dd'),
           turno_hora_inicio: clase.horario.hora_inicio,
           turno_hora_fin: clase.horario.hora_fin,
-          motivo_cancelacion: 'Cancelado por el usuario',
-          tipo_cancelacion: 'usuario',
-          servicio: 'Clase programada'
+          tipo_cancelacion: 'usuario'
         });
 
       if (error) {
@@ -564,14 +568,16 @@ export const RecurringScheduleView = () => {
                           {format(new Date(turno.turno_fecha), 'dd/MM/yyyy', { locale: es })} - 
                           {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
                         </p>
-                        <p className="text-xs text-muted-foreground">
-                          Cancelado el {format(new Date(turno.created_at), 'dd/MM/yyyy HH:mm', { locale: es })}
-                        </p>
-                        {turno.motivo_cancelacion && (
-                          <p className="text-xs text-muted-foreground italic">
-                            Motivo: {turno.motivo_cancelacion}
-                          </p>
-                        )}
+                        {(() => {
+                          const createdAt = turno.creado_at || turno.created_at;
+                          const d = createdAt ? new Date(createdAt) : null;
+                          return d && !isNaN(d.valueOf()) ? (
+                            <p className="text-xs text-muted-foreground">
+                              Cancelado el {format(d, 'dd/MM/yyyy HH:mm', { locale: es })}
+                            </p>
+                          ) : null;
+                        })()}
+                        {/* Campo motivo_cancelacion eliminado de la tabla */}
                       </div>
                       <Badge variant="secondary">
                         Disponible

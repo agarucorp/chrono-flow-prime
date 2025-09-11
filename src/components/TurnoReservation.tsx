@@ -248,6 +248,7 @@ export const TurnoReservation = () => {
     try {
       const loadingToast = showLoading('Cancelando turno...');
       
+      // 1) Marcar turno como cancelado y liberar cliente
       const { error } = await supabase
         .from('turnos')
         .update({
@@ -263,6 +264,17 @@ export const TurnoReservation = () => {
         showError('Error al cancelar turno', error.message);
         return;
       }
+
+      // 2) Registrar disponibilidad en turnos_cancelados para CTA "turnos disponibles"
+      await supabase
+        .from('turnos_cancelados')
+        .insert({
+          cliente_id: user?.id,
+          turno_fecha: turno.fecha,
+          turno_hora_inicio: turno.hora_inicio,
+          turno_hora_fin: turno.hora_fin,
+          tipo_cancelacion: 'usuario'
+        });
 
       showSuccess('Turno cancelado', 'Tu turno ha sido cancelado exitosamente');
       
