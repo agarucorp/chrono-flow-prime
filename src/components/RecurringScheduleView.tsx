@@ -278,19 +278,25 @@ export const RecurringScheduleView = () => {
         console.error('Error al cargar turnos variables:', error);
       } else if (turnosVariables) {
         // Convertir turnos variables a formato de clase
-        const clasesVariables = turnosVariables.map(turno => ({
-          id: `variable-${turno.id}`,
-          dia: new Date(turno.turno_fecha),
-          horario: {
-            id: turno.id,
-            dia_semana: new Date(turno.turno_fecha).getDay(),
-            hora_inicio: turno.turno_hora_inicio,
-            hora_fin: turno.turno_hora_fin,
-            activo: true,
-            cancelada: false,
-            esVariable: true // Marcar como turno variable
-          }
-        }));
+        const clasesVariables = turnosVariables.map(turno => {
+          // Crear fecha correcta sin problemas de zona horaria
+          const fechaParts = turno.turno_fecha.split('-');
+          const fechaCorrecta = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
+          
+          return {
+            id: `variable-${turno.id}`,
+            dia: fechaCorrecta,
+            horario: {
+              id: turno.id,
+              dia_semana: fechaCorrecta.getDay(),
+              hora_inicio: turno.turno_hora_inicio,
+              hora_fin: turno.turno_hora_fin,
+              activo: true,
+              cancelada: false,
+              esVariable: true // Marcar como turno variable
+            }
+          };
+        });
         todasLasClases.push(...clasesVariables);
       }
 
