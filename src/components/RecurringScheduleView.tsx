@@ -296,6 +296,15 @@ export const RecurringScheduleView = () => {
     return clasesConCancelaciones;
   };
 
+  // Verificar si la fecha ya pasó
+  const isFechaPasada = (fecha: Date) => {
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const fechaTurno = new Date(fecha);
+    fechaTurno.setHours(0, 0, 0, 0);
+    return fechaTurno < hoy;
+  };
+
   // Manejar click en clase
   const handleClaseClick = (clase: ClaseDelDia) => {
     if (clase.horario.cancelada) return;
@@ -565,7 +574,7 @@ export const RecurringScheduleView = () => {
                       <div>
                         <h3 className="font-semibold">Clase Disponible</h3>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(turno.turno_fecha), 'dd/MM/yyyy', { locale: es })} - 
+                          {turno.turno_fecha.split('-').reverse().join('/')} - 
                           {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
                         </p>
                         {(() => {
@@ -639,10 +648,14 @@ export const RecurringScheduleView = () => {
                     setShowModal(false);
                     setConfirmOpen(true);
                   }}
-                  disabled={selectedClase.horario.cancelada}
+                  disabled={selectedClase.horario.cancelada || isFechaPasada(selectedClase.dia)}
                   className="flex-1"
                 >
-                  {selectedClase.horario.cancelada ? 'Ya Cancelada' : 'Cancelar Clase'}
+                  {selectedClase.horario.cancelada 
+                    ? 'Ya Cancelada' 
+                    : isFechaPasada(selectedClase.dia) 
+                      ? 'Fecha Pasada' 
+                      : 'Cancelar Clase'}
                 </Button>
                 <Button
                   variant="outline"
