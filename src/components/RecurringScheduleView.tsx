@@ -57,6 +57,12 @@ export const RecurringScheduleView = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [loadingTurnosCancelados, setLoadingTurnosCancelados] = useState(false);
+  
+  // Estados para modal de reserva
+  const [showReservaModal, setShowReservaModal] = useState(false);
+  const [turnoToReserve, setTurnoToReserve] = useState<any>(null);
+  const [confirmingReserva, setConfirmingReserva] = useState(false);
+  const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
   const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles'>(() => {
     // Recuperar la vista activa del localStorage
     const savedView = localStorage.getItem('activeView');
@@ -148,8 +154,6 @@ export const RecurringScheduleView = () => {
   const cargarTurnosCancelados = async (forceReload = false) => {
     if (!user?.id) return;
 
-    // Siempre recargar desde BD para datos reales
-
     setLoadingTurnosCancelados(true);
     try {
       // Obtener todos los turnos cancelados disponibles
@@ -165,11 +169,27 @@ export const RecurringScheduleView = () => {
         return;
       }
 
-      // Eliminar duplicados basándose en fecha y horario
+      // Obtener turnos reservados por el usuario para marcar como reservados
+      const { data: reservados, error: errorReservados } = await supabase
+        .from('turnos_variables')
+        .select('creado_desde_disponible_id')
+        .eq('cliente_id', user.id)
+        .eq('estado', 'confirmada');
+
+      if (errorReservados) {
+        console.error('Error al cargar turnos reservados:', errorReservados);
+      }
+
+      const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
+
+      // Eliminar duplicados y marcar como reservados
       const turnosUnicos = data?.reduce((acc, turno) => {
         const key = `${turno.turno_fecha}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
         if (!acc.find(t => `${t.turno_fecha}-${t.turno_hora_inicio}-${t.turno_hora_fin}` === key)) {
-          acc.push(turno);
+          acc.push({
+            ...turno,
+            reservado: idsReservados.has(turno.id)
+          });
         }
         return acc;
       }, []) || [];
@@ -207,9 +227,9 @@ export const RecurringScheduleView = () => {
     }
   }, [user?.id]);
 
-  // Cargar clases del mes
+  // Cargar clases del mes (horarios recurrentes + turnos variables)
   const cargarClasesDelMes = async (forceReload = false) => {
-    if (!user?.id || horariosRecurrentes.length === 0) return;
+    if (!user?.id) return;
 
     const monthKey = format(currentMonth, 'yyyy-MM');
     const cachedKey = `clasesDelMes_${monthKey}`;
@@ -236,9 +256,42 @@ export const RecurringScheduleView = () => {
       });
 
       const todasLasClases = [];
-      for (const dia of diasDelMes) {
-        const clasesDelDia = await getClasesDelDia(dia);
-        todasLasClases.push(...clasesDelDia);
+      
+      // Cargar horarios recurrentes si existen
+      if (horariosRecurrentes.length > 0) {
+        for (const dia of diasDelMes) {
+          const clasesDelDia = await getClasesDelDia(dia);
+          todasLasClases.push(...clasesDelDia);
+        }
+      }
+
+      // Cargar turnos variables del mes
+      const { data: turnosVariables, error } = await supabase
+        .from('turnos_variables')
+        .select('*')
+        .eq('cliente_id', user.id)
+        .eq('estado', 'confirmada')
+        .gte('turno_fecha', format(startOfMonth(currentMonth), 'yyyy-MM-dd'))
+        .lte('turno_fecha', format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
+
+      if (error) {
+        console.error('Error al cargar turnos variables:', error);
+      } else if (turnosVariables) {
+        // Convertir turnos variables a formato de clase
+        const clasesVariables = turnosVariables.map(turno => ({
+          id: `variable-${turno.id}`,
+          dia: new Date(turno.turno_fecha),
+          horario: {
+            id: turno.id,
+            dia_semana: new Date(turno.turno_fecha).getDay(),
+            hora_inicio: turno.turno_hora_inicio,
+            hora_fin: turno.turno_hora_fin,
+            activo: true,
+            cancelada: false,
+            esVariable: true // Marcar como turno variable
+          }
+        }));
+        todasLasClases.push(...clasesVariables);
       }
 
       setClasesDelMes(todasLasClases);
@@ -253,9 +306,7 @@ export const RecurringScheduleView = () => {
 
   // Cargar clases del mes cuando cambien los horarios o el mes
   useEffect(() => {
-    if (horariosRecurrentes.length > 0) {
-      cargarClasesDelMes();
-    }
+    cargarClasesDelMes();
   }, [horariosRecurrentes, currentMonth]);
 
   // Generar días del mes actual
@@ -372,6 +423,64 @@ export const RecurringScheduleView = () => {
     if (selectedClase) {
       handleCancelarClase(selectedClase);
     }
+  };
+
+  // Manejar click en reservar turno
+  const handleReservarClick = (turno: any) => {
+    setTurnoToReserve(turno);
+    setShowReservaModal(true);
+  };
+
+  // Manejar confirmación de reserva
+  const handleConfirmarReserva = async () => {
+    if (!turnoToReserve || !user?.id) return;
+
+    setConfirmingReserva(true);
+    try {
+      // Insertar en turnos_variables
+      const { error } = await supabase
+        .from('turnos_variables')
+        .insert({
+          cliente_id: user.id,
+          turno_fecha: turnoToReserve.turno_fecha,
+          turno_hora_inicio: turnoToReserve.turno_hora_inicio,
+          turno_hora_fin: turnoToReserve.turno_hora_fin,
+          estado: 'confirmada',
+          creado_desde_disponible_id: turnoToReserve.id
+        });
+
+      if (error) {
+        console.error('Error al reservar turno:', error);
+        alert(`Error al reservar el turno: ${error.message}`);
+        return;
+      }
+
+      // Eliminar de turnos_disponibles
+      await supabase
+        .from('turnos_disponibles')
+        .delete()
+        .eq('id', turnoToReserve.id);
+
+      alert('Turno reservado exitosamente');
+      setShowReservaModal(false);
+      setTurnoToReserve(null);
+      
+      // Recargar turnos disponibles y clases del mes
+      await cargarTurnosCancelados(true);
+      await cargarClasesDelMes(true);
+    } catch (error) {
+      console.error('Error al reservar turno:', error);
+      alert('Error al reservar el turno');
+    } finally {
+      setConfirmingReserva(false);
+    }
+  };
+
+  // Cerrar modal de reserva
+  const handleCloseReservaModal = () => {
+    setShowReservaModal(false);
+    setTurnoToReserve(null);
+    setConfirmingReserva(false);
   };
 
   // Navegación del mes
@@ -496,7 +605,9 @@ export const RecurringScheduleView = () => {
                             className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer ${
                               clase.horario.cancelada 
                                 ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
-                                : ''
+                                : clase.horario.esVariable
+                                  ? 'bg-green-50 dark:bg-green-950/20'
+                                  : ''
                             }`}
                             onClick={() => handleClaseClick(clase)}
                           >
@@ -519,10 +630,17 @@ export const RecurringScheduleView = () => {
                               <span className={`text-sm font-medium ${
                                 clase.horario.cancelada 
                                   ? 'text-red-600 dark:text-red-400 line-through' 
-                                  : ''
+                                  : clase.horario.esVariable
+                                    ? 'text-green-600 dark:text-green-400'
+                                    : ''
                               }`}>
                                 {formatTime(clase.horario.hora_inicio)} - {formatTime(clase.horario.hora_fin)}
                               </span>
+                              {clase.horario.esVariable && (
+                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                  NUEVO TURNO
+                                </div>
+                              )}
                             </td>
                             <td className="p-4 text-center hidden md:table-cell">
                               <Button
@@ -588,9 +706,15 @@ export const RecurringScheduleView = () => {
                         })()}
                         {/* Campo motivo_cancelacion eliminado de la tabla */}
                       </div>
-                      <Badge variant="secondary">
-                        Disponible
-                      </Badge>
+                      <Button
+                        variant="default"
+                        size="sm"
+                        onClick={() => handleReservarClick(turno)}
+                        disabled={turno.reservado}
+                        className="h-8 px-3"
+                      >
+                        {turno.reservado ? 'Reservado' : 'Reservar Clase'}
+                      </Button>
                     </div>
                   </div>
                 ))}
@@ -687,6 +811,58 @@ export const RecurringScheduleView = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de confirmación de reserva */}
+      <Dialog open={showReservaModal} onOpenChange={setShowReservaModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center space-x-2">
+              <Calendar className="h-5 w-5" />
+              <span>Confirmar Reserva</span>
+            </DialogTitle>
+          </DialogHeader>
+          
+          {turnoToReserve && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Fecha</label>
+                  <p className="text-sm">{turnoToReserve.turno_fecha.split('-').reverse().join('/')}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Horario</label>
+                  <p className="text-sm">{formatTime(turnoToReserve.turno_hora_inicio)} - {formatTime(turnoToReserve.turno_hora_fin)}</p>
+                </div>
+              </div>
+
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Confirmación:</strong> ¿Estás seguro de que quieres reservar este horario?
+                </p>
+              </div>
+
+              <div className="flex space-x-2 pt-4">
+                <Button
+                  variant="default"
+                  onClick={handleConfirmarReserva}
+                  disabled={confirmingReserva}
+                  className="flex-1"
+                >
+                  {confirmingReserva ? 'Reservando...' : 'Confirmar Reserva'}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={handleCloseReservaModal}
+                  disabled={confirmingReserva}
+                  className="flex-1"
+                >
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
