@@ -3,7 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Lock } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 interface ProfileSettingsDialogProps {
   open: boolean;
@@ -18,6 +20,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
   const [phone, setPhone] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -112,12 +115,32 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
             <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} />
           </div>
 
+          <div className="space-y-2">
+            <Label>Seguridad</Label>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setShowChangePassword(true)}
+              className="w-full justify-start"
+              disabled={loading}
+            >
+              <Lock className="w-4 h-4 mr-2" />
+              Cambiar Contraseña
+            </Button>
+          </div>
+
           <div className="flex gap-2 pt-2">
             <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>Cancelar</Button>
             <Button className="flex-1" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
           </div>
         </div>
       </DialogContent>
+
+      {/* Dialog para cambiar contraseña */}
+      <ChangePasswordDialog
+        open={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+      />
     </Dialog>
   );
 };

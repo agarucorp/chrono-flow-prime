@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
 import { LoginFormSimple } from "./components/LoginFormSimple";
+import { ResetPasswordForm } from "./components/ResetPasswordForm";
 import { TurnoReservation } from "./components/TurnoReservation";
 import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
@@ -173,9 +174,10 @@ const App = () => {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
-            <Route path="/user" element={<Dashboard />} />
-            <Route path="/admin" element={<Admin />} />
+              <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
+              <Route path="/reset-password" element={<ResetPasswordForm />} />
+              <Route path="/user" element={<Dashboard />} />
+              <Route path="/admin" element={<Admin />} />
             </Routes>
           </BrowserRouter>
       </TooltipProvider>

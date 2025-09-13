@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { RecoverPasswordForm } from "./RecoverPasswordForm";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -34,6 +35,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isRecoverMode, setIsRecoverMode] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
@@ -52,7 +54,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         
         if (error) {
           console.error('Error en login:', error);
-          setError(error.message || 'Error al iniciar sesión');
+          setError(error || 'Error al iniciar sesión');
           return;
         }
         
@@ -93,7 +95,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         console.log("Registrando usuario:", registerData.email);
         
         // Crear usuario en Supabase Auth
-        const { data: authData, error: authError } = await signUp(
+        const result = await signUp(
           registerData.email, 
           registerData.password,
           {
@@ -105,13 +107,13 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           }
         );
         
-        if (authError) {
-          console.error('Error en registro:', authError);
-          setError(authError.message || 'Error al crear la cuenta');
+        if (!result.success) {
+          console.error('Error en registro:', result.error);
+          setError(result.error || 'Error al crear la cuenta');
           return;
         }
         
-        console.log('Registro exitoso:', authData);
+        console.log('Registro exitoso:', result.user);
         setError(null);
         setIsRegisterMode(false);
         setCurrentStep(1);
@@ -144,6 +146,30 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       setCurrentStep(currentStep - 1);
     }
   };
+
+  // Función para manejar modo recuperación
+  const handleRecoverMode = () => {
+    setIsRecoverMode(true);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+  };
+
+  // Función para volver al login desde recuperación
+  const handleBackToLogin = () => {
+    setIsRecoverMode(false);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+    setCredentials({ email: "", password: "" });
+  };
+
+  // Si está en modo recuperación, mostrar formulario de recuperación
+  if (isRecoverMode) {
+    return (
+      <RecoverPasswordForm onBack={handleBackToLogin} />
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
@@ -458,10 +484,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                 <p className="text-sm text-muted-foreground">
                   ¿Olvidaste tu contraseña?{" "}
                   <button 
-                    onClick={() => {
-                      // Aquí iría la lógica de recuperación
-                      console.log("Recuperar contraseña");
-                    }}
+                    onClick={handleRecoverMode}
                     className="text-primary hover:underline font-medium"
                   >
                     Recuperar acceso
