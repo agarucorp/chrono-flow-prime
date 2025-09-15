@@ -25,6 +25,18 @@ interface Turno {
   servicio?: string;
 }
 
+interface AlumnoHorario {
+  id: string;
+  nombre: string;
+  email: string;
+  telefono?: string;
+  tipo: 'recurrente' | 'variable' | 'cancelado';
+  hora_inicio: string;
+  hora_fin: string;
+  fecha?: string;
+  activo?: boolean;
+}
+
 
 
 interface CalendarViewProps {
@@ -48,12 +60,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminSelectedTurno, setAdminSelectedTurno] = useState<Turno | null>(null);
   
+  // Estado para alumnos
+  const [alumnosHorarios, setAlumnosHorarios] = useState<AlumnoHorario[]>([]);
+  const [loadingAlumnos, setLoadingAlumnos] = useState(false);
+  
 
 
   // Obtener turnos desde Supabase
   useEffect(() => {
     fetchTurnos();
-  }, [currentDate]);
+    if (isAdminView) {
+      fetchAlumnosHorarios();
+    }
+  }, [currentDate, isAdminView]);
 
   const fetchTurnos = async () => {
     try {
@@ -99,6 +118,136 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       console.error('Error inesperado:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función para cargar horarios de alumnos
+  const fetchAlumnosHorarios = async () => {
+    try {
+      setLoadingAlumnos(true);
+      const fechaActual = currentDate.toISOString().split('T')[0];
+      // Convertir día de la semana: JS (0=domingo) -> DB (1=lunes)
+      const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+
+
+      // Cargar horarios recurrentes
+      const { data: horariosRecurrentes, error: errorRecurrentes } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select(`
+          id,
+          dia_semana,
+          hora_inicio,
+          hora_fin,
+          activo,
+          usuario_id,
+          profiles!inner(full_name, email, phone)
+        `)
+        .eq('dia_semana', diaSemana)
+        .eq('activo', true);
+
+
+      if (errorRecurrentes) {
+        console.error('Error cargando horarios recurrentes:', errorRecurrentes);
+      }
+
+      // Cargar turnos variables
+      const { data: turnosVariables, error: errorVariables } = await supabase
+        .from('turnos_variables')
+        .select(`
+          id,
+          turno_fecha,
+          turno_hora_inicio,
+          turno_hora_fin,
+          estado,
+          cliente_id,
+          profiles!inner(full_name, email, phone)
+        `)
+        .eq('turno_fecha', fechaActual)
+        .eq('estado', 'confirmada');
+
+
+      if (errorVariables) {
+        console.error('Error cargando turnos variables:', errorVariables);
+      }
+
+      // Cargar turnos cancelados
+      const { data: turnosCancelados, error: errorCancelados } = await supabase
+        .from('turnos_cancelados')
+        .select(`
+          id,
+          turno_fecha,
+          turno_hora_inicio,
+          turno_hora_fin,
+          cliente_id,
+          profiles!inner(full_name, email, phone)
+        `)
+        .eq('turno_fecha', fechaActual);
+
+
+      if (errorCancelados) {
+        console.error('Error cargando turnos cancelados:', errorCancelados);
+      }
+
+      // Combinar todos los datos
+      const todosAlumnos: AlumnoHorario[] = [];
+
+      // Agregar horarios recurrentes
+      if (horariosRecurrentes) {
+        horariosRecurrentes.forEach(horario => {
+          const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
+          todosAlumnos.push({
+            id: horario.id,
+            nombre: profile?.full_name || 'Sin nombre',
+            email: profile?.email || '',
+            telefono: profile?.phone,
+            tipo: 'recurrente',
+            hora_inicio: horario.hora_inicio,
+            hora_fin: horario.hora_fin,
+            fecha: fechaActual,
+            activo: horario.activo
+          });
+        });
+      }
+
+      // Agregar turnos variables
+      if (turnosVariables) {
+        turnosVariables.forEach(turno => {
+          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
+          todosAlumnos.push({
+            id: turno.id,
+            nombre: profile?.full_name || 'Sin nombre',
+            email: profile?.email || '',
+            telefono: profile?.phone,
+            tipo: 'variable',
+            hora_inicio: turno.turno_hora_inicio,
+            hora_fin: turno.turno_hora_fin,
+            fecha: turno.turno_fecha
+          });
+        });
+      }
+
+      // Agregar turnos cancelados
+      if (turnosCancelados) {
+        turnosCancelados.forEach(turno => {
+          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
+          todosAlumnos.push({
+            id: turno.id,
+            nombre: profile?.full_name || 'Sin nombre',
+            email: profile?.email || '',
+            telefono: profile?.phone,
+            tipo: 'cancelado',
+            hora_inicio: turno.turno_hora_inicio,
+            hora_fin: turno.turno_hora_fin,
+            fecha: turno.turno_fecha
+          });
+        });
+      }
+
+      setAlumnosHorarios(todosAlumnos);
+    } catch (error) {
+      console.error('Error inesperado cargando horarios de alumnos:', error);
+    } finally {
+      setLoadingAlumnos(false);
     }
   };
 
@@ -377,7 +526,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
   // Función para renderizar los horarios disponibles como CTAs
   const renderAvailableTimeSlots = () => {
-    const dayTurnos = getTurnosForDate(currentDate);
     const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
     
     if (isWeekend) {
@@ -389,24 +537,34 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       );
     }
 
+    if (loadingAlumnos) {
+      return (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Cargando horarios de alumnos...</p>
+        </div>
+      );
+    }
+
     // Generar los 8 horarios estándar (8:00 a 15:00)
     const timeSlots = [];
+    
     for (let hour = 8; hour < 16; hour++) {
       const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
       const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
       
-      // Buscar turnos ocupados para este horario
-      const turnosOcupados = dayTurnos.filter(turno => 
-        turno.hora_inicio === horaInicio && turno.estado === 'ocupado'
-      );
+      // Buscar alumnos para este horario
+      const alumnosEnHorario = alumnosHorarios.filter(alumno => {
+        // Normalizar formato de hora: "09:00:00" -> "09:00"
+        const horaAlumno = alumno.hora_inicio.substring(0, 5);
+        return horaAlumno === horaInicio;
+      });
+      
       
       timeSlots.push({
         horaInicio,
         horaFin,
-        turnosDisponibles: 3 - turnosOcupados.length,
-        totalSlots: 3,
-        estado: turnosOcupados.length < 3 ? 'disponible' : 'no_disponible',
-        turnosOcupados: turnosOcupados
+        alumnos: alumnosEnHorario
       });
     }
 
@@ -414,7 +572,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const amSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) < 12);
     const pmSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) >= 12);
 
-    // Si es vista de admin, mostrar información de turnos reservados
+    // Si es vista de admin, mostrar información de alumnos
     if (isAdminView) {
       return (
         <div className="space-y-6">
@@ -433,27 +591,47 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                           </span>
                         </div>
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                          {slot.turnosOcupados.length}/3 Reservado{slot.turnosOcupados.length !== 1 ? 's' : ''}
+                          {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                       
-                      {slot.turnosOcupados.length > 0 ? (
-                        <div className="space-y-2">
-                          {slot.turnosOcupados.map((turno, turnoIndex) => (
-                            <div key={turnoIndex} className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-blue-600" />
-                                <span className="text-sm font-medium text-foreground">
-                                  {turno.cliente_nombre}
-                                </span>
+                      {slot.alumnos.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {slot.alumnos.map((alumno, alumnoIndex) => {
+                            // Separar nombre y apellido
+                            const nombreCompleto = alumno.nombre || '';
+                            const partesNombre = nombreCompleto.split(' ');
+                            const nombre = partesNombre[0] || '';
+                            const apellido = partesNombre.slice(1).join(' ') || '';
+                            
+                            return (
+                              <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
+                                alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                alumno.tipo === 'variable' ? 'border-blue-200' :
+                                'border-red-200'
+                              }`}>
+                                <div className="font-medium">
+                                  {nombre} {apellido}
+                                </div>
+                                <div className="ml-2">
+                                  <Badge variant="outline" className={
+                                    alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                                    alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                                    'text-red-600 border-red-300'
+                                  }>
+                                    {alumno.tipo === 'recurrente' ? 'Fijo' :
+                                     alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
+                                  </Badge>
+                                </div>
                               </div>
-                              <div className="text-xs text-blue-600">
-                                ID: {turno.cliente_id?.slice(0, 8)}...
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                      ) : null}
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Sin alumnos en este horario
+                        </div>
+                      )}
                       
                     </CardContent>
                   </Card>
@@ -477,35 +655,48 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                           </span>
                         </div>
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                          {slot.turnosOcupados.length}/3 Reservado{slot.turnosOcupados.length !== 1 ? 's' : ''}
+                          {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
                         </Badge>
                       </div>
                       
-                      {slot.turnosOcupados.length > 0 ? (
-                        <div className="space-y-2">
-                          {slot.turnosOcupados.map((turno, turnoIndex) => (
-                            <div key={turnoIndex} className="flex items-center justify-between p-2 bg-blue-50 rounded border border-blue-200">
-                              <div className="flex items-center gap-2">
-                                <User className="h-4 w-4 text-blue-600" />
-                                <span className="text-sm font-medium text-foreground">
-                                  {turno.cliente_nombre}
-                                </span>
+                      {slot.alumnos.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {slot.alumnos.map((alumno, alumnoIndex) => {
+                            // Separar nombre y apellido
+                            const nombreCompleto = alumno.nombre || '';
+                            const partesNombre = nombreCompleto.split(' ');
+                            const nombre = partesNombre[0] || '';
+                            const apellido = partesNombre.slice(1).join(' ') || '';
+                            
+                            return (
+                              <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
+                                alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                alumno.tipo === 'variable' ? 'border-blue-200' :
+                                'border-red-200'
+                              }`}>
+                                <div className="font-medium">
+                                  {nombre} {apellido}
+                                </div>
+                                <div className="ml-2">
+                                  <Badge variant="outline" className={
+                                    alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                                    alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                                    'text-red-600 border-red-300'
+                                  }>
+                                    {alumno.tipo === 'recurrente' ? 'Fijo' :
+                                     alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
+                                  </Badge>
+                                </div>
                               </div>
-                              <div className="text-xs text-blue-600">
-                                ID: {turno.cliente_id?.slice(0, 8)}...
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
-                      ) : null}
-                      
-                      {slot.turnosDisponibles > 0 && (
-                        <div className="mt-3 pt-3 border-t border-blue-200">
-                          <div className="text-xs text-blue-600 font-medium">
-                            {slot.turnosDisponibles} slot{slot.turnosDisponibles !== 1 ? 's' : ''} disponible{slot.turnosDisponibles !== 1 ? '' : ''}
-                          </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Sin alumnos en este horario
                         </div>
                       )}
+                      
                     </CardContent>
                   </Card>
                 ))}
