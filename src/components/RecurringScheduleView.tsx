@@ -18,6 +18,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { useAdmin } from '@/hooks/useAdmin';
 
 interface HorarioRecurrente {
   id: string;
@@ -36,6 +37,7 @@ interface ClaseDelDia {
 
 export const RecurringScheduleView = () => {
   const { user } = useAuthContext();
+  const { isAdmin } = useAdmin();
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>(() => {
     // Recuperar horarios del localStorage
     const saved = localStorage.getItem('horariosRecurrentes');
@@ -182,19 +184,13 @@ export const RecurringScheduleView = () => {
 
       const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
 
-      // Eliminar duplicados y marcar como reservados
-      const turnosUnicos = data?.reduce((acc, turno) => {
-        const key = `${turno.turno_fecha}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
-        if (!acc.find(t => `${t.turno_fecha}-${t.turno_hora_inicio}-${t.turno_hora_fin}` === key)) {
-          acc.push({
-            ...turno,
-            reservado: idsReservados.has(turno.id)
-          });
-        }
-        return acc;
-      }, []) || [];
+      // Mantener todas las ocurrencias y marcar como reservados por id
+      const turnosMarcados = (data || []).map((turno) => ({
+        ...turno,
+        reservado: idsReservados.has(turno.id)
+      }));
 
-      setTurnosCancelados(turnosUnicos);
+      setTurnosCancelados(turnosMarcados);
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);
     } finally {
@@ -704,7 +700,7 @@ export const RecurringScheduleView = () => {
                         {(() => {
                           const createdAt = turno.creado_at || turno.created_at;
                           const d = createdAt ? new Date(createdAt) : null;
-                          return d && !isNaN(d.valueOf()) ? (
+                          return d && !isNaN(d.valueOf()) && isAdmin ? (
                             <p className="text-xs text-muted-foreground">
                               Cancelado el {format(d, 'dd/MM/yyyy HH:mm', { locale: es })}
                             </p>
