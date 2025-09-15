@@ -10,7 +10,6 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { useAdminRedirect } from "./hooks/useAdminRedirect";
 import { Calendar, Clock, User, Settings, LogOut, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +22,6 @@ import Admin from "./pages/Admin";
 const Dashboard = () => {
   const { user, signOut } = useAuthContext();
   const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
-  const { isAdmin, isChecking } = useAdminRedirect();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const navigate = useNavigate();
@@ -127,12 +125,12 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {firstTimeLoading || isChecking ? (
+        {firstTimeLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
               <p className="text-muted-foreground">
-                {isChecking ? 'Verificando permisos de administrador...' : 'Cargando...'}
+                Cargando...
               </p>
             </div>
           </div>

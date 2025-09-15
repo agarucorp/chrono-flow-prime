@@ -34,17 +34,24 @@ export const useAdmin = () => {
       }
 
       try {
+        console.log('Verificando admin para usuario:', user.email, 'ID:', user.id);
+        
         const { data, error } = await supabase
           .from('profiles')
-          .select('role')
+          .select('id, email, role, created_at')
           .eq('id', user.id)
-          .maybeSingle();
+          .single();
+
+        console.log('Respuesta de la consulta:', { data, error });
 
         if (error) {
           console.error('Error verificando rol de admin:', error);
           setIsAdmin(false);
         } else {
-          setIsAdmin(data?.role === 'admin');
+          const isUserAdmin = data?.role === 'admin';
+          setIsAdmin(isUserAdmin);
+          console.log('Usuario encontrado:', data);
+          console.log('Admin status:', isUserAdmin, 'for user:', user.email);
         }
       } catch (err) {
         console.error('Error inesperado verificando admin:', err);

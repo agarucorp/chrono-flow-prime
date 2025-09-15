@@ -213,13 +213,44 @@ export default function Admin() {
   };
   
 
-  // Cargar datos al montar el componente
+  // Cargar datos al montar el componente y refrescar verificación de admin
   useEffect(() => {
     if (isAdmin) {
       fetchAllUsers();
       fetchAdminUsers();
     }
   }, [isAdmin, fetchAllUsers, fetchAdminUsers]);
+
+  // Refrescar verificación de admin cuando el componente se monta
+  useEffect(() => {
+    const refreshAdminCheck = async () => {
+      if (user) {
+        console.log('=== VERIFICACIÓN ADICIONAL DE ADMIN ===');
+        console.log('Usuario actual:', user.email, 'ID:', user.id);
+        
+        // Verificar por email
+        const { data: byEmail, error: emailError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('email', user.email)
+          .single();
+
+        console.log('Consulta por email:', { byEmail, emailError });
+
+        // Verificar por ID
+        const { data: byId, error: idError } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        console.log('Consulta por ID:', { byId, idError });
+        console.log('=== FIN VERIFICACIÓN ===');
+      }
+    };
+
+    refreshAdminCheck();
+  }, [user]);
 
   // Filtrar usuarios según búsqueda y filtros
   const filteredUsers = allUsers.filter(user => {
@@ -278,27 +309,41 @@ export default function Admin() {
     }
   };
 
-  // Si no es admin, mostrar mensaje de acceso denegado
-  if (!isAdmin && !isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Acceso Denegado</h1>
-          <p className="text-muted-foreground">No tienes permisos para acceder a esta sección.</p>
-        </div>
-      </div>
-    );
-  }
-
-  // Si está cargando, mostrar spinner
-  if (isLoading) {
+  // Si está cargando o no hay usuario, mostrar spinner
+  if (isLoading || !user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
           <h2 className="text-2xl font-bold mb-2">Verificando permisos...</h2>
           <p className="text-muted-foreground">Comprobando tu rol de administrador.</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no es admin después de verificar, mostrar mensaje de acceso denegado
+  if (!isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center max-w-md">
+          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-foreground mb-2">Acceso Denegado</h1>
+          <p className="text-muted-foreground">No tienes permisos para acceder a esta sección.</p>
+          <div className="text-sm text-muted-foreground mt-4 space-y-1">
+            <p>Usuario: {user?.email}</p>
+            <p>Estado: {isLoading ? 'Verificando...' : 'Verificación completada'}</p>
+            <p>Rol en BD: {isAdmin ? 'Admin' : 'No es admin'}</p>
+          </div>
+          <div className="mt-6">
+            <Button 
+              onClick={() => window.location.reload()} 
+              variant="outline"
+              size="sm"
+            >
+              Recargar página
+            </Button>
+          </div>
         </div>
       </div>
     );
