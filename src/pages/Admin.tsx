@@ -96,6 +96,47 @@ export default function Admin() {
     return name.charAt(0).toUpperCase() + name.slice(1);
   };
 
+  // Nombre a mostrar: preferir first_name + last_name; si no, full_name; si no, derivar de email
+  const getDisplayFullName = (u: AdminUser) => {
+    const looksLikeEmail = (value: string) => /@/.test(value || '');
+    const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : '';
+    const capitalizeWords = (s: string) => s
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(capitalize)
+      .join(' ');
+    if ((u.first_name || u.last_name)) {
+      const first = capitalize(u.first_name || '');
+      const last = capitalize(u.last_name || '');
+      const combined = `${first} ${last}`.trim();
+      if (combined) return combined;
+    }
+    if (u.full_name && !looksLikeEmail(u.full_name)) return capitalizeWords(u.full_name);
+    const local = (u.email || '').split('@')[0];
+    if (!local) return 'Usuario';
+    const parts = local.split(/[._-]+/).filter(Boolean);
+    if (parts.length >= 2) return `${capitalize(parts[0])} ${capitalize(parts[1])}`;
+    // Intentar detectar nombre sin separadores (p.ej., "gastondigilio")
+    const commonFirstNames = [
+      'agustin','agustina','andres','ana','antonio','beatriz','bruno','carlos','camila','catalina','cristian',
+      'diego','daniel','dalma','dario','emiliano','emilia','esteban','facundo','federico','florencia',
+      'franco','fernando','gabriel','gaston','gonzalo','guillermo','ignacio','ivan','javier','jorge','jose',
+      'juan','julian','julia','karina','laura','leandro','leonardo','luan','lucas','lucia','luis','marcelo',
+      'martin','martina','matias','melina','maria','mariana','mariano','marcos','maximiliano','nicolas','noelia',
+      'pablo','patricia','paula','ricardo','rodrigo','romina','santiago','sebastian','sergio','silvia','sofia',
+      'tomás','tomas','valentin','valentina','vanesa','victoria'
+    ];
+    const lowerLocal = local.toLowerCase();
+    const matched = commonFirstNames.find(n => lowerLocal.startsWith(n));
+    if (matched && lowerLocal.length > matched.length) {
+      const first = matched;
+      const last = lowerLocal.slice(matched.length);
+      return `${capitalize(first)} ${capitalize(last)}`;
+    }
+    return capitalize(local);
+  };
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -352,7 +393,7 @@ export default function Admin() {
                         <th className="text-left p-3 font-medium min-w-[200px]">Usuario</th>
                         <th className="text-left p-3 font-medium min-w-[200px]">Email</th>
                         <th className="text-left p-3 font-medium min-w-[100px]">Rol</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Fecha</th>
+                        <th className="text-left p-3 font-medium min-w-[100px]">Pago</th>
                         <th className="text-left p-3 font-medium min-w-[120px]">Acciones</th>
                       </tr>
                     </thead>
@@ -360,18 +401,8 @@ export default function Admin() {
                       {filteredUsers.map((user) => (
                         <tr key={user.id} className="border-b hover:bg-muted/50">
                           <td className="p-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <div className="w-8 h-8 bg-primary/10 rounded-full flex items-center justify-center flex-shrink-0">
-                                {user.role === 'admin' ? (
-                                  <Crown className="w-4 h-4 text-yellow-600" />
-                                ) : (
-                                  <User className="w-4 h-4 text-primary" />
-                                )}
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="font-medium truncate">{user.full_name}</p>
-                                <p className="text-sm text-muted-foreground truncate">ID: {user.id.slice(0, 8)}...</p>
-                              </div>
+                            <div className="min-w-0">
+                              <p className="font-medium truncate">{getDisplayFullName(user)}</p>
                             </div>
                           </td>
                           <td className="p-3">
@@ -386,9 +417,7 @@ export default function Admin() {
                             </Badge>
                           </td>
                           <td className="p-3">
-                            <p className="text-sm text-muted-foreground">
-                              {new Date(user.created_at).toLocaleDateString('es-ES')}
-                            </p>
+                            <p className="text-sm text-muted-foreground">—</p>
                           </td>
                           <td className="p-3">
                             <div className="flex items-center space-x-1">
@@ -456,7 +485,7 @@ export default function Admin() {
                       <CardContent className="p-4 w-full max-w-full">
                         <div className="flex items-center justify-between w-full max-w-full">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate">{user.full_name}</p>
+                            <p className="font-medium truncate">{getDisplayFullName(user)}</p>
                           </div>
                           <div className="flex items-center space-x-1 flex-shrink-0">
                             <DropdownMenu>
@@ -546,7 +575,7 @@ export default function Admin() {
             <CardContent className="space-y-4">
               <div>
                 <label className="text-sm font-medium">Nombre Completo</label>
-                <p className="text-sm text-muted-foreground">{selectedUser.full_name}</p>
+                <p className="text-sm text-muted-foreground">{getDisplayFullName(selectedUser)}</p>
               </div>
               <div>
                 <label className="text-sm font-medium">Email</label>

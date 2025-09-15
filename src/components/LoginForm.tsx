@@ -110,37 +110,24 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         setIsLoading(true);
         const loadingToast = showLoading("Creando cuenta...");
         
-        // Crear usuario en Supabase
-        const result = await signUp(registerData.email, registerData.password);
+        // Crear usuario en Supabase con metadatos (para poblar perfiles automáticamente)
+        const result = await signUp(registerData.email, registerData.password, {
+          first_name: registerData.firstName,
+          last_name: registerData.lastName,
+          full_name: `${registerData.firstName} ${registerData.lastName}`,
+          phone: registerData.phone,
+          gender: registerData.gender,
+          birth_date: registerData.birthDate?.toISOString().split('T')[0]
+        });
         
         if (result.success && result.user) {
           // ✅ Determinar el rol según el email - Temporalmente todos son clientes
           const userRole = 'client'; // Temporalmente todos son clientes
           
-          // Actualizar el perfil creado automáticamente por el trigger
-          const { error: profileError } = await supabase
-            .from('profiles')
-            .update({
-              full_name: `${registerData.firstName} ${registerData.lastName}`,
-              first_name: registerData.firstName,
-              last_name: registerData.lastName,
-              phone: registerData.phone,
-              gender: registerData.gender,
-              birth_date: registerData.birthDate?.toISOString().split('T')[0],
-              role: userRole // ✅ Rol asignado automáticamente
-            })
-            .eq('id', result.user.id);
-
+          // Nota: En este flujo el email debe confirmarse, por lo que el perfil se completará
+          // con los metadatos del auth.user en el backend (trigger). Aquí solo mostramos feedback.
           dismissToast(loadingToast);
-
-          if (profileError) {
-            console.error('Error actualizando perfil:', profileError);
-            showError(
-              "Error al actualizar perfil", 
-              "Usuario creado pero hubo un problema actualizando el perfil. Contacte soporte."
-            );
-            setError('Usuario creado pero error al actualizar perfil. Contacte soporte.');
-          } else {
+          {
             // ✅ Usuario creado exitosamente - mostrar toast y volver al login
             const roleMessage = userRole === 'admin' 
               ? "¡Usuario ADMIN creado exitosamente! Revise su email y confirme la cuenta."
