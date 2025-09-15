@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User, ChevronDown, ChevronUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -63,6 +63,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Estado para alumnos
   const [alumnosHorarios, setAlumnosHorarios] = useState<AlumnoHorario[]>([]);
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
+  
+  // Estado para acordeón
+  const [horariosExpandidos, setHorariosExpandidos] = useState<Set<string>>(new Set());
+
+  // Función para toggle del acordeón
+  const toggleHorario = (horarioKey: string) => {
+    const nuevosExpandidos = new Set(horariosExpandidos);
+    if (nuevosExpandidos.has(horarioKey)) {
+      nuevosExpandidos.delete(horarioKey);
+    } else {
+      nuevosExpandidos.add(horarioKey);
+    }
+    setHorariosExpandidos(nuevosExpandidos);
+  };
   
 
 
@@ -581,61 +595,79 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-3">AM</h4>
               <div className="space-y-3">
-                {amSlots.map((slot, index) => (
-                  <Card key={`am-${index}`} className="border-l-4 border-l-blue-500">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">
-                            {slot.horaInicio} - {slot.horaFin}
-                          </span>
+                {amSlots.map((slot, index) => {
+                  const horarioKey = `am-${slot.horaInicio}`;
+                  const isExpanded = horariosExpandidos.has(horarioKey);
+                  
+                  return (
+                    <Card key={`am-${index}`} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4">
+                        <div 
+                          className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                          onClick={() => toggleHorario(horarioKey)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">
+                              {slot.horaInicio} - {slot.horaFin}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                              {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
+                            </Badge>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
                         </div>
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                          {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
-                        </Badge>
-                      </div>
-                      
-                      {slot.alumnos.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {slot.alumnos.map((alumno, alumnoIndex) => {
-                            // Separar nombre y apellido
-                            const nombreCompleto = alumno.nombre || '';
-                            const partesNombre = nombreCompleto.split(' ');
-                            const nombre = partesNombre[0] || '';
-                            const apellido = partesNombre.slice(1).join(' ') || '';
-                            
-                            return (
-                              <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
-                                alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                alumno.tipo === 'variable' ? 'border-blue-200' :
-                                'border-red-200'
-                              }`}>
-                                <div className="font-medium">
-                                  {nombre} {apellido}
-                                </div>
-                                <div className="ml-2">
-                                  <Badge variant="outline" className={
-                                    alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
-                                    alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
-                                    'text-red-600 border-red-300'
-                                  }>
-                                    {alumno.tipo === 'recurrente' ? 'Fijo' :
-                                     alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
-                                  </Badge>
-                                </div>
+                        
+                        {isExpanded && (
+                          <div className="mt-4">
+                            {slot.alumnos.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {slot.alumnos.map((alumno, alumnoIndex) => {
+                                  // Separar nombre y apellido
+                                  const nombreCompleto = alumno.nombre || '';
+                                  const partesNombre = nombreCompleto.split(' ');
+                                  const nombre = partesNombre[0] || '';
+                                  const apellido = partesNombre.slice(1).join(' ') || '';
+                                  
+                                  return (
+                                    <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
+                                      alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                      alumno.tipo === 'variable' ? 'border-blue-200' :
+                                      'border-red-200'
+                                    }`}>
+                                      <div className="font-medium">
+                                        {nombre} {apellido}
+                                      </div>
+                                      <div className="ml-2">
+                                        <Badge variant="outline" className={
+                                          alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                                          alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                                          'text-red-600 border-red-300'
+                                        }>
+                                          {alumno.tipo === 'recurrente' ? 'Fijo' :
+                                           alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sin alumnos en este horario
-                        </div>
-                      )}
-                      
-                    </CardContent>
-                  </Card>
-                ))}
+                            ) : (
+                              <div className="text-center py-4 text-muted-foreground text-sm">
+                                Sin alumnos en este horario
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -645,61 +677,79 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             <div>
               <h4 className="text-xs font-medium text-muted-foreground mb-3">PM</h4>
               <div className="space-y-3">
-                {pmSlots.map((slot, index) => (
-                  <Card key={`pm-${index}`} className="border-l-4 border-l-blue-500">
-                    <CardContent className="p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-foreground">
-                            {slot.horaInicio} - {slot.horaFin}
-                          </span>
+                {pmSlots.map((slot, index) => {
+                  const horarioKey = `pm-${slot.horaInicio}`;
+                  const isExpanded = horariosExpandidos.has(horarioKey);
+                  
+                  return (
+                    <Card key={`pm-${index}`} className="border-l-4 border-l-blue-500">
+                      <CardContent className="p-4">
+                        <div 
+                          className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                          onClick={() => toggleHorario(horarioKey)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium text-foreground">
+                              {slot.horaInicio} - {slot.horaFin}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                              {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
+                            </Badge>
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            )}
+                          </div>
                         </div>
-                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                          {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
-                        </Badge>
-                      </div>
-                      
-                      {slot.alumnos.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {slot.alumnos.map((alumno, alumnoIndex) => {
-                            // Separar nombre y apellido
-                            const nombreCompleto = alumno.nombre || '';
-                            const partesNombre = nombreCompleto.split(' ');
-                            const nombre = partesNombre[0] || '';
-                            const apellido = partesNombre.slice(1).join(' ') || '';
-                            
-                            return (
-                              <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
-                                alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                alumno.tipo === 'variable' ? 'border-blue-200' :
-                                'border-red-200'
-                              }`}>
-                                <div className="font-medium">
-                                  {nombre} {apellido}
-                                </div>
-                                <div className="ml-2">
-                                  <Badge variant="outline" className={
-                                    alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
-                                    alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
-                                    'text-red-600 border-red-300'
-                                  }>
-                                    {alumno.tipo === 'recurrente' ? 'Fijo' :
-                                     alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
-                                  </Badge>
-                                </div>
+                        
+                        {isExpanded && (
+                          <div className="mt-4">
+                            {slot.alumnos.length > 0 ? (
+                              <div className="flex flex-wrap gap-2">
+                                {slot.alumnos.map((alumno, alumnoIndex) => {
+                                  // Separar nombre y apellido
+                                  const nombreCompleto = alumno.nombre || '';
+                                  const partesNombre = nombreCompleto.split(' ');
+                                  const nombre = partesNombre[0] || '';
+                                  const apellido = partesNombre.slice(1).join(' ') || '';
+                                  
+                                  return (
+                                    <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
+                                      alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                      alumno.tipo === 'variable' ? 'border-blue-200' :
+                                      'border-red-200'
+                                    }`}>
+                                      <div className="font-medium">
+                                        {nombre} {apellido}
+                                      </div>
+                                      <div className="ml-2">
+                                        <Badge variant="outline" className={
+                                          alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                                          alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                                          'text-red-600 border-red-300'
+                                        }>
+                                          {alumno.tipo === 'recurrente' ? 'Fijo' :
+                                           alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
-                          Sin alumnos en este horario
-                        </div>
-                      )}
-                      
-                    </CardContent>
-                  </Card>
-                ))}
+                            ) : (
+                              <div className="text-center py-4 text-muted-foreground text-sm">
+                                Sin alumnos en este horario
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
