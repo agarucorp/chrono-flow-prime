@@ -18,6 +18,7 @@ import {
   Clock,
   LogOut
 } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -60,6 +61,8 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
+  const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
+  const [loadingHorarios, setLoadingHorarios] = useState(false);
   // Obtener el mes actual en formato YYYY-MM
   const getCurrentMonth = () => {
     const now = new Date();
@@ -94,6 +97,69 @@ export default function Admin() {
       ).join(' ');
     }
     return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  // Función para cargar horarios recurrentes del usuario
+  const cargarHorariosRecurrentes = async (userId: string) => {
+    setLoadingHorarios(true);
+    try {
+      const { data, error } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select(`
+          id,
+          dia_semana,
+          hora_inicio,
+          hora_fin,
+          activo,
+          fecha_inicio,
+          fecha_fin,
+          created_at,
+          updated_at
+        `)
+        .eq('usuario_id', userId)
+        .order('dia_semana', { ascending: true })
+        .order('hora_inicio', { ascending: true });
+
+      if (error) {
+        console.error('Error al cargar horarios recurrentes:', error);
+        showError('Error', 'No se pudieron cargar los horarios recurrentes');
+        return;
+      }
+
+      setHorariosRecurrentes(data || []);
+    } catch (error) {
+      console.error('Error inesperado:', error);
+      showError('Error', 'Error inesperado al cargar horarios');
+    } finally {
+      setLoadingHorarios(false);
+    }
+  };
+
+  // Función para cargar datos actualizados del usuario
+  const cargarDatosUsuario = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone')
+        .eq('id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error al cargar datos del usuario:', error);
+        return;
+      }
+
+      // Establecer directamente el usuario seleccionado con los datos más recientes
+      setSelectedUser(data);
+    } catch (error) {
+      console.error('Error inesperado cargando datos del usuario:', error);
+    }
+  };
+
+  // Función para obtener el nombre del día
+  const getDiaNombre = (diaSemana: number) => {
+    const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+    return dias[diaSemana] || 'Desconocido';
   };
 
   // Nombre a mostrar: preferir first_name + last_name; si no, full_name; si no, derivar de email
@@ -424,7 +490,11 @@ export default function Admin() {
                               <Button 
                                 variant="outline" 
                                 size="sm" 
-                                onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}
+                                onClick={async () => { 
+                                  setShowUserDetails(true);
+                                  await cargarDatosUsuario(user.id);
+                                  cargarHorariosRecurrentes(user.id);
+                                }}
                                 className="h-8 w-8 p-0"
                               >
                                 <Eye className="w-4 h-4" />
@@ -496,7 +566,11 @@ export default function Admin() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}>
+                                <DropdownMenuItem onClick={async () => { 
+                                  setShowUserDetails(true);
+                                  await cargarDatosUsuario(user.id);
+                                  cargarHorariosRecurrentes(user.id);
+                                }}>
                                   <Eye className="w-4 h-4 mr-2" />
                                   Ver Detalles
                                 </DropdownMenuItem>
@@ -582,47 +656,50 @@ export default function Admin() {
                 <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
               </div>
               <div>
-                <label className="text-sm font-medium">Rol</label>
-                <Badge 
-                  variant={selectedUser.role === 'admin' ? 'default' : 'secondary'}
-                  className={selectedUser.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''}
-                >
-                  {selectedUser.role === 'admin' ? 'Administrador' : 'Cliente'}
-                </Badge>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Fecha de Registro</label>
+                <label className="text-sm font-medium">Teléfono</label>
                 <p className="text-sm text-muted-foreground">
-                  {new Date(selectedUser.created_at).toLocaleString('es-ES')}
+                  {selectedUser.phone || 'No especificado'}
                 </p>
               </div>
               <div>
                 <label className="text-sm font-medium">Días de Asistencia</label>
-                <p className="text-sm text-muted-foreground">
-                  {selectedUser.horarios_recurrentes && selectedUser.horarios_recurrentes.length > 0 
-                    ? selectedUser.horarios_recurrentes.map(horario => {
-                        const dias = horario.dias_semana || [];
-                        const diasNombres = dias.map(dia => {
-                          const diasMap = {
-                            'lunes': 'Lunes',
-                            'martes': 'Martes', 
-                            'miércoles': 'Miércoles',
-                            'jueves': 'Jueves',
-                            'viernes': 'Viernes',
-                            'sábado': 'Sábado',
-                            'domingo': 'Domingo'
-                          };
-                          return diasMap[dia] || dia;
-                        }).join(', ');
-                        return `${horario.turno_nombre}: ${diasNombres}`;
-                      }).join(' | ')
-                    : 'Sin horarios asignados'
-                  }
-                </p>
+                {loadingHorarios ? (
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+                    <span className="text-sm text-muted-foreground">Cargando horarios...</span>
+                  </div>
+                ) : horariosRecurrentes.length > 0 ? (
+                  <div className="space-y-2">
+                    {horariosRecurrentes.map((horario) => (
+                      <div key={horario.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+                        <div className="flex items-center space-x-2">
+                          <Clock className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-medium">
+                            {getDiaNombre(horario.dia_semana)}
+                          </span>
+                          <span className="text-sm text-muted-foreground">
+                            {horario.hora_inicio} - {horario.hora_fin}
+                          </span>
+                        </div>
+                        <Badge 
+                          variant={horario.activo ? "default" : "secondary"}
+                          className={horario.activo ? "bg-green-500 hover:bg-green-600" : ""}
+                        >
+                          {horario.activo ? 'Activo' : 'Inactivo'}
+                        </Badge>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>
+                )}
               </div>
             </CardContent>
             <div className="p-6 pt-0 flex justify-end">
-              <Button onClick={() => setShowUserDetails(false)}>
+              <Button onClick={() => {
+                setShowUserDetails(false);
+                setHorariosRecurrentes([]);
+              }}>
                 Cerrar
               </Button>
             </div>

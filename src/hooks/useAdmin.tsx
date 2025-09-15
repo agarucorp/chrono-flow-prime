@@ -8,6 +8,7 @@ export interface AdminUser {
   full_name: string;
   first_name?: string;
   last_name?: string;
+  phone?: string;
   role: 'client' | 'admin';
   created_at: string;
   horarios_recurrentes?: {
@@ -92,7 +93,7 @@ export const useAdmin = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -124,7 +125,7 @@ export const useAdmin = () => {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone')
         .eq('role', 'admin')
         .order('created_at', { ascending: false });
 
