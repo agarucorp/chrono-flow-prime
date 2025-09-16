@@ -67,14 +67,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Estado para acordeón
   const [horariosExpandidos, setHorariosExpandidos] = useState<Set<string>>(new Set());
 
-  // Función para toggle del acordeón
+  // Función para toggle del acordeón - solo permite un dropdown abierto a la vez
   const toggleHorario = (horarioKey: string) => {
-    const nuevosExpandidos = new Set(horariosExpandidos);
-    if (nuevosExpandidos.has(horarioKey)) {
-      nuevosExpandidos.delete(horarioKey);
-    } else {
+    const nuevosExpandidos = new Set<string>();
+    if (!horariosExpandidos.has(horarioKey)) {
+      // Si el horario no está expandido, lo expandimos y cerramos todos los demás
       nuevosExpandidos.add(horarioKey);
     }
+    // Si ya estaba expandido, lo cerramos (nuevosExpandidos queda vacío)
     setHorariosExpandidos(nuevosExpandidos);
   };
   
@@ -607,12 +607,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                           onClick={() => toggleHorario(horarioKey)}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">
+                            <span className="font-medium text-foreground text-sm sm:text-base">
                               {slot.horaInicio} - {slot.horaFin}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px]">
                               {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
                             </Badge>
                             {isExpanded ? (
@@ -689,12 +689,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                           onClick={() => toggleHorario(horarioKey)}
                         >
                           <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground">
+                            <span className="font-medium text-foreground text-sm sm:text-base">
                               {slot.horaInicio} - {slot.horaFin}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px]">
                               {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
                             </Badge>
                             {isExpanded ? (

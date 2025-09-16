@@ -97,6 +97,7 @@ export const TurnoManagement = () => {
   
   // Estado para nueva ausencia única
   const [nuevaAusenciaUnica, setNuevaAusenciaUnica] = useState({
+    fechaCompleta: '',
     dia: '',
     mes: '',
     año: '',
@@ -160,7 +161,7 @@ export const TurnoManagement = () => {
         ...nuevaAusenciaUnica
       };
       setAusenciasUnicas(prev => [...prev, nuevaAusencia]);
-      setNuevaAusenciaUnica({ dia: '', mes: '', año: '', clasesCanceladas: [] });
+      setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
       setTipoAusencia(null);
     }
   };
@@ -425,12 +426,8 @@ export const TurnoManagement = () => {
                     Editar ausencias
                   </div>
                 </DialogTrigger>
-                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[80vh] overflow-y-auto p-3 sm:p-6">
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2">Gestionar Ausencias Eventuales</DialogTitle>
-                    <DialogDescription>
-                      Configura ausencias por día específico o por período
-                    </DialogDescription>
                   </DialogHeader>
 
                   {!tipoAusencia ? (
@@ -439,10 +436,9 @@ export const TurnoManagement = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Button
                           onClick={() => setTipoAusencia('unica')}
-                          className="h-24 flex flex-col items-center justify-center space-y-2"
+                          className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
                           variant="outline"
                         >
-                          <Calendar className="h-8 w-8" />
                           <span className="font-medium">Ausencia Única</span>
                           <span className="text-xs text-muted-foreground text-center">
                             Cancelar clases de un día específico
@@ -451,10 +447,9 @@ export const TurnoManagement = () => {
                         
                         <Button
                           onClick={() => setTipoAusencia('periodo')}
-                          className="h-24 flex flex-col items-center justify-center space-y-2"
+                          className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
                           variant="outline"
                         >
-                          <X className="h-8 w-8" />
                           <span className="font-medium">Ausencia por Período</span>
                           <span className="text-xs text-muted-foreground text-center">
                             Cancelar todas las clases por un período
@@ -464,63 +459,42 @@ export const TurnoManagement = () => {
                     </div>
                   ) : tipoAusencia === 'unica' ? (
                     // Formulario para ausencia única
-                    <div className="space-y-6">
-                      <div className="border-b pb-4">
-                        <h3 className="font-medium mb-4">Ausencia Única</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                          <div className="space-y-2">
-                            <Label>Día</Label>
-                            <Select value={nuevaAusenciaUnica.dia} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, dia: value }))}>
-                              <SelectTrigger id="ausencia-unica-dia">
-                                <SelectValue placeholder="Seleccionar día" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {dias.map(dia => (
-                                  <SelectItem key={dia} value={dia.toString()}>{dia}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Mes</Label>
-                            <Select value={nuevaAusenciaUnica.mes} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, mes: value }))}>
-                              <SelectTrigger id="ausencia-unica-mes">
-                                <SelectValue placeholder="Seleccionar mes" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {meses.map((mes, index) => (
-                                  <SelectItem key={index} value={(index + 1).toString()}>{mes}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Año</Label>
-                            <Select value={nuevaAusenciaUnica.año} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, año: value }))}>
-                              <SelectTrigger id="ausencia-unica-anio">
-                                <SelectValue placeholder="Seleccionar año" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {años.map(año => (
-                                  <SelectItem key={año} value={año.toString()}>{año}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          </div>
+                    <div className="space-y-4">
+                      <div className="border-b pb-3">
+                        <div className="space-y-2">
+                          <Label>Fecha</Label>
+                          <Input
+                            type="date"
+                            value={nuevaAusenciaUnica.fechaCompleta}
+                            onChange={(e) => {
+                              const fecha = e.target.value;
+                              if (fecha) {
+                                const [año, mes, dia] = fecha.split('-');
+                                setNuevaAusenciaUnica(prev => ({
+                                  ...prev,
+                                  fechaCompleta: fecha,
+                                  dia: dia,
+                                  mes: mes,
+                                  año: año
+                                }));
+                              }
+                            }}
+                            className="w-full"
+                          />
                         </div>
                       </div>
 
-                      <div className="space-y-4">
+                      <div className="space-y-3">
                         <Label>Clases a cancelar (selección múltiple)</Label>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                        <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                           {horariosFijos.map((clase) => (
                             <Button
                               key={clase.id}
                               variant={nuevaAusenciaUnica.clasesCanceladas.includes(clase.id) ? "default" : "outline"}
                               onClick={() => handleToggleClase(clase.id)}
-                              className="h-12 flex flex-col items-center justify-center"
+                              className="h-10 flex flex-col items-center justify-center text-xs"
                             >
-                              <span className="font-medium">{clase.nombre}</span>
+                              <span className="font-medium text-xs">{clase.nombre}</span>
                               <span className="text-xs">{clase.horaInicio} - {clase.horaFin}</span>
                             </Button>
                           ))}
@@ -528,12 +502,11 @@ export const TurnoManagement = () => {
                       </div>
 
                       <div className="flex space-x-2">
-                        <Button variant="outline" onClick={() => setTipoAusencia(null)}>
+                        <Button variant="outline" onClick={() => setTipoAusencia(null)} size="sm">
                           Volver
                         </Button>
-                        <Button onClick={handleAgregarAusenciaUnica} disabled={!nuevaAusenciaUnica.dia || !nuevaAusenciaUnica.mes || !nuevaAusenciaUnica.año || nuevaAusenciaUnica.clasesCanceladas.length === 0}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Agregar Ausencia
+                        <Button onClick={handleAgregarAusenciaUnica} disabled={!nuevaAusenciaUnica.fechaCompleta || nuevaAusenciaUnica.clasesCanceladas.length === 0} size="sm">
+                          Guardar
                         </Button>
                       </div>
                     </div>
@@ -567,8 +540,7 @@ export const TurnoManagement = () => {
                           Volver
                         </Button>
                         <Button onClick={handleAgregarAusenciaPeriodo} disabled={!nuevaAusenciaPeriodo.fechaDesde || !nuevaAusenciaPeriodo.fechaHasta}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Agregar Ausencia
+                          Guardar
                         </Button>
                       </div>
                     </div>
@@ -584,7 +556,7 @@ export const TurnoManagement = () => {
                         <div className="space-y-2">
                           <h4 className="text-sm font-medium text-muted-foreground">Ausencias Únicas</h4>
                           {ausenciasUnicas.map((ausencia) => (
-                            <div key={ausencia.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div key={ausencia.id} className="flex items-center justify-between p-3 border-orange-500 border rounded-lg">
                               <div>
                                 <span className="font-medium">
                                   {ausencia.dia}/{ausencia.mes}/{ausencia.año}
@@ -593,13 +565,6 @@ export const TurnoManagement = () => {
                                   Clases: {ausencia.clasesCanceladas.map(id => `Clase ${id}`).join(', ')}
                                 </span>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEliminarAusencia(ausencia.id, 'unica')}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
                             </div>
                           ))}
                         </div>
@@ -610,7 +575,7 @@ export const TurnoManagement = () => {
                         <div className="space-y-2">
                           <h4 className="text-sm font-medium text-muted-foreground">Ausencias por Período</h4>
                           {ausenciasPeriodo.map((ausencia) => (
-                            <div key={ausencia.id} className="flex items-center justify-between p-3 border rounded-lg">
+                            <div key={ausencia.id} className="flex items-center justify-between p-3 border-orange-500 border rounded-lg">
                               <div>
                                 <span className="font-medium">
                                   {ausencia.fechaDesde} - {ausencia.fechaHasta}
@@ -619,13 +584,6 @@ export const TurnoManagement = () => {
                                   Todas las clases canceladas
                                 </span>
                               </div>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleEliminarAusencia(ausencia.id, 'periodo')}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
                             </div>
                           ))}
                         </div>
