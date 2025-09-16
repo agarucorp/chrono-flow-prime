@@ -100,7 +100,17 @@ export const useSystemConfig = () => {
         .eq('activo', true);
 
       if (errorTarifas) {
-        console.error('Error cargando configuración de tarifas:', errorTarifas);
+        if ((errorTarifas as any).code !== 'PGRST205') {
+          console.error('Error cargando configuración de tarifas:', errorTarifas);
+        }
+        const { data: cfgAdminTarifa } = await supabase
+          .from('configuracion_admin')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+        const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.precio_clase ?? cfgAdminTarifa.tarifa_horaria) || 0) : 0;
+        const moneda = (cfgAdminTarifa && (cfgAdminTarifa as any).moneda) ? (cfgAdminTarifa as any).moneda : 'ARS';
+        setConfiguracionTarifas(tarifa > 0 ? [{ id: 'admin', tipo_clase: 'general', tarifa_por_clase: tarifa, moneda, activo: true }] : []);
       } else {
         setConfiguracionTarifas(tarifas || []);
       }
@@ -112,7 +122,15 @@ export const useSystemConfig = () => {
         .eq('activo', true);
 
       if (errorCapacidad) {
-        console.error('Error cargando configuración de capacidad:', errorCapacidad);
+        if ((errorCapacidad as any).code !== 'PGRST205') {
+          console.error('Error cargando configuración de capacidad:', errorCapacidad);
+        }
+        const { data: cfgAdminCap } = await supabase
+          .from('configuracion_admin')
+          .select('*')
+          .limit(1)
+          .maybeSingle();
+        setConfiguracionCapacidad(cfgAdminCap ? [{ id: 'admin', tipo_clase: 'general', max_alumnos_por_clase: Number(cfgAdminCap.max_alumnos_por_clase) || 1, activo: true }] : []);
       } else {
         setConfiguracionCapacidad(capacidad || []);
       }
@@ -225,6 +243,7 @@ export const useSystemConfig = () => {
   // Actualizar configuración de tarifas
   const actualizarConfiguracionTarifas = async (tarifa: Omit<ConfiguracionTarifa, 'id'>) => {
     try {
+      // Intentar tabla específica; si falla, actualizar configuracion_admin
       const { error } = await supabase
         .from('configuracion_tarifas')
         .upsert({
@@ -235,7 +254,23 @@ export const useSystemConfig = () => {
 
       if (error) {
         console.error('Error actualizando configuración de tarifas:', error);
-        return { success: false, error: error.message };
+        // Intento 1: precio_clase
+        const { error: adminError1 } = await supabase
+          .from('configuracion_admin')
+          .update({ precio_clase: tarifa.tarifa_por_clase, moneda: tarifa.moneda, updated_at: new Date().toISOString() })
+          .eq('activa', true);
+        if (adminError1) {
+          // Intento 2: tarifa_horaria (columna alternativa)
+          const { error: adminError2 } = await supabase
+            .from('configuracion_admin')
+            .update({ tarifa_horaria: tarifa.tarifa_por_clase, moneda: tarifa.moneda, updated_at: new Date().toISOString() })
+            .eq('activa', true);
+          if (adminError2) {
+            return { success: false, error: adminError2.message };
+          }
+        }
+        await cargarConfiguraciones();
+        return { success: true };
       }
 
       await cargarConfiguraciones();
@@ -259,7 +294,15 @@ export const useSystemConfig = () => {
 
       if (error) {
         console.error('Error actualizando configuración de capacidad:', error);
-        return { success: false, error: error.message };
+        const { error: adminError } = await supabase
+          .from('configuracion_admin')
+          .update({ max_alumnos_por_clase: capacidad.max_alumnos_por_clase, updated_at: new Date().toISOString() })
+          .eq('activa', true);
+        if (adminError) {
+          return { success: false, error: adminError.message };
+        }
+        await cargarConfiguraciones();
+        return { success: true };
       }
 
       await cargarConfiguraciones();

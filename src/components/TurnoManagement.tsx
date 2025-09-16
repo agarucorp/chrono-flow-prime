@@ -196,16 +196,16 @@ export const TurnoManagement = () => {
   return (
     <div className="space-y-6 w-full max-w-full">
       <Card className="w-full max-w-full">
-        <CardContent className="space-y-6 w-full max-w-full pt-6">
+        <CardContent className="space-y-6 w-full max-w-full pt-6 md:space-y-6 space-y-0">
           {/* Configuración: mobile muestra CTAs; desktop mantiene controles actuales */}
-          <div className="grid grid-cols-1 gap-4 md:hidden">
+          <div className="grid grid-cols-1 gap-2 md:hidden mb-2 sm:mb-0">
             <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
               <DialogTrigger asChild>
                 <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
                   Alumnos por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-sm">
+              <DialogContent className="w-[10rem] max-w-[10rem] p-3">
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
                   <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
@@ -226,7 +226,7 @@ export const TurnoManagement = () => {
                   Tarifa por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-sm">
+              <DialogContent className="w-[10rem] max-w-[10rem] p-3">
                 <DialogHeader>
                   <DialogTitle>Tarifa por clase</DialogTitle>
                   <DialogDescription>Defina el valor de cada clase.</DialogDescription>
@@ -251,7 +251,7 @@ export const TurnoManagement = () => {
                   Alumnos por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-sm">
+              <DialogContent className="max-w-xs">
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
                   <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
@@ -272,7 +272,7 @@ export const TurnoManagement = () => {
                   Tarifa por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-sm">
+              <DialogContent className="max-w-xs">
                 <DialogHeader>
                   <DialogTitle>Tarifa por clase</DialogTitle>
                   <DialogDescription>Defina el valor de cada clase.</DialogDescription>
@@ -290,8 +290,8 @@ export const TurnoManagement = () => {
           </div>
 
           {/* Botones de acción */}
-          <div className="space-y-4 pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-0 sm:space-y-4 pt-0 sm:pt-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
               {/* CTA 1: Editar horarios fijos */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
@@ -299,7 +299,7 @@ export const TurnoManagement = () => {
                     Editar horarios fijos
                   </div>
                 </DialogTrigger>
-                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6">
                   <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">Configurar Horarios Fijos</DialogTitle>
                   </DialogHeader>
@@ -387,14 +387,14 @@ export const TurnoManagement = () => {
                 </DialogContent>
               </Dialog>
 
-              {/* CTA 2: Editar ausencias eventuales */}
+              {/* CTA 2: Editar ausencias */}
               <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
                 <DialogTrigger asChild>
                   <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
-                    Editar ausencias eventuales
+                    Editar ausencias
                   </div>
                 </DialogTrigger>
-                <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[80vh] overflow-y-auto p-3 sm:p-6">
                   <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">Gestionar Ausencias Eventuales</DialogTitle>
                     <DialogDescription>

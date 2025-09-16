@@ -16,7 +16,8 @@ import {
   EyeOff,
   Settings,
   Clock,
-  LogOut
+  LogOut,
+  X
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -290,6 +291,17 @@ export default function Admin() {
     }
   };
 
+  // Bloquear scroll del body cuando el popup de detalles está abierto
+  useEffect(() => {
+    if (showUserDetails) {
+      const previous = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = previous;
+      };
+    }
+  }, [showUserDetails]);
+
   // Eliminar usuario
   const handleDeleteUser = async (userId: string, userName: string) => {
     if (!confirm(`¿Estás seguro de que quieres eliminar a ${userName}? Esta acción no se puede deshacer.`)) {
@@ -394,7 +406,7 @@ export default function Admin() {
         </div>
       </header>
 
-      <div className="w-full max-w-full px-4 py-8 mx-auto">
+      <div className="w-full max-w-full px-4 py-8 pb-32 mx-auto">
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
           <div className="w-full max-w-full overflow-x-auto">
@@ -418,7 +430,7 @@ export default function Admin() {
 
 
           {/* Tab de Usuarios */}
-          <TabsContent value="usuarios" className="mt-6 w-full max-w-full">
+          <TabsContent value="usuarios" className="mt-6 w-full max-w-full pb-24">
 
             {/* Search and Filters */}
             <Card className="mb-6">
@@ -431,10 +443,10 @@ export default function Admin() {
                       <Input
                         id="search-users"
                         name="search-users"
-                        placeholder="Buscar usuarios por nombre o email..."
+                        placeholder="Buscar..."
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 w-full"
+                        className="pl-10 w-full placeholder:text-[2px] sm:placeholder:text-sm"
                       />
                     </div>
                   </div>
@@ -594,13 +606,13 @@ export default function Admin() {
                 </div>
 
                 {/* Vista móvil - Cards */}
-                <div className="md:hidden space-y-4 p-4">
+                <div className="md:hidden space-y-2 p-4">
                   {filteredUsers.map((user) => (
                     <Card key={user.id} className="w-full max-w-full">
-                      <CardContent className="p-4 w-full max-w-full">
+                      <CardContent className="px-4 py-2 w-full max-w-full">
                         <div className="flex items-center justify-between w-full max-w-full">
                           <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate">{getDisplayFullName(user)}</p>
+                            <p className="font-medium truncate text-[15px] sm:text-base">{getDisplayFullName(user)}</p>
                           </div>
                           <div className="flex items-center space-x-1 flex-shrink-0">
                             <DropdownMenu>
@@ -666,12 +678,12 @@ export default function Admin() {
           </TabsContent>
 
           {/* Tab de Gestión de Turnos */}
-          <TabsContent value="turnos" className="mt-6 w-full max-w-full">
+          <TabsContent value="turnos" className="mt-6 w-full max-w-full pb-24">
             <TurnoManagement />
           </TabsContent>
 
           {/* Tab de Calendario */}
-          <TabsContent value="calendario" className="mt-6 w-full max-w-full">
+          <TabsContent value="calendario" className="mt-6 w-full max-w-full pb-24">
             <CalendarView isAdminView={true} />
           </TabsContent>
         </Tabs>
@@ -679,19 +691,20 @@ export default function Admin() {
 
       {/* User Details Modal */}
       {showUserDetails && selectedUser && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <Card className="w-full max-w-md">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                {selectedUser.role === 'admin' ? (
-                  <Crown className="w-5 h-5 text-yellow-500" />
-                ) : (
-                  <User className="w-5 h-5 text-primary" />
-                )}
-                Detalles del Usuario
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 overscroll-contain">
+          <Card className="relative w-full max-w-md max-h-[85vh] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => { setShowUserDetails(false); setHorariosRecurrentes([]); }}
+              aria-label="Cerrar"
+              className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <CardContent className="space-y-4 overflow-y-auto max-h-[65vh] px-2 overscroll-contain">
+              <div className="text-center pt-1">
+                <h3 className="text-[17px] font-semibold">Detalles de usuario</h3>
+              </div>
               <div>
                 <label className="text-sm font-medium">Nombre Completo</label>
                 <p className="text-sm text-muted-foreground">{getDisplayFullName(selectedUser)}</p>
@@ -716,9 +729,8 @@ export default function Admin() {
                 ) : horariosRecurrentes.length > 0 ? (
                   <div className="space-y-2">
                     {horariosRecurrentes.map((horario) => (
-                      <div key={horario.id} className="flex items-center justify-between p-2 bg-muted/50 rounded-lg">
+                      <div key={horario.id} className="flex items-center justify-start gap-3 p-2 bg-muted/50 rounded-lg">
                         <div className="flex items-center space-x-2">
-                          <Clock className="h-4 w-4 text-primary" />
                           <span className="text-sm font-medium">
                             {getDiaNombre(horario.dia_semana)}
                           </span>
@@ -726,12 +738,6 @@ export default function Admin() {
                             {horario.hora_inicio} - {horario.hora_fin}
                           </span>
                         </div>
-                        <Badge 
-                          variant={horario.activo ? "default" : "secondary"}
-                          className={horario.activo ? "bg-green-500 hover:bg-green-600" : ""}
-                        >
-                          {horario.activo ? 'Activo' : 'Inactivo'}
-                        </Badge>
                       </div>
                     ))}
                   </div>
@@ -740,14 +746,6 @@ export default function Admin() {
                 )}
               </div>
             </CardContent>
-            <div className="p-6 pt-0 flex justify-end">
-              <Button onClick={() => {
-                setShowUserDetails(false);
-                setHorariosRecurrentes([]);
-              }}>
-                Cerrar
-              </Button>
-            </div>
           </Card>
         </div>
       )}
