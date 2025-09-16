@@ -5,6 +5,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
+import { useToast } from '@/hooks/use-toast';
 import { Clock, Calendar, Edit3, X, Plus } from 'lucide-react';
 
 interface HorarioClase {
@@ -42,6 +45,49 @@ export const TurnoManagement = () => {
     { id: 8, nombre: 'Clase 8', horaInicio: '19:00', horaFin: '20:00' }
   ]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
+  const [isCapacidadDialogOpen, setIsCapacidadDialogOpen] = useState(false);
+  const [capacidadValor, setCapacidadValor] = useState<string>('');
+  const [isTarifaDialogOpen, setIsTarifaDialogOpen] = useState(false);
+  const [tarifaValor, setTarifaValor] = useState<string>('');
+  const { actualizarConfiguracionCapacidad, obtenerCapacidadActual, cargarConfiguraciones, actualizarConfiguracionTarifas, obtenerTarifaActual } = useSystemConfig();
+  const { toast } = useToast();
+
+  const abrirCapacidad = () => {
+    const actual = obtenerCapacidadActual();
+    setCapacidadValor(String(actual || 1));
+    setIsCapacidadDialogOpen(true);
+  };
+
+  const guardarCapacidad = async () => {
+    const numero = Math.max(1, parseInt(capacidadValor || '1', 10));
+    const { success, error } = await actualizarConfiguracionCapacidad({ tipo_clase: 'general', max_alumnos_por_clase: numero, activo: true as any });
+    if (!success) {
+      toast({ title: 'Error', description: error || 'No se pudo guardar la capacidad', variant: 'destructive' });
+      return;
+    }
+    await cargarConfiguraciones();
+    toast({ title: 'Guardado', description: 'Capacidad actualizada globalmente' });
+    setIsCapacidadDialogOpen(false);
+  };
+
+  const abrirTarifa = () => {
+    const actual = obtenerTarifaActual();
+    setTarifaValor(String(actual || 0));
+    setIsTarifaDialogOpen(true);
+  };
+
+  const guardarTarifa = async () => {
+    const numero = Math.max(0, parseFloat(tarifaValor || '0'));
+    const { success, error } = await actualizarConfiguracionTarifas({ tipo_clase: 'general', tarifa_por_clase: numero, moneda: 'ARS', activo: true as any });
+    if (!success) {
+      toast({ title: 'Error', description: error || 'No se pudo guardar la tarifa', variant: 'destructive' });
+      return;
+    }
+    await cargarConfiguraciones();
+    toast({ title: 'Guardado', description: 'Tarifa actualizada globalmente' });
+    setIsTarifaDialogOpen(false);
+  };
   
   // Estados para ausencias
   const [isDialogAusenciasOpen, setIsDialogAusenciasOpen] = useState(false);
@@ -75,6 +121,26 @@ export const TurnoManagement = () => {
     // Aquí guardarías los horarios en la base de datos
     console.log('Guardando horarios:', horariosFijos);
     setIsDialogOpen(false);
+  };
+
+  const handleAgregarHorario = () => {
+    setHorariosFijos(prev => {
+      const nextId = prev.length ? Math.max(...prev.map(h => h.id)) + 1 : 1;
+      return [
+        ...prev,
+        { id: nextId, nombre: `Clase ${nextId}`, horaInicio: '00:00', horaFin: '00:00' }
+      ];
+    });
+  };
+
+  const handleEliminarHorario = (id: number) => {
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmarEliminar = () => {
+    if (confirmDeleteId === null) return;
+    setHorariosFijos(prev => prev.filter(h => h.id !== confirmDeleteId));
+    setConfirmDeleteId(null);
   };
 
   // Funciones para manejar ausencias
@@ -133,22 +199,94 @@ export const TurnoManagement = () => {
         <CardContent className="space-y-6 w-full max-w-full pt-6">
           {/* Configuración: mobile muestra CTAs; desktop mantiene controles actuales */}
           <div className="grid grid-cols-1 gap-4 md:hidden">
-            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
-              Alumnos por clase
-            </div>
-            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
-              Tarifa por clase
-            </div>
+            <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
+              <DialogTrigger asChild>
+                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  Alumnos por clase
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Capacidad por clase</DialogTitle>
+                  <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="capacidad-global" className="text-xs">Alumnos permitidos</Label>
+                  <Input id="capacidad-global" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={guardarCapacidad}>Guardar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
+              <DialogTrigger asChild>
+                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  Tarifa por clase
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Tarifa por clase</DialogTitle>
+                  <DialogDescription>Defina el valor de cada clase.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="tarifa-global" className="text-xs">Precio (ARS)</Label>
+                  <Input id="tarifa-global" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={guardarTarifa}>Guardar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* CTAs para desktop también */}
           <div className="hidden md:grid md:grid-cols-2 md:gap-4">
-            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
-              Alumnos por clase
-            </div>
-            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
-              Tarifa por clase
-            </div>
+            <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
+              <DialogTrigger asChild>
+                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  Alumnos por clase
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Capacidad por clase</DialogTitle>
+                  <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="capacidad-global-desktop" className="text-xs">Alumnos permitidos</Label>
+                  <Input id="capacidad-global-desktop" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={guardarCapacidad}>Guardar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
+              <DialogTrigger asChild>
+                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  Tarifa por clase
+                </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-sm">
+                <DialogHeader>
+                  <DialogTitle>Tarifa por clase</DialogTitle>
+                  <DialogDescription>Defina el valor de cada clase.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label htmlFor="tarifa-global-desktop" className="text-xs">Precio (ARS)</Label>
+                  <Input id="tarifa-global-desktop" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
+                  <Button onClick={guardarTarifa}>Guardar</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Botones de acción */}
@@ -157,25 +295,22 @@ export const TurnoManagement = () => {
               {/* CTA 1: Editar horarios fijos */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
                     Editar horarios fijos
                   </div>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">Configurar Horarios Fijos</DialogTitle>
-                    <DialogDescription>
-                      Configura los horarios de inicio y fin para las 8 clases del día
-                    </DialogDescription>
                   </DialogHeader>
                   
                   <div className="space-y-4">
                     {horariosFijos.map((horario) => (
-                      <div key={horario.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center p-4 border rounded-lg">
+                      <div key={horario.id} className="relative grid grid-cols-1 md:grid-cols-3 gap-0 items-center p-2 border rounded-lg">
                         <div className="font-medium text-sm">
                           {horario.nombre}
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1 flex flex-col items-center px-0.5">
                           <Label htmlFor={`inicio-${horario.id}`} className="text-xs">
                             Hora de inicio
                           </Label>
@@ -184,10 +319,10 @@ export const TurnoManagement = () => {
                             type="time"
                             value={horario.horaInicio}
                             onChange={(e) => handleHorarioChange(horario.id, 'horaInicio', e.target.value)}
-                            className="w-full"
+                            className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
                           />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1 flex flex-col items-center px-0.5">
                           <Label htmlFor={`fin-${horario.id}`} className="text-xs">
                             Hora de fin
                           </Label>
@@ -196,11 +331,46 @@ export const TurnoManagement = () => {
                             type="time"
                             value={horario.horaFin}
                             onChange={(e) => handleHorarioChange(horario.id, 'horaFin', e.target.value)}
-                            className="w-full"
+                            className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
                           />
                         </div>
+                        <button
+                          type="button"
+                          aria-label="Eliminar clase"
+                          onClick={() => handleEliminarHorario(horario.id)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
                       </div>
                     ))}
+
+                    {/* Confirmación de eliminación */}
+                    <AlertDialog open={confirmDeleteId !== null} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Eliminar clase</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            ¿Está seguro que desea eliminar esta clase?
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleConfirmarEliminar}>Eliminar</AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+
+                    <div className="w-full">
+                      <div
+                        onClick={handleAgregarHorario}
+                        className="h-10 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
+                        style={{ padding: '8px 16px' }}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Agregar horario
+                      </div>
+                    </div>
                   </div>
 
                   <DialogFooter>
@@ -211,7 +381,7 @@ export const TurnoManagement = () => {
                       Cancelar
                     </Button>
                     <Button onClick={handleGuardarHorarios}>
-                      Guardar Horarios
+                      Guardar
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -220,7 +390,7 @@ export const TurnoManagement = () => {
               {/* CTA 2: Editar ausencias eventuales */}
               <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
                     Editar ausencias eventuales
                   </div>
                 </DialogTrigger>

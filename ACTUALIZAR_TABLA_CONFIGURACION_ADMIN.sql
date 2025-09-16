@@ -21,3 +21,4 @@ UPDATE public.configuracion_admin
 SET tarifa_horaria = COALESCE(NULLIF(tarifa_horaria, 0), precio_clase);
 
 
+
