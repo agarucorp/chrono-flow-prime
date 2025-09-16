@@ -205,16 +205,23 @@ export const TurnoManagement = () => {
                   Alumnos por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="w-[10rem] max-w-[10rem] p-3">
+              <DialogContent 
+                className="p-2 rounded-xl" 
+                style={{ 
+                  width: '90vw', 
+                  maxWidth: '90vw',
+                  minWidth: '90vw'
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
                   <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
                   <Label htmlFor="capacidad-global" className="text-xs">Alumnos permitidos</Label>
                   <Input id="capacidad-global" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
                   <Button onClick={guardarCapacidad}>Guardar</Button>
                 </DialogFooter>
@@ -226,19 +233,21 @@ export const TurnoManagement = () => {
                   Tarifa por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="w-[10rem] max-w-[10rem] p-3">
-                <DialogHeader>
-                  <DialogTitle>Tarifa por clase</DialogTitle>
-                  <DialogDescription>Defina el valor de cada clase.</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-2">
-                  <Label htmlFor="tarifa-global" className="text-xs">Precio (ARS)</Label>
-                  <Input id="tarifa-global" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
+              <DialogContent className="w-[90vw] max-w-[90vw] p-2 rounded-xl">
+                <div className="w-full">
+                  <DialogHeader>
+                    <DialogTitle>Tarifa por clase</DialogTitle>
+                    <DialogDescription>Defina el valor de cada clase.</DialogDescription>
+                  </DialogHeader>
+                  <div className="flex items-center justify-between gap-4">
+                    <Label htmlFor="tarifa-global" className="text-xs">Precio (ARS)</Label>
+                    <Input id="tarifa-global" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
+                    <Button onClick={guardarTarifa}>Guardar</Button>
+                  </DialogFooter>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={guardarTarifa}>Guardar</Button>
-                </DialogFooter>
               </DialogContent>
             </Dialog>
           </div>
@@ -251,16 +260,23 @@ export const TurnoManagement = () => {
                   Alumnos por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-xs">
+              <DialogContent 
+                className="p-2 rounded-xl" 
+                style={{ 
+                  width: '90vw', 
+                  maxWidth: '90vw',
+                  minWidth: '90vw'
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
                   <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
                   <Label htmlFor="capacidad-global-desktop" className="text-xs">Alumnos permitidos</Label>
                   <Input id="capacidad-global-desktop" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
                   <Button onClick={guardarCapacidad}>Guardar</Button>
                 </DialogFooter>
@@ -272,16 +288,23 @@ export const TurnoManagement = () => {
                   Tarifa por clase
                 </div>
               </DialogTrigger>
-              <DialogContent className="max-w-xs">
+              <DialogContent 
+                className="p-2 rounded-xl" 
+                style={{ 
+                  width: '90vw', 
+                  maxWidth: '90vw',
+                  minWidth: '90vw'
+                }}
+              >
                 <DialogHeader>
                   <DialogTitle>Tarifa por clase</DialogTitle>
                   <DialogDescription>Defina el valor de cada clase.</DialogDescription>
                 </DialogHeader>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
                   <Label htmlFor="tarifa-global-desktop" className="text-xs">Precio (ARS)</Label>
                   <Input id="tarifa-global-desktop" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
                 </div>
-                <DialogFooter>
+                <DialogFooter className="gap-2">
                   <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
                   <Button onClick={guardarTarifa}>Guardar</Button>
                 </DialogFooter>
@@ -299,40 +322,48 @@ export const TurnoManagement = () => {
                     Editar horarios fijos
                   </div>
                 </DialogTrigger>
-                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6">
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
                   <DialogHeader>
                     <DialogTitle className="flex items-center space-x-2">Configurar Horarios Fijos</DialogTitle>
                   </DialogHeader>
                   
                   <div className="space-y-4">
                     {horariosFijos.map((horario) => (
-                      <div key={horario.id} className="relative grid grid-cols-1 md:grid-cols-3 gap-0 items-center p-2 border rounded-lg">
-                        <div className="font-medium text-sm">
+                      <div key={horario.id} className="relative grid grid-cols-1 md:grid-cols-3 gap-0 items-center py-4 px-2 border rounded-lg">
+                        <div 
+                          className="absolute -top-2 -left-2 bg-background px-2 text-xs text-muted-foreground"
+                          style={{ 
+                            background: 'hsl(var(--background))',
+                            zIndex: 10
+                          }}
+                        >
                           {horario.nombre}
                         </div>
-                        <div className="space-y-1 flex flex-col items-center px-0.5">
-                          <Label htmlFor={`inicio-${horario.id}`} className="text-xs">
-                            Hora de inicio
-                          </Label>
-                          <Input
-                            id={`inicio-${horario.id}`}
-                            type="time"
-                            value={horario.horaInicio}
-                            onChange={(e) => handleHorarioChange(horario.id, 'horaInicio', e.target.value)}
-                            className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
-                          />
-                        </div>
-                        <div className="space-y-1 flex flex-col items-center px-0.5">
-                          <Label htmlFor={`fin-${horario.id}`} className="text-xs">
-                            Hora de fin
-                          </Label>
-                          <Input
-                            id={`fin-${horario.id}`}
-                            type="time"
-                            value={horario.horaFin}
-                            onChange={(e) => handleHorarioChange(horario.id, 'horaFin', e.target.value)}
-                            className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
-                          />
+                        <div className="flex items-center gap-2 px-0.5">
+                          <div className="space-y-1 flex flex-col items-center">
+                            <Label htmlFor={`inicio-${horario.id}`} className="text-xs">
+                              Hora de inicio
+                            </Label>
+                            <Input
+                              id={`inicio-${horario.id}`}
+                              type="time"
+                              value={horario.horaInicio}
+                              onChange={(e) => handleHorarioChange(horario.id, 'horaInicio', e.target.value)}
+                              className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
+                            />
+                          </div>
+                          <div className="space-y-1 flex flex-col items-center">
+                            <Label htmlFor={`fin-${horario.id}`} className="text-xs">
+                              Hora de fin
+                            </Label>
+                            <Input
+                              id={`fin-${horario.id}`}
+                              type="time"
+                              value={horario.horaFin}
+                              onChange={(e) => handleHorarioChange(horario.id, 'horaFin', e.target.value)}
+                              className="w-24 h-8 text-sm text-center [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:right-0 [&::-webkit-calendar-picker-indicator]:w-0 [&::-webkit-calendar-picker-indicator]:h-0"
+                            />
+                          </div>
                         </div>
                         <button
                           type="button"
@@ -373,7 +404,7 @@ export const TurnoManagement = () => {
                     </div>
                   </div>
 
-                  <DialogFooter>
+                  <DialogFooter className="gap-2">
                     <Button 
                       variant="outline" 
                       onClick={() => setIsDialogOpen(false)}

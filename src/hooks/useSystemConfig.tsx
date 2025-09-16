@@ -56,25 +56,50 @@ export const useSystemConfig = () => {
     try {
       setLoading(true);
 
-      // Cargar horarios fijos
-      const { data: horarios, error: errorHorarios } = await supabase
-        .from('horarios_fijos_sistema')
-        .select('*')
-        .eq('activo', true)
-        .order('clase_numero');
+      // Cargar horarios fijos (usar horarios_clase sin filtros problemáticos)
+      let horarios = [];
+      let errorHorarios = null;
+      
+      try {
+        // Consultar horarios_clase sin filtros que puedan causar error 400
+        const { data, error } = await supabase
+          .from('horarios_clase')
+          .select('*');
+        horarios = data;
+        errorHorarios = error;
+      } catch (err: any) {
+        if (err.code !== 'PGRST205') { // Ignore "table does not exist" error
+          console.error('Error cargando horarios fijos:', err);
+        }
+        errorHorarios = err;
+      }
 
       if (errorHorarios) {
-        console.error('Error cargando horarios fijos:', errorHorarios);
+        // Si hay error, usar datos por defecto
+        console.log('Error cargando horarios_clase, usando horarios por defecto');
+        setHorariosFijos([]);
       } else {
         setHorariosFijos(horarios || []);
       }
 
-      // Cargar ausencias eventuales
-      const { data: ausencias, error: errorAusencias } = await supabase
-        .from('ausencias_eventuales')
-        .select('*')
-        .eq('activo', true)
-        .order('fecha_inicio', { ascending: false });
+      // Cargar ausencias eventuales (usar ausencias_admin)
+      let ausencias = [];
+      let errorAusencias = null;
+      
+      try {
+        const { data, error } = await supabase
+          .from('ausencias_admin')
+          .select('*')
+          .eq('activo', true)
+          .order('fecha_inicio', { ascending: false });
+        ausencias = data;
+        errorAusencias = error;
+      } catch (err: any) {
+        if (err.code !== 'PGRST205') { // Ignore "table does not exist" error
+          console.error('Error cargando ausencias eventuales:', err);
+        }
+        errorAusencias = err;
+      }
 
       if (errorAusencias) {
         console.error('Error cargando ausencias eventuales:', errorAusencias);
@@ -82,10 +107,23 @@ export const useSystemConfig = () => {
         setAusenciasEventuales(ausencias || []);
       }
 
-      // Cargar configuración del sistema
-      const { data: config, error: errorConfig } = await supabase
-        .from('configuracion_sistema')
-        .select('*');
+      // Cargar configuración del sistema (usar configuracion_admin)
+      let config = [];
+      let errorConfig = null;
+      
+      try {
+        const { data, error } = await supabase
+          .from('configuracion_admin')
+          .select('*')
+          .eq('sistema_activo', true);
+        config = data;
+        errorConfig = error;
+      } catch (err: any) {
+        if (err.code !== 'PGRST205') { // Ignore "table does not exist" error
+          console.error('Error cargando configuración del sistema:', err);
+        }
+        errorConfig = err;
+      }
 
       if (errorConfig) {
         console.error('Error cargando configuración del sistema:', errorConfig);
@@ -93,46 +131,36 @@ export const useSystemConfig = () => {
         setConfiguracionSistema(config || []);
       }
 
-      // Cargar configuración de tarifas
-      const { data: tarifas, error: errorTarifas } = await supabase
-        .from('configuracion_tarifas')
-        .select('*')
-        .eq('activo', true);
-
-      if (errorTarifas) {
-        if ((errorTarifas as any).code !== 'PGRST205') {
-          console.error('Error cargando configuración de tarifas:', errorTarifas);
-        }
+      // Cargar configuración de tarifas (usar configuracion_admin directamente)
+      try {
         const { data: cfgAdminTarifa } = await supabase
           .from('configuracion_admin')
-          .select('*')
+          .select('precio_clase, tarifa_horaria, moneda')
+          .eq('sistema_activo', true)
           .limit(1)
           .maybeSingle();
+        
         const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.precio_clase ?? cfgAdminTarifa.tarifa_horaria) || 0) : 0;
         const moneda = (cfgAdminTarifa && (cfgAdminTarifa as any).moneda) ? (cfgAdminTarifa as any).moneda : 'ARS';
         setConfiguracionTarifas(tarifa > 0 ? [{ id: 'admin', tipo_clase: 'general', tarifa_por_clase: tarifa, moneda, activo: true }] : []);
-      } else {
-        setConfiguracionTarifas(tarifas || []);
+      } catch (error) {
+        console.error('Error cargando configuración de tarifas:', error);
+        setConfiguracionTarifas([]);
       }
 
-      // Cargar configuración de capacidad
-      const { data: capacidad, error: errorCapacidad } = await supabase
-        .from('configuracion_capacidad')
-        .select('*')
-        .eq('activo', true);
-
-      if (errorCapacidad) {
-        if ((errorCapacidad as any).code !== 'PGRST205') {
-          console.error('Error cargando configuración de capacidad:', errorCapacidad);
-        }
+      // Cargar configuración de capacidad (usar configuracion_admin directamente)
+      try {
         const { data: cfgAdminCap } = await supabase
           .from('configuracion_admin')
-          .select('*')
+          .select('max_alumnos_por_clase')
+          .eq('sistema_activo', true)
           .limit(1)
           .maybeSingle();
+        
         setConfiguracionCapacidad(cfgAdminCap ? [{ id: 'admin', tipo_clase: 'general', max_alumnos_por_clase: Number(cfgAdminCap.max_alumnos_por_clase) || 1, activo: true }] : []);
-      } else {
-        setConfiguracionCapacidad(capacidad || []);
+      } catch (error) {
+        console.error('Error cargando configuración de capacidad:', error);
+        setConfiguracionCapacidad([]);
       }
 
     } catch (error) {
