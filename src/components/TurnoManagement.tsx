@@ -131,48 +131,23 @@ export const TurnoManagement = () => {
     <div className="space-y-6 w-full max-w-full">
       <Card className="w-full max-w-full">
         <CardContent className="space-y-6 w-full max-w-full pt-6">
-          {/* Componentes editables en fila */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Cantidad de alumnos por clase */}
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="cantidad-alumnos" className="text-base font-medium whitespace-nowrap">
-                Cantidad de alumnos por clase
-              </Label>
-              <Select value={cantidadAlumnos} onValueChange={setCantidadAlumnos}>
-                <SelectTrigger className="w-16">
-                  <SelectValue placeholder="1" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1</SelectItem>
-                  <SelectItem value="2">2</SelectItem>
-                  <SelectItem value="3">3</SelectItem>
-                  <SelectItem value="4">4</SelectItem>
-                  <SelectItem value="5">5</SelectItem>
-                  <SelectItem value="6">6</SelectItem>
-                  <SelectItem value="8">8</SelectItem>
-                  <SelectItem value="10">10</SelectItem>
-                  <SelectItem value="12">12</SelectItem>
-                  <SelectItem value="15">15</SelectItem>
-                  <SelectItem value="20">20</SelectItem>
-                </SelectContent>
-              </Select>
+          {/* Configuración: mobile muestra CTAs; desktop mantiene controles actuales */}
+          <div className="grid grid-cols-1 gap-4 md:hidden">
+            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+              Alumnos por clase
             </div>
+            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+              Tarifa por clase
+            </div>
+          </div>
 
-            {/* Tarifa por clase */}
-            <div className="flex items-center space-x-2">
-              <Label htmlFor="tarifa-clase" className="text-base font-medium whitespace-nowrap">
-                Tarifa por clase
-              </Label>
-              <Input
-                id="tarifa-clase"
-                type="number"
-                value={tarifaClase}
-                onChange={(e) => setTarifaClase(e.target.value)}
-                placeholder="0"
-                className="w-20"
-                min="0"
-                step="0.01"
-              />
+          {/* CTAs para desktop también */}
+          <div className="hidden md:grid md:grid-cols-2 md:gap-4">
+            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+              Alumnos por clase
+            </div>
+            <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+              Tarifa por clase
             </div>
           </div>
 
@@ -182,24 +157,13 @@ export const TurnoManagement = () => {
               {/* CTA 1: Editar horarios fijos */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex items-center space-x-3">
-                      <Clock className="h-8 w-8 text-blue-500 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h3 className="font-medium text-sm sm:text-base">Editar horarios fijos</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          Configurar horarios regulares del gimnasio
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                    Editar horarios fijos
+                  </div>
                 </DialogTrigger>
                 <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2">
-                      <Edit3 className="h-5 w-5" />
-                      <span>Configurar Horarios Fijos</span>
-                    </DialogTitle>
+                    <DialogTitle className="flex items-center space-x-2">Configurar Horarios Fijos</DialogTitle>
                     <DialogDescription>
                       Configura los horarios de inicio y fin para las 8 clases del día
                     </DialogDescription>
@@ -256,24 +220,13 @@ export const TurnoManagement = () => {
               {/* CTA 2: Editar ausencias eventuales */}
               <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
                 <DialogTrigger asChild>
-                  <Card className="p-4 hover:bg-muted/50 transition-colors cursor-pointer">
-                    <div className="flex items-center space-x-3">
-                      <Calendar className="h-8 w-8 text-orange-500 flex-shrink-0" />
-                      <div className="flex-1">
-                        <h3 className="font-medium text-sm sm:text-base">Editar ausencias eventuales</h3>
-                        <p className="text-xs sm:text-sm text-muted-foreground">
-                          Gestionar días sin clases o cambios especiales
-                        </p>
-                      </div>
-                    </div>
-                  </Card>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                    Editar ausencias eventuales
+                  </div>
                 </DialogTrigger>
                 <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2">
-                      <Calendar className="h-5 w-5" />
-                      <span>Gestionar Ausencias Eventuales</span>
-                    </DialogTitle>
+                    <DialogTitle className="flex items-center space-x-2">Gestionar Ausencias Eventuales</DialogTitle>
                     <DialogDescription>
                       Configura ausencias por día específico o por período
                     </DialogDescription>
@@ -317,7 +270,7 @@ export const TurnoManagement = () => {
                           <div className="space-y-2">
                             <Label>Día</Label>
                             <Select value={nuevaAusenciaUnica.dia} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, dia: value }))}>
-                              <SelectTrigger>
+                              <SelectTrigger id="ausencia-unica-dia">
                                 <SelectValue placeholder="Seleccionar día" />
                               </SelectTrigger>
                               <SelectContent>
@@ -330,7 +283,7 @@ export const TurnoManagement = () => {
                           <div className="space-y-2">
                             <Label>Mes</Label>
                             <Select value={nuevaAusenciaUnica.mes} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, mes: value }))}>
-                              <SelectTrigger>
+                              <SelectTrigger id="ausencia-unica-mes">
                                 <SelectValue placeholder="Seleccionar mes" />
                               </SelectTrigger>
                               <SelectContent>
@@ -343,7 +296,7 @@ export const TurnoManagement = () => {
                           <div className="space-y-2">
                             <Label>Año</Label>
                             <Select value={nuevaAusenciaUnica.año} onValueChange={(value) => setNuevaAusenciaUnica(prev => ({ ...prev, año: value }))}>
-                              <SelectTrigger>
+                              <SelectTrigger id="ausencia-unica-anio">
                                 <SelectValue placeholder="Seleccionar año" />
                               </SelectTrigger>
                               <SelectContent>

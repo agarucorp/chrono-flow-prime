@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
 import Admin from "./pages/Admin";
+import { useAdmin } from "./hooks/useAdmin";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -26,6 +27,7 @@ const Dashboard = () => {
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
+  const { isAdmin, isLoading: adminLoading } = useAdmin();
   
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -71,6 +73,13 @@ const Dashboard = () => {
       setShowRecurringModal(true);
     }
   }, [isFirstTime, firstTimeLoading, hasCompletedSetup]);
+
+  // Si el usuario es admin y está en /user, redirigir a /admin
+  useEffect(() => {
+    if (!adminLoading && isAdmin) {
+      navigate('/admin', { replace: true });
+    }
+  }, [adminLoading, isAdmin, navigate]);
 
   return (
     <div className="min-h-screen bg-background">

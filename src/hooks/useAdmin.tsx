@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -65,7 +65,7 @@ export const useAdmin = () => {
   }, [user]);
 
   // Obtener horarios recurrentes de un usuario específico
-  const fetchUserHorarios = async (userId: string) => {
+  const fetchUserHorarios = useCallback(async (userId: string) => {
     try {
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
@@ -91,10 +91,10 @@ export const useAdmin = () => {
       console.error('Error inesperado obteniendo horarios:', err);
       return [];
     }
-  };
+  }, []);
 
   // Obtener todos los usuarios (solo para admins)
-  const fetchAllUsers = async () => {
+  const fetchAllUsers = useCallback(async () => {
     if (!isAdmin) return;
 
     try {
@@ -123,10 +123,10 @@ export const useAdmin = () => {
     } catch (err) {
       console.error('Error inesperado obteniendo usuarios:', err);
     }
-  };
+  }, [isAdmin, fetchUserHorarios]);
 
   // Obtener solo usuarios administradores
-  const fetchAdminUsers = async () => {
+  const fetchAdminUsers = useCallback(async () => {
     if (!isAdmin) return;
 
     try {
@@ -145,7 +145,7 @@ export const useAdmin = () => {
     } catch (err) {
       console.error('Error inesperado obteniendo admins:', err);
     }
-  };
+  }, [isAdmin]);
 
   // Cambiar rol de usuario
   const changeUserRole = async (userId: string, newRole: 'client' | 'admin') => {

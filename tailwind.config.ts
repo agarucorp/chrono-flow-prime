@@ -18,6 +18,10 @@ export default {
 			}
 		},
 		extend: {
+            fontFamily: {
+                heading: ["Open Sans", "ui-sans-serif", "system-ui"],
+                body: ["Poppins", "ui-sans-serif", "system-ui"],
+            },
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',

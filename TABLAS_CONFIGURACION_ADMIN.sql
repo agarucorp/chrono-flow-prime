@@ -184,3 +184,5 @@ CREATE POLICY "Allow admin write access" ON configuracion_capacidad
       AND profiles.role = 'admin'
     )
   );
+
+

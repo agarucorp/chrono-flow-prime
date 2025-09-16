@@ -50,17 +50,43 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         setIsLoading(true);
         console.log("Intentando login con:", credentials.email);
         
-        const { error } = await signIn(credentials.email, credentials.password);
-        
-        if (error) {
-          console.error('Error en login:', error);
-          setError(error || 'Error al iniciar sesión');
+        const result = await signIn(credentials.email, credentials.password);
+
+        if (!result.success || !result.user) {
+          const message = result.error || 'Error al iniciar sesión';
+          console.error('Error en login:', message);
+          setError(message);
           return;
         }
-        
+
         console.log('Login exitoso');
-        onLogin();
-        navigate('/user');
+
+        // Consultar rol desde profiles para decidir la redirección
+        try {
+          const { data: profile, error: profileError } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', result.user.id)
+            .single();
+
+          if (profileError) {
+            console.warn('No se pudo obtener el rol, enviando a /user por defecto:', profileError.message);
+            onLogin();
+            navigate('/user');
+            return;
+          }
+
+          onLogin();
+          if (profile?.role === 'admin') {
+            navigate('/admin');
+          } else {
+            navigate('/user');
+          }
+        } catch (roleErr) {
+          console.error('Error inesperado leyendo rol:', roleErr);
+          onLogin();
+          navigate('/user');
+        }
       } catch (err) {
         console.error('Error inesperado en login:', err);
         setError('Error inesperado al iniciar sesión');
