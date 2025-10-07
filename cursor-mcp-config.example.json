@@ -1,0 +1,18 @@
+{
+  "$schema": "https://github.com/modelcontextprotocol/servers/blob/main/schema.json",
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase-community/mcp-server-supabase"
+      ],
+      "env": {
+        "SUPABASE_URL": "https://tu-proyecto-id.supabase.co",
+        "SUPABASE_SERVICE_ROLE_KEY": "tu_service_role_key_aqui_empieza_con_eyJ...",
+        "SUPABASE_DB_URL": "postgresql://postgres.tu-proyecto-id:[TU_PASSWORD]@aws-0-us-east-1.pooler.supabase.com:6543/postgres"
+      }
+    }
+  }
+}
+

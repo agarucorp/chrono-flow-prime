@@ -59,6 +59,65 @@ This project is built with:
 - React
 - shadcn-ui
 - Tailwind CSS
+- Supabase (Authentication & Database)
+
+## Supabase Setup
+
+This project uses Supabase for authentication and database. To run this project locally:
+
+1. Create a Supabase account at [https://supabase.com](https://supabase.com)
+2. Create a new project
+3. Create a `.env` file in the root directory with:
+   ```env
+   VITE_SUPABASE_URL=your_supabase_url
+   VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+   ```
+4. Get your credentials from Project Settings > API
+
+For detailed setup instructions, see [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+
+## MCP (Model Context Protocol) Integration
+
+This project supports MCP integration for enhanced AI-assisted development with Cursor/Claude.
+
+### Quick Start MCP
+
+**Windows:**
+```bash
+scripts\mcp-quickstart.bat
+```
+
+**Mac/Linux:**
+```bash
+bash scripts/mcp-quickstart.sh
+```
+
+Or install manually:
+```bash
+npm run mcp:install
+```
+
+### Verify MCP Configuration
+
+```bash
+npm run verify:mcp
+```
+
+### Documentation
+
+- [MCP_SUPABASE_SETUP.md](./MCP_SUPABASE_SETUP.md) - Complete MCP setup guide
+- [MCP_CREDENTIALS.md](./MCP_CREDENTIALS.md) - Required credentials information
+- [cursor-mcp-config.example.json](./cursor-mcp-config.example.json) - Configuration template
+
+### What does MCP do?
+
+MCP allows Claude/Cursor to:
+- Query and modify your Supabase database directly
+- Create tables, policies, and functions
+- Execute SQL queries through natural language
+- Manage your database schema during development
+
+⚠️ **Security Note:** MCP is for development only. Never use service role keys in production.
 
 ## How can I deploy this project?
 

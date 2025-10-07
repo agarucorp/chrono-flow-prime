@@ -5,18 +5,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 
 interface LoginFormProps {
-  onLogin: () => void;
+  onLogin?: () => void;
 }
 
 export const LoginForm = ({ onLogin }: LoginFormProps) => {
+  const { signIn, signUp } = useAuth();
+  const { toast } = useToast();
+  
   const [credentials, setCredentials] = useState({
-    username: "",
-    password: "",
     email: "",
-    confirmPassword: ""
+    password: ""
   });
   const [registerData, setRegisterData] = useState({
     firstName: "",
@@ -37,12 +40,28 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     e.preventDefault();
     
     if (!isRegisterMode) {
-      // Login normal
+      // Login con Supabase
       setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        onLogin();
-      }, 1500);
+      const { error } = await signIn(credentials.email, credentials.password);
+      setIsLoading(false);
+      
+      if (error) {
+        toast({
+          title: "Error de autenticación",
+          description: error.message === "Invalid login credentials" 
+            ? "Credenciales incorrectas. Verifique su email y contraseña." 
+            : error.message,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      toast({
+        title: "¡Bienvenido!",
+        description: "Sesión iniciada correctamente",
+      });
+      
+      if (onLogin) onLogin();
       return;
     }
 
@@ -50,7 +69,11 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     if (currentStep === 1) {
       // Validación paso 1
       if (!registerData.firstName || !registerData.lastName || !registerData.phone || !registerData.gender || !registerData.birthDate) {
-        alert("Por favor complete todos los campos del paso 1");
+        toast({
+          title: "Campos incompletos",
+          description: "Por favor complete todos los campos del paso 1",
+          variant: "destructive"
+        });
         return;
       }
       setCurrentStep(2);
@@ -60,32 +83,72 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     if (currentStep === 2) {
       // Validación paso 2
       if (registerData.email !== registerData.confirmEmail) {
-        alert("Los emails no coinciden");
+        toast({
+          title: "Error de validación",
+          description: "Los emails no coinciden",
+          variant: "destructive"
+        });
         return;
       }
       if (registerData.password !== registerData.confirmPassword) {
-        alert("Las contraseñas no coinciden");
+        toast({
+          title: "Error de validación",
+          description: "Las contraseñas no coinciden",
+          variant: "destructive"
+        });
+        return;
+      }
+      if (registerData.password.length < 6) {
+        toast({
+          title: "Contraseña débil",
+          description: "La contraseña debe tener al menos 6 caracteres",
+          variant: "destructive"
+        });
         return;
       }
       
       setIsLoading(true);
-      setTimeout(() => {
-        setIsLoading(false);
-        alert("Cuenta creada exitosamente. Ahora puede iniciar sesión.");
-        setIsRegisterMode(false);
-        setCurrentStep(1);
-        setRegisterData({
-          firstName: "",
-          lastName: "",
-          phone: "",
-          gender: "",
-          birthDate: undefined,
-          email: "",
-          confirmEmail: "",
-          password: "",
-          confirmPassword: ""
+      
+      // Registrar usuario en Supabase con metadata
+      const { error } = await signUp(registerData.email, registerData.password, {
+        first_name: registerData.firstName,
+        last_name: registerData.lastName,
+        phone: registerData.phone,
+        gender: registerData.gender,
+        birth_date: registerData.birthDate?.toISOString()
+      });
+      
+      setIsLoading(false);
+      
+      if (error) {
+        toast({
+          title: "Error al crear cuenta",
+          description: error.message === "User already registered" 
+            ? "Ya existe una cuenta con este email" 
+            : error.message,
+          variant: "destructive"
         });
-      }, 1500);
+        return;
+      }
+      
+      toast({
+        title: "¡Cuenta creada!",
+        description: "Por favor verifica tu email para activar tu cuenta. Luego podrás iniciar sesión.",
+      });
+      
+      setIsRegisterMode(false);
+      setCurrentStep(1);
+      setRegisterData({
+        firstName: "",
+        lastName: "",
+        phone: "",
+        gender: "",
+        birthDate: undefined,
+        email: "",
+        confirmEmail: "",
+        password: "",
+        confirmPassword: ""
+      });
     }
   };
 
@@ -147,15 +210,15 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                 // Login Form
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="username">Usuario</Label>
+                    <Label htmlFor="email">Email</Label>
                     <div className="relative">
-                      <User className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                      <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="username"
-                        type="text"
-                        placeholder="Ingrese su usuario"
-                        value={credentials.username}
-                        onChange={(e) => setCredentials(prev => ({ ...prev, username: e.target.value }))}
+                        id="email"
+                        type="email"
+                        placeholder="Ingrese su email"
+                        value={credentials.email}
+                        onChange={(e) => setCredentials(prev => ({ ...prev, email: e.target.value }))}
                         className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />

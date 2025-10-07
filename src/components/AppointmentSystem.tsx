@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { Calendar, Clock, User, Settings, LogOut } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LoginForm } from "./LoginForm";
 import { AppointmentCalendar } from "./AppointmentCalendar";
 import { ProfessionalSettings } from "./ProfessionalSettings";
+import { useAuth } from "@/contexts/AuthContext";
 
 export const AppointmentSystem = () => {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, loading, signOut } = useAuth();
   const [currentView, setCurrentView] = useState<'calendar' | 'settings'>('calendar');
   const [professional, setProfessional] = useState({
     name: "Dr. María González",
@@ -17,8 +18,19 @@ export const AppointmentSystem = () => {
     availableDays: [1, 2, 3, 4, 5] // Monday to Friday
   });
 
-  if (!isLoggedIn) {
-    return <LoginForm onLogin={() => setIsLoggedIn(true)} />;
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+          <p className="mt-4 text-muted-foreground">Cargando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <LoginForm />;
   }
 
   return (
@@ -39,7 +51,11 @@ export const AppointmentSystem = () => {
             
             <div className="flex items-center space-x-4">
               <div className="text-right">
-                <p className="text-sm font-medium text-foreground">{professional.name}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {user.user_metadata?.first_name && user.user_metadata?.last_name 
+                    ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                    : user.email}
+                </p>
                 <p className="text-xs text-muted-foreground">{professional.specialty}</p>
               </div>
               
@@ -66,7 +82,7 @@ export const AppointmentSystem = () => {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setIsLoggedIn(false)}
+                onClick={() => signOut()}
                 className="h-9 text-destructive hover:bg-destructive/10"
               >
                 <LogOut className="h-4 w-4 mr-2" />

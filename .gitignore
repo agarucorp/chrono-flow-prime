@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Environment variables
+.env
+.env.local
+.env.*.local
+.cursor/
+.env.mcp
+
+# MCP Configuration (contains sensitive credentials)
+cursor-mcp-config.json
+cline_mcp_settings.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
