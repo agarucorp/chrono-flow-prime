@@ -535,11 +535,12 @@ export const RecurringScheduleView = () => {
     <div className="space-y-6">
       {/* Subnavbar */}
       <div className="space-y-4">
-        <div className="flex justify-center">
-        <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+        {/* Desktop navbar (centered pills) */}
+        <div className="hidden sm:flex justify-center">
+        <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
           <button
             onClick={() => handleViewChange('mis-clases')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               activeView === 'mis-clases'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -549,7 +550,7 @@ export const RecurringScheduleView = () => {
           </button>
           <button
             onClick={() => handleViewChange('turnos-disponibles')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
               activeView === 'turnos-disponibles'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -558,6 +559,38 @@ export const RecurringScheduleView = () => {
             Turnos Disponibles
           </button>
         </div>
+        </div>
+
+        {/* Mobile bottom floating navbar (unified like desktop) */}
+        <div className="block sm:hidden">
+          {/* Spacer to avoid content behind the floating navbar */}
+          <div className="h-20" />
+          <nav className="fixed bottom-4 left-0 right-0 z-40 pointer-events-none">
+            <div className="max-w-7xl mx-auto px-4 flex justify-center">
+              <div className="flex space-x-1 bg-background border border-border p-1 rounded-full shadow-lg pointer-events-auto">
+                <button
+                  onClick={() => handleViewChange('mis-clases')}
+                  className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
+                    activeView === 'mis-clases'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  Mis Clases
+                </button>
+                <button
+                  onClick={() => handleViewChange('turnos-disponibles')}
+                  className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
+                    activeView === 'turnos-disponibles'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground hover:text-foreground'
+                }`}
+                >
+                  Turnos Disponibles
+                </button>
+              </div>
+            </div>
+          </nav>
         </div>
       </div>
 
