@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ interface ClaseDelDia {
 export const RecurringScheduleView = () => {
   const { user } = useAuthContext();
   const { isAdmin } = useAdmin();
+  const [profileData, setProfileData] = useState<any>(null);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>(() => {
     // Recuperar horarios del localStorage
     const saved = localStorage.getItem('horariosRecurrentes');
@@ -160,10 +161,13 @@ export const RecurringScheduleView = () => {
 
     setLoadingTurnosCancelados(true);
     try {
-      // Obtener todos los turnos cancelados disponibles
+      // Obtener todos los turnos cancelados disponibles con el cliente que canceló
       const { data, error } = await supabase
         .from('turnos_disponibles')
-        .select('*')
+        .select(`
+          *,
+          turnos_cancelados!creado_desde_cancelacion_id(cliente_id)
+        `)
         .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd'))
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
@@ -186,10 +190,11 @@ export const RecurringScheduleView = () => {
 
       const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
 
-      // Mantener todas las ocurrencias y marcar como reservados por id
+      // Marcar como reservados y verificar si el usuario actual fue quien canceló
       const turnosMarcados = (data || []).map((turno) => ({
         ...turno,
-        reservado: idsReservados.has(turno.id)
+        reservado: idsReservados.has(turno.id),
+        canceladoPorUsuario: turno.turnos_cancelados?.cliente_id === user.id
       }));
 
       setTurnosCancelados(turnosMarcados);
@@ -218,10 +223,33 @@ export const RecurringScheduleView = () => {
     };
   }, [activeView]);
 
+  // Cargar datos del perfil desde la base de datos
+  const cargarDatosPerfil = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name, first_name, last_name, phone, birth_date')
+        .eq('id', user.id)
+        .single();
+      
+      if (error) {
+        console.error('Error al cargar perfil:', error);
+        return;
+      }
+      
+      setProfileData(data);
+    } catch (error) {
+      console.error('Error al cargar perfil:', error);
+    }
+  };
+
   // Cargar datos iniciales
   useEffect(() => {
     if (user?.id) {
       cargarHorariosRecurrentes();
+      cargarDatosPerfil();
     }
   }, [user?.id]);
 
@@ -684,7 +712,7 @@ export const RecurringScheduleView = () => {
                                 {format(dia, 'dd/MM', { locale: es })}
                               </div>
                               {clase.horario.cancelada && (
-                                <div className="text-xs text-red-600 dark:text-red-400 font-medium">
+                                <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
                                   CANCELADA
                                 </div>
                               )}
@@ -737,12 +765,99 @@ export const RecurringScheduleView = () => {
         </>
       )}
 
+      {/* Vista de Perfil */}
+      {activeView === 'perfil' && (
+        <div className="w-full md:w-[55%] mx-auto animate-view-swap pb-24 sm:pb-0">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg sm:text-2xl">Mi Perfil</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Nombre y Apellido */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Nombre y Apellido</label>
+                <p className="text-sm px-3 py-2 bg-muted/50 rounded-md">
+                  {profileData?.full_name || 
+                   (profileData?.first_name && profileData?.last_name 
+                     ? `${profileData.first_name} ${profileData.last_name}` 
+                     : user?.user_metadata?.full_name || 
+                       (user?.user_metadata?.first_name && user?.user_metadata?.last_name
+                         ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                         : 'No configurado'))}
+                </p>
+              </div>
+
+              {/* Correo */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between h-auto py-2 px-3"
+                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-email'))}
+                >
+                  <span className="text-sm">{user?.email}</span>
+                  <span className="text-xs text-primary">Editar</span>
+                </Button>
+              </div>
+
+              {/* Fecha de Nacimiento */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Fecha de Nacimiento</label>
+                <p className="text-sm px-3 py-2 bg-muted/50 rounded-md">
+                  {profileData?.birth_date || user?.user_metadata?.birth_date || 'No configurado'}
+                </p>
+              </div>
+
+              {/* Teléfono */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Número de Teléfono</label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between h-auto py-2 px-3"
+                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-phone'))}
+                >
+                  <span className="text-sm">{profileData?.phone || user?.user_metadata?.phone || 'No configurado'}</span>
+                  <span className="text-xs text-primary">Editar</span>
+                </Button>
+              </div>
+
+              {/* Contraseña */}
+              <div className="space-y-2">
+                <label className="text-sm font-medium text-muted-foreground">Contraseña</label>
+                <Button
+                  variant="outline"
+                  className="w-full justify-between h-auto py-2 px-3"
+                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-password'))}
+                >
+                  <span className="text-sm">••••••••</span>
+                  <span className="text-xs text-primary">Cambiar</span>
+                </Button>
+              </div>
+
+              {/* Cerrar Sesión */}
+              <Button
+                variant="destructive"
+                className="w-full justify-center mt-6"
+                onClick={() => {
+                  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                    window.dispatchEvent(new CustomEvent('auth:signout'));
+                  }
+                }}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cerrar Sesión
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (
-        <div className="w-full md:w-[55%] mx-auto animate-view-swap">
+        <div className="w-full md:w-[55%] mx-auto animate-view-swap pb-24 sm:pb-0">
         <Card>
           <CardHeader>
-            <CardTitle>Turnos Cancelados Disponibles</CardTitle>
+            <CardTitle className="text-base sm:text-2xl">Turnos Cancelados Disponibles</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTurnosCancelados ? (
@@ -757,35 +872,37 @@ export const RecurringScheduleView = () => {
             ) : (
               <div className="space-y-4">
                 {turnosCancelados.map((turno) => (
-                  <div key={turno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h3 className="font-semibold">Clase Disponible</h3>
-                        <p className="text-sm text-muted-foreground">
-                          {turno.turno_fecha.split('-').reverse().join('/')} - 
-                          {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
-                        </p>
-                        {(() => {
-                          const createdAt = turno.creado_at || turno.created_at;
-                          const d = createdAt ? new Date(createdAt) : null;
-                          return d && !isNaN(d.valueOf()) && isAdmin ? (
-                            <p className="text-xs text-muted-foreground">
-                              Cancelado el {format(d, 'dd/MM/yyyy HH:mm', { locale: es })}
-                            </p>
-                          ) : null;
-                        })()}
-                        {/* Campo motivo_cancelacion eliminado de la tabla */}
+                  <div key={turno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors flex flex-col">
+                    <div className="flex items-start justify-between mb-3">
+                      <div className="flex items-baseline gap-2">
+                        <h3 className="font-semibold text-sm sm:text-base">Clase Disponible</h3>
+                        <span className="text-xs text-muted-foreground">
+                          {turno.turno_fecha.split('-').reverse().join('/')}
+                        </span>
                       </div>
-                      <Button
-                        variant="default"
-                        size="sm"
-                        onClick={() => handleReservarClick(turno)}
-                        disabled={turno.reservado}
-                        className="h-8 px-3"
-                      >
-                        {turno.reservado ? 'Reservado' : 'Reservar Clase'}
-                      </Button>
                     </div>
+                    <p className="text-sm text-muted-foreground mb-3">
+                      {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
+                    </p>
+                    {(() => {
+                      const createdAt = turno.creado_at || turno.created_at;
+                      const d = createdAt ? new Date(createdAt) : null;
+                      return d && !isNaN(d.valueOf()) && isAdmin ? (
+                        <p className="text-xs text-muted-foreground mb-3">
+                          Cancelado el {format(d, 'dd/MM/yyyy HH:mm', { locale: es })}
+                        </p>
+                      ) : null;
+                    })()}
+                    {/* Botón centrado en la parte inferior */}
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={() => handleReservarClick(turno)}
+                      disabled={turno.reservado || turno.canceladoPorUsuario}
+                      className="w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm"
+                    >
+                      {turno.reservado ? 'Reservado' : turno.canceladoPorUsuario ? 'No disponible' : 'Reservar Clase'}
+                    </Button>
                   </div>
                 ))}
               </div>

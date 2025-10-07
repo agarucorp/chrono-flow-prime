@@ -10,7 +10,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -74,6 +74,18 @@ const Dashboard = () => {
     }
   }, [isFirstTime, firstTimeLoading, hasCompletedSetup]);
 
+  // Escuchar evento de apertura de perfil desde la navbar mobile
+  useEffect(() => {
+    const handleProfileOpen = () => setProfileOpen(true);
+    const handleSignOutEvent = () => handleSignOut();
+    window.addEventListener('profile:open', handleProfileOpen);
+    window.addEventListener('auth:signout', handleSignOutEvent);
+    return () => {
+      window.removeEventListener('profile:open', handleProfileOpen);
+      window.removeEventListener('auth:signout', handleSignOutEvent);
+    };
+  }, []);
+
   // Si el usuario es admin y está en /user, redirigir a /admin
   useEffect(() => {
     if (!adminLoading && isAdmin) {
@@ -95,38 +107,61 @@ const Dashboard = () => {
             </div>
             
             {/* Menú de usuario */}
-            <div className="flex items-center">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="h-9 w-9 p-0 hover:bg-muted rounded-full"
-                  >
-                    <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
-                      {getInitials(user?.email || '')}
+            <div className="flex items-center gap-3">
+              {/* Botón de soporte - visible solo en desktop */}
+              <button
+                type="button"
+                aria-label="Soporte"
+                className="hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-full border border-border hover:bg-muted transition-colors"
+                onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
+              
+              {/* Avatar - visible solo en desktop */}
+              <div className="hidden sm:block">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      className="h-9 w-9 p-0 hover:bg-muted rounded-full"
+                    >
+                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
+                        {getInitials(user?.email || '')}
+                      </div>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-56">
+                    <div className="px-3 py-2">
+                      <p className="text-sm font-medium">{getUserName(user?.email || '')}</p>
+                      <p className="text-xs text-muted-foreground">{user?.email}</p>
                     </div>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56">
-                  <div className="px-3 py-2">
-                    <p className="text-sm font-medium">{getUserName(user?.email || '')}</p>
-                    <p className="text-xs text-muted-foreground">{user?.email}</p>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem className="cursor-pointer" onClick={() => setProfileOpen(true)}>
-                    <Settings className="h-4 w-4 mr-2" />
-                    Configurar Perfil
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="cursor-pointer text-destructive focus:text-destructive"
-                    onClick={handleSignOut}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Cerrar Sesión
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => setProfileOpen(true)}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Configurar Perfil
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem 
+                      className="cursor-pointer text-destructive focus:text-destructive"
+                      onClick={handleSignOut}
+                    >
+                      <LogOut className="h-4 w-4 mr-2" />
+                      Cerrar Sesión
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+              
+              {/* Botón de soporte - visible solo en mobile */}
+              <button
+                type="button"
+                aria-label="Soporte"
+                className="sm:hidden inline-flex items-center justify-center h-9 w-9 rounded-full border border-border hover:bg-muted transition-colors"
+                onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
+              >
+                <HelpCircle className="h-5 w-5" />
+              </button>
             </div>
           </div>
         </div>
@@ -178,15 +213,15 @@ const App = () => {
     >
       <TooltipProvider>
         <Toaster />
-          <BrowserRouter>
-            <Routes>
+        <BrowserRouter>
+          <Routes>
               <Route path="/" element={<Navigate to="/login" replace />} />
               <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
               <Route path="/reset-password" element={<ResetPasswordForm />} />
               <Route path="/user" element={<Dashboard />} />
               <Route path="/admin" element={<Admin />} />
-            </Routes>
-          </BrowserRouter>
+          </Routes>
+        </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
 );
