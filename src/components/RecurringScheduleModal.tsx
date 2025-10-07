@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Calendar, Clock, Check, AlertCircle } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -35,6 +34,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const [horariosSeleccionados, setHorariosSeleccionados] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [openDay, setOpenDay] = useState<number | null>(null);
+  const [isReview, setIsReview] = useState(false);
 
   // Días de la semana
   const diasSemana = [
@@ -77,6 +78,12 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     }
   };
 
+  const formatTime = (t?: string) => {
+    if (!t) return ''
+    // Espera formato HH:MM:SS → devuelve HH:MM
+    return t.slice(0, 5)
+  }
+
   const toggleHorario = (horarioId: string, diaSemana: number) => {
     setHorariosSeleccionados(prev => {
       const newSelection = new Set(prev);
@@ -100,17 +107,20 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     });
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (horariosSeleccionados.size === 0) {
       showError('Selección requerida', 'Debes seleccionar al menos un horario para tu cuota mensual');
       return;
     }
+    // Avanzar a etapa de revisión (no cierra ni inserta todavía)
+    setIsReview(true);
+  };
 
+  const handleConfirm = async () => {
     try {
       setSaving(true);
-      const loadingToast = showLoading('Configurando tu horario recurrente...');
+      const loadingToast = showLoading('Guardando horarios...');
 
-      // Crear registros de horarios recurrentes para el usuario
       const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
         const horario = horariosClase.find(h => h.id === horarioId);
         return {
@@ -137,11 +147,9 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         return;
       }
 
-      showSuccess(
-        '¡Horarios configurados!', 
-        `Has configurado ${horariosSeleccionados.size} horario(s) recurrente(s) para tu cuota mensual`
-      );
-
+      showSuccess('¡Horarios confirmados!', 'Tus horarios recurrentes fueron guardados');
+      // Notificar al panel para recargar "Mis Clases"
+      window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
       onComplete();
     } catch (error) {
       console.error('Error inesperado:', error);
@@ -177,114 +185,160 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-4xl max-h-[80vh] overflow-y-auto">
+    <Dialog open={isOpen} onOpenChange={() => undefined}>
+      <DialogContent
+        hideClose
+        className="h-[100dvh] w-[100vw] max-w-none sm:max-w-4xl sm:max-h-[85vh] sm:w-auto sm:rounded-lg p-4 sm:p-6 border-0 sm:border shadow-none sm:shadow-lg overflow-hidden flex flex-col"
+        onEscapeKeyDown={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2">
+          <DialogTitle className="flex items-center space-x-2 text-base sm:text-lg">
             <Calendar className="h-5 w-5" />
-            <span>Configura tu horario recurrente</span>
+            <span>Seteo de horario recurrente</span>
           </DialogTitle>
-          <DialogDescription>
-            Selecciona los horarios que deseas reservar de forma recurrente para tu cuota mensual. 
-            Puedes elegir máximo 1 clase por día de lunes a viernes.
-          </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Información importante */}
-          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-start space-x-2">
-              <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-              <div className="text-sm text-blue-800">
-                <p className="font-medium">Sistema de cuota mensual</p>
-                <p className="text-xs mt-1">
-                  Los horarios que selecciones se reservarán automáticamente cada mes. 
-                  Solo puedes elegir 1 clase por día para mantener la disponibilidad para otros usuarios.
-                </p>
+        <div className="space-y-6 flex-1 overflow-y-auto">
+          {!isReview && (
+            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <div className="flex items-start space-x-2">
+                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                <div className="text-sm text-blue-800">
+                  <p className="font-medium">Sistema de cuota mensual</p>
+                  <p className="text-xs mt-1">
+                    Los horarios que selecciones se reservarán automáticamente cada mes. 
+                    Solo puedes elegir 1 clase por día para mantener la disponibilidad para otros usuarios.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Selección de horarios por día */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Selección de horarios (solo en etapa 1) */}
+          {!isReview && (
+          <div className="block sm:hidden">
+            <div className="divide-y divide-border rounded-md border">
+              {diasSemana.map(dia => {
+                const horariosDelDia = getHorariosPorDia(dia.numero);
+                const abierto = openDay === dia.numero;
+                return (
+                  <div key={dia.numero}>
+                    <button
+                      type="button"
+                      className="w-full px-4 py-3 text-base font-medium flex items-center justify-between"
+                      onClick={() => setOpenDay(prev => (prev === dia.numero ? null : dia.numero))}
+                    >
+                      {dia.nombre}
+                      <span className={`transform transition-transform ${abierto ? 'rotate-180' : ''}`}>▾</span>
+                    </button>
+                    <div
+                      className={`px-4 overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-out ${abierto ? 'pb-3 max-h-96 opacity-100' : 'pb-0 max-h-0 opacity-0 pointer-events-none'}`}
+                    >
+                      {horariosDelDia.length === 0 ? (
+                        <p className="text-sm text-muted-foreground text-center py-2">No hay horarios disponibles</p>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                          {horariosDelDia.map(horario => (
+                            <Button
+                              key={horario.id}
+                              variant={isHorarioSeleccionado(horario.id) ? 'default' : 'outline'}
+                              size="sm"
+                              className="w-full justify-center text-sm h-10"
+                              onClick={() => toggleHorario(horario.id, dia.numero)}
+                            >
+                              {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                            </Button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+          )}
+
+          {!isReview && (
+          <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-4">
             {diasSemana.map(dia => {
               const horariosDelDia = getHorariosPorDia(dia.numero);
-              const tieneSeleccion = tieneHorarioEnDia(dia.numero);
-
               return (
-                <Card key={dia.numero} className={`${tieneSeleccion ? 'ring-2 ring-primary' : ''}`}>
+                <Card key={dia.numero}>
                   <CardHeader className="pb-3">
                     <CardTitle className="text-sm flex items-center justify-between">
                       <span>{dia.nombre}</span>
-                      {tieneSeleccion && (
-                        <Badge variant="default" className="text-xs">
-                          <Check className="h-3 w-3 mr-1" />
-                          Seleccionado
-                        </Badge>
-                      )}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="pt-0">
                     <div className="space-y-2">
                       {horariosDelDia.length === 0 ? (
-                        <p className="text-xs text-muted-foreground text-center py-2">
-                          No hay horarios disponibles
-                        </p>
+                        <p className="text-xs text-muted-foreground text-center py-2">No hay horarios disponibles</p>
                       ) : (
                         horariosDelDia.map(horario => (
                           <Button
                             key={horario.id}
-                            variant={isHorarioSeleccionado(horario.id) ? "default" : "outline"}
+                            variant={isHorarioSeleccionado(horario.id) ? 'default' : 'outline'}
                             size="sm"
                             className="w-full justify-start text-xs h-8"
                             onClick={() => toggleHorario(horario.id, dia.numero)}
                           >
-                            <Clock className="h-3 w-3 mr-2" />
-                            {horario.hora_inicio} - {horario.hora_fin}
+                            {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
                           </Button>
                         ))
                       )}
                     </div>
                   </CardContent>
                 </Card>
-              );
+              )
             })}
           </div>
+          )}
 
-          {/* Resumen de selección */}
-          {horariosSeleccionados.size > 0 && (
-            <div className="p-4 bg-muted/50 rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Resumen de tu selección:</h4>
-              <div className="text-sm text-muted-foreground">
-                <p>• {horariosSeleccionados.size} horario(s) seleccionado(s)</p>
-                <p>• Estos horarios se reservarán automáticamente cada mes</p>
-                <p>• Podrás modificar tu selección desde tu perfil</p>
+          {/* Etapa de revisión final */}
+          {isReview && (
+            <div className="p-4 bg-muted/50 rounded-lg space-y-3 max-w-md mx-auto">
+              <h4 className="font-medium text-sm">Resumen de clases elegidas</h4>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                {Array.from(horariosSeleccionados).map(id => {
+                  const h = horariosClase.find(x => x.id === id);
+                  const dia = diasSemana.find(d => d.numero === h?.dia_semana)?.nombre;
+                  return (
+                    <li key={id}>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</li>
+                  );
+                })}
+              </ul>
+              <div className="text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-md p-3">
+                <strong>Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
               </div>
             </div>
           )}
         </div>
 
-        <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={onClose}
-            disabled={saving}
-          >
-            Cancelar
-          </Button>
-          <Button
-            onClick={handleSave}
-            disabled={saving || horariosSeleccionados.size === 0}
-          >
-            {saving ? (
-              <>
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                Guardando...
-              </>
-            ) : (
-              `Configurar ${horariosSeleccionados.size} horario(s)`
-            )}
-          </Button>
+        <DialogFooter className={isReview ? 'flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-2' : undefined}>
+          {!isReview ? (
+            <Button onClick={handleSave} disabled={saving || horariosSeleccionados.size === 0}>
+              Guardar y continuar
+            </Button>
+          ) : (
+            <>
+              <Button variant="outline" onClick={() => setIsReview(false)} disabled={saving}>
+                Volver al paso anterior
+              </Button>
+              <Button onClick={handleConfirm} disabled={saving}>
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    Guardando...
+                  </>
+                ) : (
+                  'Confirmar horarios'
+                )}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -87,6 +87,8 @@ export const RecurringScheduleView = () => {
     return timeString.substring(0, 5); // Toma solo HH:mm
   };
 
+  const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
   // Función para cambiar la vista activa y guardarla en localStorage
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles') => {
     setActiveView(view);
@@ -222,6 +224,16 @@ export const RecurringScheduleView = () => {
       cargarHorariosRecurrentes();
     }
   }, [user?.id]);
+
+  // Escuchar actualización desde el modal y recargar inmediatamente
+  useEffect(() => {
+    const handler = () => {
+      cargarHorariosRecurrentes(true);
+      cargarClasesDelMes(true);
+    };
+    window.addEventListener('horariosRecurrentes:updated', handler);
+    return () => window.removeEventListener('horariosRecurrentes:updated', handler);
+  }, []);
 
   // Cargar clases del mes (horarios recurrentes + turnos variables)
   const cargarClasesDelMes = async (forceReload = false) => {
@@ -564,7 +576,7 @@ export const RecurringScheduleView = () => {
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <h3 className="text-lg font-semibold min-w-[200px] text-center">
-              {format(currentMonth, 'MMMM yyyy', { locale: es })}
+              {capitalize(format(currentMonth, 'MMMM yyyy', { locale: es }))}
             </h3>
             <Button
               variant="outline"
@@ -578,6 +590,7 @@ export const RecurringScheduleView = () => {
           </div>
 
           {/* Calendario de Mis Clases */}
+          <div className="w-full md:w-[55%] mx-auto">
           <Card>
             <CardContent className="p-0">
               {horariosRecurrentes.length === 0 ? (
@@ -587,17 +600,19 @@ export const RecurringScheduleView = () => {
                 </div>
               ) : (
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full table-fixed">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Fecha</th>
-                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Día</th>
-                        <th className="p-4 text-left font-medium text-sm text-muted-foreground">Horario</th>
-                        <th className="p-4 text-center font-medium text-sm text-muted-foreground hidden md:table-cell">Acciones</th>
+                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-1/5">Fecha</th>
+                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-2/5">Día</th>
+                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-2/5">Horario</th>
+                        <th className="px-4 py-3 text-center font-medium text-sm text-muted-foreground hidden md:table-cell w-[140px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {diasDelMes.map((dia, index) => {
+                        // Ocultar días anteriores a la fecha actual para evitar cancelaciones retroactivas
+                        if (isFechaPasada(dia)) return null;
                         const clasesDelDia = clasesDelMes.filter(clase => 
                           isSameDay(clase.dia, dia)
                         );
@@ -613,7 +628,7 @@ export const RecurringScheduleView = () => {
                             }`}
                             onClick={() => handleClaseClick(clase)}
                           >
-                            <td className="p-4">
+                            <td className="px-4 py-3">
                               <div className="text-sm font-medium">
                                 {format(dia, 'dd/MM', { locale: es })}
                               </div>
@@ -623,12 +638,12 @@ export const RecurringScheduleView = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="p-4">
+                            <td className="px-4 py-3">
                               <div className="text-sm text-muted-foreground">
                                 {format(dia, 'EEEE', { locale: es })}
                               </div>
                             </td>
-                            <td className="p-4">
+                            <td className="px-4 py-3">
                               <span className={`text-sm font-medium ${
                                 clase.horario.cancelada 
                                   ? 'text-red-600 dark:text-red-400 line-through' 
@@ -644,7 +659,7 @@ export const RecurringScheduleView = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="p-4 text-center hidden md:table-cell">
+                            <td className="px-4 py-3 text-center hidden md:table-cell">
                               <Button
                                 variant="outline"
                                 size="sm"
@@ -667,6 +682,7 @@ export const RecurringScheduleView = () => {
               )}
             </CardContent>
           </Card>
+          </div>
         </>
       )}
 
