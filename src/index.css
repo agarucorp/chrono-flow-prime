@@ -104,6 +104,24 @@ All colors MUST be HSL.
   }
 }
 
+/* Animación de transición para cambios de vista en navbar mobile */
+@keyframes viewSwapBounce {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  60% { opacity: 1; transform: translateY(-2px) scale(1.01); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.animate-view-swap {
+  animation: viewSwapBounce 280ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Más lento en mobile */
+@media (max-width: 640px) {
+  .animate-view-swap {
+    animation-duration: 480ms; /* ~1.7x más lento en mobile */
+  }
+}
+
 @layer base {
   * {
     @apply border-border;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, X } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -65,10 +65,10 @@ export const RecurringScheduleView = () => {
   const [turnoToReserve, setTurnoToReserve] = useState<any>(null);
   const [confirmingReserva, setConfirmingReserva] = useState(false);
   const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles'>(() => {
+  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>(() => {
     // Recuperar la vista activa del localStorage
     const savedView = localStorage.getItem('activeView');
-    return (savedView as 'mis-clases' | 'turnos-disponibles') || 'mis-clases';
+    return (savedView as 'mis-clases' | 'turnos-disponibles' | 'perfil') || 'mis-clases';
   });
   const [clasesDelMes, setClasesDelMes] = useState<any[]>(() => {
     // Recuperar clases del mes del localStorage
@@ -90,7 +90,7 @@ export const RecurringScheduleView = () => {
   const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
   // Función para cambiar la vista activa y guardarla en localStorage
-  const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles') => {
+  const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
     setActiveView(view);
     localStorage.setItem('activeView', view);
   };
@@ -560,7 +560,7 @@ export const RecurringScheduleView = () => {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            Turnos Disponibles
+            Vacantes
           </button>
         </div>
         </div>
@@ -568,27 +568,43 @@ export const RecurringScheduleView = () => {
         {/* Mobile bottom floating navbar (unified like desktop) */}
         <div className="block sm:hidden">
           <nav className="fixed bottom-4 left-0 right-0 z-40 pointer-events-none">
-            <div className="max-w-7xl mx-auto px-4 flex justify-center">
-              <div className="flex space-x-1 bg-background border border-border p-1 rounded-full shadow-lg pointer-events-auto">
+            <div className="max-w-7xl mx-auto px-6 flex justify-center">
+              <div className="flex items-center gap-2 bg-black/40 backdrop-blur-lg rounded-full shadow-lg pointer-events-auto px-3 py-1.5">
+                {/* Mis Clases */}
                 <button
                   onClick={() => handleViewChange('mis-clases')}
-                  className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
-                    activeView === 'mis-clases'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
+                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
+                    activeView === 'mis-clases' ? 'text-primary' : 'text-muted-foreground'
                   }`}
+                  aria-current={activeView === 'mis-clases'}
                 >
-                  Mis Clases
+                  <Dumbbell className={`h-5 w-5 ${activeView === 'mis-clases' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  {activeView === 'mis-clases' && <span className="leading-none">Mis Clases</span>}
+                  {activeView === 'mis-clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
                 </button>
+                {/* Vacantes */}
                 <button
                   onClick={() => handleViewChange('turnos-disponibles')}
-                  className={`px-4 py-2 rounded-full text-xs font-medium transition-colors ${
-                    activeView === 'turnos-disponibles'
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:text-foreground'
-                }`}
+                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
+                    activeView === 'turnos-disponibles' ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                  aria-current={activeView === 'turnos-disponibles'}
                 >
-                  Turnos Disponibles
+                  <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  {activeView === 'turnos-disponibles' && <span className="leading-none">Vacantes</span>}
+                  {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
+                </button>
+                {/* Perfil */}
+                <button
+                  onClick={() => handleViewChange('perfil')}
+                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
+                    activeView === 'perfil' ? 'text-primary' : 'text-muted-foreground'
+                  }`}
+                  aria-current={activeView === 'perfil'}
+                >
+                  <UserIcon className={`h-5 w-5 ${activeView === 'perfil' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  {activeView === 'perfil' && <span className="leading-none">Perfil</span>}
+                  {activeView === 'perfil' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
                 </button>
               </div>
             </div>
@@ -600,7 +616,7 @@ export const RecurringScheduleView = () => {
       {activeView === 'mis-clases' && (
         <>
           {/* Navegación del mes */}
-          <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0">
+          <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0 animate-view-swap">
             <Button
               variant="outline"
               size="sm"
@@ -625,7 +641,7 @@ export const RecurringScheduleView = () => {
           </div>
 
           {/* Calendario de Mis Clases */}
-          <div className="w-full md:w-[55%] mx-auto">
+          <div className="w-full md:w-[55%] mx-auto animate-view-swap">
           <Card>
             <CardContent className="p-0">
               {horariosRecurrentes.length === 0 ? (
@@ -723,7 +739,7 @@ export const RecurringScheduleView = () => {
 
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (
-        <div className="w-full md:w-[55%] mx-auto">
+        <div className="w-full md:w-[55%] mx-auto animate-view-swap">
         <Card>
           <CardHeader>
             <CardTitle>Turnos Cancelados Disponibles</CardTitle>
