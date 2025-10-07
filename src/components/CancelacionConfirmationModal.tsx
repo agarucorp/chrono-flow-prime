@@ -32,7 +32,7 @@ export const CancelacionConfirmationModal: React.FC<CancelacionConfirmationModal
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 sm:fixed sm:bottom-4 sm:left-4 sm:top-auto sm:transform-none">
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2 text-destructive">
             <AlertTriangle className="h-5 w-5" />

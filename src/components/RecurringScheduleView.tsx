@@ -335,28 +335,32 @@ export const RecurringScheduleView = () => {
     const diaSemana = dia.getDay();
     const horariosDelDia = horariosRecurrentes.filter(horario => horario.dia_semana === diaSemana);
     
-    // Verificar cancelaciones para cada horario en esta fecha específica
-    const clasesConCancelaciones = await Promise.all(
-      horariosDelDia.map(async (horario) => {
-        const { data: cancelacion } = await supabase
-          .from('turnos_cancelados')
-          .select('id')
-          .eq('cliente_id', user?.id)
-          .eq('turno_fecha', format(dia, 'yyyy-MM-dd'))
-          .eq('turno_hora_inicio', horario.hora_inicio)
-          .eq('turno_hora_fin', horario.hora_fin)
-          .single();
+    if (horariosDelDia.length === 0) return [];
 
-        return {
-          id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
-          dia,
-          horario: {
-            ...horario,
-            cancelada: !!cancelacion
-          }
-        };
-      })
+    // Obtener todas las cancelaciones del día de una sola vez
+    const { data: cancelaciones } = await supabase
+      .from('turnos_cancelados')
+      .select('turno_hora_inicio, turno_hora_fin')
+      .eq('cliente_id', user?.id)
+      .eq('turno_fecha', format(dia, 'yyyy-MM-dd'));
+
+    // Crear un Set para búsqueda rápida de cancelaciones
+    const cancelacionesSet = new Set(
+      cancelaciones?.map(c => `${c.turno_hora_inicio}-${c.turno_hora_fin}`) || []
     );
+
+    // Mapear horarios con su estado de cancelación
+    const clasesConCancelaciones = horariosDelDia.map((horario) => {
+      const claveCancelacion = `${horario.hora_inicio}-${horario.hora_fin}`;
+      return {
+        id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+        dia,
+        horario: {
+          ...horario,
+          cancelada: cancelacionesSet.has(claveCancelacion)
+        }
+      };
+    });
 
     return clasesConCancelaciones;
   };
@@ -563,8 +567,6 @@ export const RecurringScheduleView = () => {
 
         {/* Mobile bottom floating navbar (unified like desktop) */}
         <div className="block sm:hidden">
-          {/* Spacer to avoid content behind the floating navbar */}
-          <div className="h-20" />
           <nav className="fixed bottom-4 left-0 right-0 z-40 pointer-events-none">
             <div className="max-w-7xl mx-auto px-4 flex justify-center">
               <div className="flex space-x-1 bg-background border border-border p-1 rounded-full shadow-lg pointer-events-auto">
@@ -598,7 +600,7 @@ export const RecurringScheduleView = () => {
       {activeView === 'mis-clases' && (
         <>
           {/* Navegación del mes */}
-          <div className="flex items-center justify-center space-x-4">
+          <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0">
             <Button
               variant="outline"
               size="sm"
@@ -636,10 +638,10 @@ export const RecurringScheduleView = () => {
                   <table className="w-full table-fixed">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-1/5">Fecha</th>
-                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-2/5">Día</th>
-                        <th className="px-4 py-3 text-left font-medium text-sm text-muted-foreground w-2/5">Horario</th>
-                        <th className="px-4 py-3 text-center font-medium text-sm text-muted-foreground hidden md:table-cell w-[140px]">Acciones</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-1/4 sm:w-1/3">Fecha</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-1/4 sm:w-1/3">Día</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-2/5 sm:w-1/3">Horario</th>
+                        <th className="px-4 py-3 text-center font-medium text-xs sm:text-sm text-muted-foreground hidden md:table-cell w-[140px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -661,8 +663,8 @@ export const RecurringScheduleView = () => {
                             }`}
                             onClick={() => handleClaseClick(clase)}
                           >
-                            <td className="px-4 py-3">
-                              <div className="text-sm font-medium">
+                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
+                              <div className="text-xs sm:text-sm font-medium">
                                 {format(dia, 'dd/MM', { locale: es })}
                               </div>
                               {clase.horario.cancelada && (
@@ -671,13 +673,13 @@ export const RecurringScheduleView = () => {
                                 </div>
                               )}
                             </td>
-                            <td className="px-4 py-3">
-                              <div className="text-sm text-muted-foreground">
+                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
+                              <div className="text-xs sm:text-sm text-muted-foreground">
                                 {format(dia, 'EEEE', { locale: es })}
                               </div>
                             </td>
-                            <td className="px-4 py-3">
-                              <span className={`text-sm font-medium ${
+                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
+                              <span className={`text-xs sm:text-sm font-medium ${
                                 clase.horario.cancelada 
                                   ? 'text-red-600 dark:text-red-400 line-through' 
                                   : clase.horario.esVariable
@@ -700,7 +702,7 @@ export const RecurringScheduleView = () => {
                                   e.stopPropagation();
                                   handleClaseClick(clase);
                                 }}
-                                className="h-8 px-3"
+                                className="h-8 px-3 text-xs sm:text-sm"
                                 disabled={clase.horario.cancelada}
                               >
                                 {clase.horario.cancelada ? 'Cancelada' : 'Ver Detalles'}
@@ -721,6 +723,7 @@ export const RecurringScheduleView = () => {
 
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (
+        <div className="w-full md:w-[55%] mx-auto">
         <Card>
           <CardHeader>
             <CardTitle>Turnos Cancelados Disponibles</CardTitle>
@@ -773,6 +776,7 @@ export const RecurringScheduleView = () => {
             )}
           </CardContent>
         </Card>
+        </div>
       )}
 
       {/* Modal de detalles de la clase */}
