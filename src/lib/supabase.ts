@@ -14,7 +14,20 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: true,
     storageKey: 'cfp_supabase_auth',
-  }
+  },
+  global: {
+    headers: {
+      'x-application-name': 'chrono-flow-prime',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 })
 
 // Tipos para la autenticación

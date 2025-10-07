@@ -228,20 +228,54 @@ export const RecurringScheduleView = () => {
     if (!user?.id) return;
     
     try {
+      // Verificar que haya sesión activa antes de hacer la consulta
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.log('No hay sesión activa, no se puede cargar perfil');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('profiles')
         .select('full_name, first_name, last_name, phone, birth_date')
         .eq('id', user.id)
-        .single();
+        .maybeSingle();
       
       if (error) {
         console.error('Error al cargar perfil:', error);
+        // Usar datos del user_metadata como fallback
+        setProfileData({
+          full_name: user?.user_metadata?.full_name,
+          first_name: user?.user_metadata?.first_name,
+          last_name: user?.user_metadata?.last_name,
+          phone: user?.user_metadata?.phone,
+          birth_date: user?.user_metadata?.birth_date
+        });
         return;
       }
       
-      setProfileData(data);
+      if (data) {
+        setProfileData(data);
+      } else {
+        // Si no hay datos en la tabla, usar user_metadata
+        setProfileData({
+          full_name: user?.user_metadata?.full_name,
+          first_name: user?.user_metadata?.first_name,
+          last_name: user?.user_metadata?.last_name,
+          phone: user?.user_metadata?.phone,
+          birth_date: user?.user_metadata?.birth_date
+        });
+      }
     } catch (error) {
       console.error('Error al cargar perfil:', error);
+      // Usar datos del user_metadata como fallback
+      setProfileData({
+        full_name: user?.user_metadata?.full_name,
+        first_name: user?.user_metadata?.first_name,
+        last_name: user?.user_metadata?.last_name,
+        phone: user?.user_metadata?.phone,
+        birth_date: user?.user_metadata?.birth_date
+      });
     }
   };
 

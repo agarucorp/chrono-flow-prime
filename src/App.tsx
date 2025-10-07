@@ -112,10 +112,10 @@ const Dashboard = () => {
               <button
                 type="button"
                 aria-label="Soporte"
-                className="hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-full border border-border hover:bg-muted transition-colors"
+                className="hidden sm:inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-all duration-200 hover:scale-105 group"
                 onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
               >
-                <HelpCircle className="h-5 w-5" />
+                <HelpCircle className="h-5 w-5 text-primary group-hover:text-primary transition-colors" />
               </button>
               
               {/* Avatar - visible solo en desktop */}
@@ -157,10 +157,10 @@ const Dashboard = () => {
               <button
                 type="button"
                 aria-label="Soporte"
-                className="sm:hidden inline-flex items-center justify-center h-9 w-9 rounded-full border border-border hover:bg-muted transition-colors"
+                className="sm:hidden inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 group"
                 onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
               >
-                <HelpCircle className="h-5 w-5" />
+                <HelpCircle className="h-5 w-5 text-primary transition-colors" />
               </button>
             </div>
           </div>
