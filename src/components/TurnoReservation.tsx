@@ -269,7 +269,7 @@ export const TurnoReservation = () => {
       await supabase
         .from('turnos_cancelados')
         .insert({
-          cliente_id: user?.id,
+          cliente_id: user?.id as string,
           turno_fecha: turno.fecha,
           turno_hora_inicio: turno.hora_inicio,
           turno_hora_fin: turno.hora_fin,

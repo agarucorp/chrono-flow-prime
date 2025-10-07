@@ -184,17 +184,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         console.error('Error cargando turnos variables:', errorVariables);
       }
 
-      // Cargar turnos cancelados
+      // Cargar turnos cancelados (sin embeds para evitar 406 si falta FK)
       const { data: turnosCancelados, error: errorCancelados } = await supabase
         .from('turnos_cancelados')
-        .select(`
-          id,
-          turno_fecha,
-          turno_hora_inicio,
-          turno_hora_fin,
-          cliente_id,
-          profiles!inner(full_name, email, phone)
-        `)
+        .select('id, turno_fecha, turno_hora_inicio, turno_hora_fin, cliente_id')
         .eq('turno_fecha', fechaActual);
 
 
