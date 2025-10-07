@@ -9,7 +9,11 @@ console.log('🔗 Conectando a Supabase:', supabaseUrl)
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    flowType: 'pkce'
+    flowType: 'pkce',
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true,
+    storageKey: 'cfp_supabase_auth',
   }
 })
 

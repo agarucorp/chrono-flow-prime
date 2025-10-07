@@ -41,11 +41,24 @@ export const useAuth = () => {
     // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setAuthState({
-          user: session?.user || null,
-          loading: false,
-          error: null
-        })
+        if (event === 'TOKEN_REFRESHED') {
+          setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+          return
+        }
+        if (event === 'SIGNED_OUT') {
+          setAuthState({ user: null, loading: false, error: null })
+          return
+        }
+        if (event === 'USER_DELETED') {
+          setAuthState({ user: null, loading: false, error: null })
+          return
+        }
+        if (event === 'USER_UPDATED') {
+          setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+          return
+        }
+        // Fallback para otros eventos
+        setAuthState({ user: session?.user || null, loading: false, error: null })
       }
     )
 
@@ -81,13 +94,17 @@ export const useAuth = () => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
       
-      const { data, error } = await supabase.auth.signUp({
+      const siteUrl = import.meta.env.VITE_SITE_URL as string | undefined
+      const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/login`,
-          data: metadata
+          data: metadata,
+          ...(siteUrl ? { emailRedirectTo: `${siteUrl}/login` } : {})
         }
+      }
+      const { data, error } = await supabase.auth.signUp({
+        ...signUpOptions
       })
       
       if (error) throw error
