@@ -17,7 +17,8 @@ import {
   Settings,
   Clock,
   LogOut,
-  X
+  X,
+  Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -64,15 +65,6 @@ export default function Admin() {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
-  // Obtener el mes actual en formato YYYY-MM
-  const getCurrentMonth = () => {
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    return `${year}-${month}`;
-  };
-
-  const [filterPeriod, setFilterPeriod] = useState<'all' | '2024-09' | '2024-10' | '2024-11' | '2024-12' | '2025-01' | '2025-02' | '2025-03' | '2025-04' | '2025-05' | '2025-06' | '2025-07' | '2025-08' | '2025-09' | '2025-10' | '2025-11' | '2025-12'>(getCurrentMonth() as any);
   const [filterPaymentStatus, setFilterPaymentStatus] = useState<'all' | 'paid' | 'pending'>('all');
   
 
@@ -255,26 +247,32 @@ export default function Admin() {
 
   // Filtrar usuarios según búsqueda y filtros
   const filteredUsers = allUsers.filter(user => {
+    // Excluir administradores - solo mostrar clientes
+    if (user.role === 'admin') return false;
+    
     const matchesSearch = user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     
-    // Filtro de período por mes específico
-    let matchesPeriod = true;
-    if (filterPeriod !== 'all') {
-      const [year, month] = filterPeriod.split('-');
-      const userDate = new Date(user.created_at);
-      matchesPeriod = userDate.getFullYear() === parseInt(year) &&
-                     userDate.getMonth() + 1 === parseInt(month);
-    }
-    
     // Por ahora, el filtro de estado de pago no está implementado
     // Se puede agregar cuando se conecte con la tabla de pagos
     const matchesPaymentStatus = true; // TODO: Implementar filtro de estado de pago
     
-    return matchesSearch && matchesRole && matchesPeriod && matchesPaymentStatus;
+    return matchesSearch && matchesRole && matchesPaymentStatus;
   });
+
+  // Debug: Mostrar información de usuarios en consola
+  useEffect(() => {
+    console.log('📋 Estado de usuarios en Admin.tsx:', {
+      totalUsuarios: allUsers.length,
+      usuariosFiltrados: filteredUsers.length,
+      roles: allUsers.reduce((acc, u) => {
+        acc[u.role] = (acc[u.role] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>)
+    });
+  }, [allUsers, filteredUsers]);
 
   // Cambiar rol de usuario
   const handleRoleChange = async (userId: string, newRole: 'client' | 'admin') => {
@@ -410,10 +408,14 @@ export default function Admin() {
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
           <div className="w-full max-w-full overflow-x-auto">
-            <TabsList className="grid w-full grid-cols-3 min-w-0">
+            <TabsList className="grid w-full grid-cols-4 min-w-0">
               <TabsTrigger value="usuarios" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
                 <Users className="hidden sm:block h-4 w-4 flex-shrink-0" />
                 <span className="truncate">Usuarios</span>
+              </TabsTrigger>
+              <TabsTrigger value="balance" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
+                <Wallet className="hidden sm:block h-4 w-4 flex-shrink-0" />
+                <span className="truncate">Balance</span>
               </TabsTrigger>
               <TabsTrigger value="turnos" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
                 <Settings className="hidden sm:block h-4 w-4 flex-shrink-0" />
@@ -435,68 +437,33 @@ export default function Admin() {
             {/* Search and Filters */}
             <Card className="mb-6">
               <CardContent className="pt-6">
-                <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
                   {/* Búsqueda */}
-                  <div className="flex flex-col gap-4">
-                    <div className="flex-1 relative">
-                      <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                      <Input
-                        id="search-users"
-                        name="search-users"
-                        placeholder="Buscar..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="pl-10 w-full placeholder:text-[2px] sm:placeholder:text-sm"
-                      />
-                    </div>
+                  <div className="relative w-full sm:w-80">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="search-users"
+                      name="search-users"
+                      placeholder="Buscar..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10 w-full placeholder:text-[2px] sm:placeholder:text-sm"
+                    />
                   </div>
 
-                  {/* Filtros adicionales */}
-                  <div className="flex flex-col gap-4">
-                    <div className="flex flex-col sm:flex-row gap-4">
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
-                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Período:</span>
-                        <Select value={filterPeriod} onValueChange={(value: any) => setFilterPeriod(value)}>
-                          <SelectTrigger className="w-full sm:w-48">
-                            <SelectValue placeholder="Seleccionar período" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos los períodos</SelectItem>
-                            <SelectItem value="2024-09">Septiembre 2024</SelectItem>
-                            <SelectItem value="2024-10">Octubre 2024</SelectItem>
-                            <SelectItem value="2024-11">Noviembre 2024</SelectItem>
-                            <SelectItem value="2024-12">Diciembre 2024</SelectItem>
-                            <SelectItem value="2025-01">Enero 2025</SelectItem>
-                            <SelectItem value="2025-02">Febrero 2025</SelectItem>
-                            <SelectItem value="2025-03">Marzo 2025</SelectItem>
-                            <SelectItem value="2025-04">Abril 2025</SelectItem>
-                            <SelectItem value="2025-05">Mayo 2025</SelectItem>
-                            <SelectItem value="2025-06">Junio 2025</SelectItem>
-                            <SelectItem value="2025-07">Julio 2025</SelectItem>
-                            <SelectItem value="2025-08">Agosto 2025</SelectItem>
-                            <SelectItem value="2025-09">Septiembre 2025</SelectItem>
-                            <SelectItem value="2025-10">Octubre 2025</SelectItem>
-                            <SelectItem value="2025-11">Noviembre 2025</SelectItem>
-                            <SelectItem value="2025-12">Diciembre 2025</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-
-                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
-                        <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Estado de Pago:</span>
-                        <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
-                          <SelectTrigger className="w-full sm:w-48">
-                            <SelectValue placeholder="Seleccionar estado" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="all">Todos los estados</SelectItem>
-                            <SelectItem value="paid">Pagado</SelectItem>
-                            <SelectItem value="pending">Pendiente</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
+                  {/* Estado de Pago */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
+                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Estado de Pago:</span>
+                    <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Seleccionar estado" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Todos los estados</SelectItem>
+                        <SelectItem value="paid">Pagado</SelectItem>
+                        <SelectItem value="pending">Pendiente</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </CardContent>
@@ -510,12 +477,10 @@ export default function Admin() {
               <CardContent className="p-0 w-full max-w-full">
                 {/* Vista de escritorio - Tabla completa */}
                 <div className="hidden md:block overflow-x-auto w-full max-w-full">
-                  <table className="w-full min-w-[600px]">
+                  <table className="w-full min-w-[400px]">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium min-w-[200px]">Usuario</th>
-                        <th className="text-left p-3 font-medium min-w-[200px]">Email</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Rol</th>
                         <th className="text-left p-3 font-medium min-w-[100px]">Pago</th>
                         <th className="text-left p-3 font-medium min-w-[120px]">Acciones</th>
                       </tr>
@@ -527,17 +492,6 @@ export default function Admin() {
                             <div className="min-w-0">
                               <p className="font-medium truncate">{getDisplayFullName(user)}</p>
                             </div>
-                          </td>
-                          <td className="p-3">
-                            <p className="text-sm truncate max-w-[180px]" title={user.email}>{user.email}</p>
-                          </td>
-                          <td className="p-3">
-                            <Badge 
-                              variant={user.role === 'admin' ? 'default' : 'secondary'}
-                              className={`${user.role === 'admin' ? 'bg-yellow-500 hover:bg-yellow-600' : ''} text-xs`}
-                            >
-                              {user.role === 'admin' ? 'Admin' : 'Cliente'}
-                            </Badge>
                           </td>
                           <td className="p-3">
                             <p className="text-sm text-muted-foreground">—</p>
@@ -668,11 +622,38 @@ export default function Admin() {
                 </div>
                 
                 {filteredUsers.length === 0 && (
-                  <div className="text-center py-8">
+                  <div className="text-center py-8 px-4">
                     <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground">No se encontraron usuarios</p>
+                    <p className="text-lg font-medium mb-2">No se encontraron clientes</p>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      {allUsers.length === 0 
+                        ? 'No hay usuarios registrados en la base de datos'
+                        : `Se encontraron ${allUsers.length} usuarios totales (todos son administradores)`
+                      }
+                    </p>
+                    <div className="text-xs text-muted-foreground space-y-1 max-w-md mx-auto">
+                      <p>• Revisa la consola del navegador para más detalles</p>
+                      <p>• Verifica las políticas RLS en Supabase</p>
+                      <p>• Asegúrate de que hay usuarios con role='client'</p>
+                    </div>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          {/* Tab de Balance */}
+          <TabsContent value="balance" className="mt-6 w-full max-w-full pb-24">
+            <Card>
+              <CardHeader>
+                <CardTitle>Balance de Pagos</CardTitle>
+                <CardDescription>Gestiona los pagos y balances de los usuarios</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">Sección de balance en construcción</p>
+                </div>
               </CardContent>
             </Card>
           </TabsContent>

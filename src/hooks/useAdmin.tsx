@@ -28,34 +28,74 @@ export const useAdmin = () => {
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
+        console.log('❌ No hay usuario autenticado');
         setIsAdmin(false);
         setIsLoading(false);
         return;
       }
 
       try {
-        console.log('Verificando admin para usuario:', user.email, 'ID:', user.id);
-        
+        console.log('🔍 Verificando admin para usuario:', {
+          email: user.email,
+          id: user.id,
+          aud: user.aud,
+          role: user.role
+        });
+
+        // Verificar primero la sesión de Supabase
+        const { data: session, error: sessionError } = await supabase.auth.getSession();
+        console.log('📱 Sesión actual:', { session: session.data?.session?.user?.email, error: sessionError });
+
+        // Intentar consulta por ID
         const { data, error } = await supabase
           .from('profiles')
           .select('id, email, role, created_at')
           .eq('id', user.id)
           .single();
 
-        console.log('Respuesta de la consulta:', { data, error });
+        console.log('📊 Respuesta de la consulta por ID:', { data, error });
 
-        if (error) {
-          console.error('Error verificando rol de admin:', error);
-          setIsAdmin(false);
-        } else {
-          const isUserAdmin = data?.role === 'admin';
+        // Si falla por ID, intentar por email
+        if (error && user.email) {
+          console.log('🔄 Reintentando consulta por email...');
+          const { data: emailData, error: emailError } = await supabase
+            .from('profiles')
+            .select('id, email, role, created_at')
+            .eq('email', user.email)
+            .single();
+
+          console.log('📧 Respuesta de la consulta por email:', { data: emailData, error: emailError });
+
+          if (!emailError && emailData) {
+            const isUserAdmin = emailData.role === 'admin';
+            setIsAdmin(isUserAdmin);
+            console.log('✅ Usuario encontrado por email:', emailData);
+            console.log('✅ Admin status:', isUserAdmin, 'for user:', user.email);
+          } else {
+            console.error('❌ Error en ambas consultas:', { error, emailError });
+            // Fallback: verificar admin por email
+            const isAdminByEmail = checkAdminByEmail(user.email || '');
+            setIsAdmin(isAdminByEmail);
+            console.log('🔄 Usando verificación por email como fallback:', isAdminByEmail);
+          }
+        } else if (!error && data) {
+          const isUserAdmin = data.role === 'admin';
           setIsAdmin(isUserAdmin);
-          console.log('Usuario encontrado:', data);
-          console.log('Admin status:', isUserAdmin, 'for user:', user.email);
+          console.log('✅ Usuario encontrado por ID:', data);
+          console.log('✅ Admin status:', isUserAdmin, 'for user:', user.email);
+        } else {
+          console.error('❌ Error verificando rol de admin:', error);
+          // Fallback: verificar admin por email
+          const isAdminByEmail = checkAdminByEmail(user.email || '');
+          setIsAdmin(isAdminByEmail);
+          console.log('🔄 Usando verificación por email como fallback:', isAdminByEmail);
         }
       } catch (err) {
-        console.error('Error inesperado verificando admin:', err);
-        setIsAdmin(false);
+        console.error('❌ Error inesperado verificando admin:', err);
+        // Fallback final: verificar admin por email
+        const isAdminByEmail = checkAdminByEmail(user?.email || '');
+        setIsAdmin(isAdminByEmail);
+        console.log('🔄 Usando verificación por email como fallback final:', isAdminByEmail);
       } finally {
         setIsLoading(false);
       }
@@ -95,7 +135,12 @@ export const useAdmin = () => {
 
   // Obtener todos los usuarios (solo para admins)
   const fetchAllUsers = useCallback(async () => {
-    if (!isAdmin) return;
+    if (!isAdmin) {
+      console.log('❌ No se puede obtener usuarios: no eres admin');
+      return;
+    }
+
+    console.log('🔄 Obteniendo todos los usuarios de Supabase...');
 
     try {
       const { data, error } = await supabase
@@ -103,10 +148,26 @@ export const useAdmin = () => {
         .select('id, email, role, created_at, full_name, first_name, last_name, phone')
         .order('created_at', { ascending: false });
 
+      console.log('📊 Respuesta de Supabase:', { 
+        total: data?.length || 0, 
+        error: error?.message,
+        usuarios: data 
+      });
+
       if (error) {
-        console.error('Error obteniendo usuarios:', error);
+        console.error('❌ Error obteniendo usuarios:', error);
         return;
       }
+
+      if (!data || data.length === 0) {
+        console.warn('⚠️ No se encontraron usuarios en la base de datos');
+        setAllUsers([]);
+        return;
+      }
+
+      console.log(`✅ Se encontraron ${data.length} usuarios en total`);
+      const clientes = data.filter(u => u.role === 'client');
+      console.log(`👥 De los cuales ${clientes.length} son clientes`);
 
       // Obtener horarios para cada usuario de manera individual
       const usersWithHorarios = await Promise.all(
@@ -120,8 +181,9 @@ export const useAdmin = () => {
       );
 
       setAllUsers(usersWithHorarios);
+      console.log('✅ Usuarios cargados exitosamente');
     } catch (err) {
-      console.error('Error inesperado obteniendo usuarios:', err);
+      console.error('❌ Error inesperado obteniendo usuarios:', err);
     }
   }, [isAdmin, fetchUserHorarios]);
 
@@ -207,6 +269,11 @@ export const useAdmin = () => {
       'agaru.corp@gmail.com' // ✅ Email admin principal
     ];
     return adminEmails.includes(email.toLowerCase());
+  };
+
+  // Función de emergencia para verificar admin por email
+  const checkAdminByEmail = (email: string): boolean => {
+    return email === 'agaru.corp@gmail.com';
   };
 
   return {
