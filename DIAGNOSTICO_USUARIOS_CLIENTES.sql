@@ -132,3 +132,4 @@ SELECT
   (SELECT COUNT(*) FROM public.profiles WHERE role = 'client') as total_clientes,
   (SELECT COUNT(*) FROM public.profiles WHERE role = 'client' AND is_active = true) as clientes_activos;
 
+

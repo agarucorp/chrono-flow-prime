@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -8,7 +8,8 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, Calendar, Edit3, X, Plus } from 'lucide-react';
+import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
+import { supabase } from '@/lib/supabase';
 
 interface HorarioClase {
   id: number;
@@ -31,6 +32,18 @@ interface AusenciaPeriodo {
   fechaHasta: string;
 }
 
+interface HorarioSemanal {
+  id: string;
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fin: string;
+  capacidad: number;
+  alumnos_agendados: number;
+  activo: boolean;
+}
+
+const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
@@ -48,26 +61,56 @@ export const TurnoManagement = () => {
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [isCapacidadDialogOpen, setIsCapacidadDialogOpen] = useState(false);
   const [capacidadValor, setCapacidadValor] = useState<string>('');
+  const [horariosSemanales, setHorariosSemanales] = useState<HorarioSemanal[]>([]);
+  const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [isTarifaDialogOpen, setIsTarifaDialogOpen] = useState(false);
   const [tarifaValor, setTarifaValor] = useState<string>('');
   const { actualizarConfiguracionCapacidad, obtenerCapacidadActual, cargarConfiguraciones, actualizarConfiguracionTarifas, obtenerTarifaActual } = useSystemConfig();
   const { toast } = useToast();
 
-  const abrirCapacidad = () => {
-    const actual = obtenerCapacidadActual();
-    setCapacidadValor(String(actual || 1));
+  // Cargar horarios semanales
+  const cargarHorariosSemanales = async () => {
+    setLoadingHorarios(true);
+    try {
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('*')
+        .order('dia_semana')
+        .order('hora_inicio');
+
+      if (error) throw error;
+      setHorariosSemanales(data || []);
+    } catch (error) {
+      console.error('Error cargando horarios:', error);
+      toast({ title: 'Error', description: 'No se pudieron cargar los horarios', variant: 'destructive' });
+    } finally {
+      setLoadingHorarios(false);
+    }
+  };
+
+  const abrirCapacidad = async () => {
+    await cargarHorariosSemanales();
     setIsCapacidadDialogOpen(true);
   };
 
-  const guardarCapacidad = async () => {
-    const numero = Math.max(1, parseInt(capacidadValor || '1', 10));
-    const { success, error } = await actualizarConfiguracionCapacidad({ tipo_clase: 'general', max_alumnos_por_clase: numero, activo: true as any });
-    if (!success) {
-      toast({ title: 'Error', description: error || 'No se pudo guardar la capacidad', variant: 'destructive' });
-      return;
+  const actualizarCapacidadHorario = async (horarioId: string, nuevaCapacidad: number) => {
+    try {
+      const { error } = await supabase
+        .from('horarios_semanales')
+        .update({ capacidad: nuevaCapacidad })
+        .eq('id', horarioId);
+
+      if (error) throw error;
+
+      toast({ title: 'Guardado', description: 'Capacidad actualizada' });
+      await cargarHorariosSemanales();
+    } catch (error) {
+      console.error('Error:', error);
+      toast({ title: 'Error', description: 'No se pudo actualizar la capacidad', variant: 'destructive' });
     }
-    await cargarConfiguraciones();
-    toast({ title: 'Guardado', description: 'Capacidad actualizada globalmente' });
+  };
+
+  const guardarCapacidad = async () => {
     setIsCapacidadDialogOpen(false);
   };
 
@@ -216,15 +259,53 @@ export const TurnoManagement = () => {
               >
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
-                  <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
+                  <DialogDescription>Edite la capacidad de alumnos para cada horario.</DialogDescription>
                 </DialogHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <Label htmlFor="capacidad-global" className="text-xs">Alumnos permitidos</Label>
-                  <Input id="capacidad-global" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
-                </div>
+                
+                {loadingHorarios ? (
+                  <div className="py-8 text-center text-muted-foreground">Cargando...</div>
+                ) : (
+                  <div className="max-h-[60vh] overflow-y-auto space-y-3">
+                    {horariosSemanales.map((horario) => (
+                      <div key={horario.id} className="flex items-center justify-between gap-4 p-3 border rounded-lg">
+                        <div className="flex-1">
+                          <div className="font-medium text-sm">
+                            {DIAS_SEMANA[horario.dia_semana - 1]}
+                          </div>
+                          <div className="text-xs text-muted-foreground">
+                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Users className="w-3 h-3" />
+                            {horario.alumnos_agendados}/{horario.capacidad} agendados
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`capacidad-${horario.id}`} className="text-xs whitespace-nowrap">Capacidad:</Label>
+                          <Input 
+                            id={`capacidad-${horario.id}`}
+                            type="number" 
+                            min={horario.alumnos_agendados} 
+                            value={horario.capacidad}
+                            onChange={(e) => {
+                              const nuevaCapacidad = parseInt(e.target.value) || horario.alumnos_agendados;
+                              actualizarCapacidadHorario(horario.id, Math.max(horario.alumnos_agendados, nuevaCapacidad));
+                            }}
+                            className="w-16 text-center" 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {horariosSemanales.length === 0 && (
+                      <div className="py-8 text-center text-muted-foreground">
+                        No hay horarios configurados
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={guardarCapacidad}>Guardar</Button>
+                  <Button onClick={() => setIsCapacidadDialogOpen(false)}>Cerrar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
@@ -261,25 +342,56 @@ export const TurnoManagement = () => {
                   Alumnos por clase
                 </div>
               </DialogTrigger>
-              <DialogContent 
-                className="p-2 rounded-xl" 
-                style={{ 
-                  width: '90vw', 
-                  maxWidth: '90vw',
-                  minWidth: '90vw'
-                }}
-              >
+              <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col">
                 <DialogHeader>
                   <DialogTitle>Capacidad por clase</DialogTitle>
-                  <DialogDescription>Defina la cantidad máxima de alumnos por clase.</DialogDescription>
+                  <DialogDescription>Edite la capacidad de alumnos para cada horario.</DialogDescription>
                 </DialogHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <Label htmlFor="capacidad-global-desktop" className="text-xs">Alumnos permitidos</Label>
-                  <Input id="capacidad-global-desktop" type="number" min={1} value={capacidadValor} onChange={(e) => setCapacidadValor(e.target.value)} className="w-28 text-center" />
-                </div>
+                
+                {loadingHorarios ? (
+                  <div className="py-8 text-center text-muted-foreground">Cargando...</div>
+                ) : (
+                  <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
+                    {horariosSemanales.map((horario) => (
+                      <div key={horario.id} className="flex items-center justify-between gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors">
+                        <div className="flex-1">
+                          <div className="font-medium">
+                            {DIAS_SEMANA[horario.dia_semana - 1]}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
+                            <Users className="w-3 h-3" />
+                            {horario.alumnos_agendados}/{horario.capacidad} agendados
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Label htmlFor={`capacidad-desktop-${horario.id}`} className="text-sm whitespace-nowrap">Capacidad:</Label>
+                          <Input 
+                            id={`capacidad-desktop-${horario.id}`}
+                            type="number" 
+                            min={horario.alumnos_agendados} 
+                            value={horario.capacidad}
+                            onChange={(e) => {
+                              const nuevaCapacidad = parseInt(e.target.value) || horario.alumnos_agendados;
+                              actualizarCapacidadHorario(horario.id, Math.max(horario.alumnos_agendados, nuevaCapacidad));
+                            }}
+                            className="w-20 text-center" 
+                          />
+                        </div>
+                      </div>
+                    ))}
+                    {horariosSemanales.length === 0 && (
+                      <div className="py-8 text-center text-muted-foreground">
+                        No hay horarios configurados
+                      </div>
+                    )}
+                  </div>
+                )}
+                
                 <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setIsCapacidadDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={guardarCapacidad}>Guardar</Button>
+                  <Button onClick={() => setIsCapacidadDialogOpen(false)}>Cerrar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
