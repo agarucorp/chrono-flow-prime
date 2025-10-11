@@ -525,14 +525,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       dayDate.setDate(i);
       days.push({ date: dayDate, isCurrentMonth: true });
     }
-    
-    // Completar la última semana
-    const remainingDays = 42 - days.length; // 6 semanas * 7 días
-    for (let i = 1; i <= remainingDays; i++) {
-      const nextDate = new Date(lastDay);
-      nextDate.setDate(lastDay.getDate() + i);
-      days.push({ date: nextDate, isCurrentMonth: false });
-    }
 
     return (
       <div className="grid grid-cols-7 gap-1 w-full max-w-full">
@@ -542,18 +534,26 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           const isSelected = date.toDateString() === currentDate.toDateString();
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
           
+          // Si no es del mes actual, mostrar celda vacía
+          if (!isCurrentMonth) {
+            return (
+              <div
+                key={index}
+                className="relative min-h-[48px] p-2 border border-transparent rounded-lg min-w-0 bg-transparent"
+              />
+            );
+          }
+          
           return (
             <div
               key={index}
-              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 ${
-                isCurrentMonth ? 'bg-muted/40 hover:bg-muted/60' : 'bg-muted/30'
-              } ${isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'}`}
+              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 bg-muted/40 hover:bg-muted/60 ${
+                isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'
+              }`}
               onClick={() => !isWeekend && handleDateSelect(date)}
             >
               <SelectedDayMarker isSelected={isSelected} />
-              <div className={`text-xs font-medium relative z-10 truncate ${
-                isCurrentMonth ? 'text-foreground' : 'text-muted-foreground'
-              }`}>
+              <div className="font-light relative z-10 truncate text-foreground" style={{ fontSize: '10px' }}>
                 {date.getDate()}
               </div>
             </div>
@@ -946,7 +946,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               {/* Días de la semana */}
               <div className="grid grid-cols-7 gap-1 mb-3 w-full max-w-full">
                 {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
-                  <div key={day} className="p-2 text-center text-xs font-semibold text-foreground bg-muted/30 rounded-md min-w-0">
+                  <div key={day} className="p-2 text-center font-light text-foreground bg-muted/30 rounded-md min-w-0" style={{ fontSize: '10px' }}>
                     {day}
                   </div>
                 ))}

@@ -632,17 +632,17 @@ export const TurnoManagement = () => {
                           </span>
                         </Button>
                         
-                        <Button
-                          onClick={() => setTipoAusencia('periodo')}
-                          className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
-                          variant="outline"
-                          style={{ fontSize: '14px' }}
-                        >
-                          <span className="font-medium">Ausencia por periodo</span>
-                          <span className="text-xs text-muted-foreground text-center">
-                            Cancelar todas las clases por un período
-                          </span>
-                        </Button>
+            <Button
+              onClick={() => setTipoAusencia('periodo')}
+              className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
+              variant="outline"
+              style={{ fontSize: '14px' }}
+            >
+              <span className="font-medium">Ausencia por período</span>
+              <span className="text-xs text-muted-foreground text-center">
+                Cancelar todas las clases por un período
+              </span>
+            </Button>
                       </div>
                     </div>
                   ) : tipoAusencia === 'unica' ? (
