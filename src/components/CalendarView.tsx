@@ -143,8 +143,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Convertir día de la semana: JS (0=domingo) -> DB (1=lunes)
       const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
 
+      console.log('🔍 Cargando datos para admin - Fecha:', fechaActual, 'Día semana:', diaSemana);
 
-      // Cargar horarios recurrentes
+      // Cargar horarios recurrentes con mejor manejo de errores
       const { data: horariosRecurrentes, error: errorRecurrentes } = await supabase
         .from('horarios_recurrentes_usuario')
         .select(`
@@ -154,14 +155,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           hora_fin,
           activo,
           usuario_id,
-          profiles!inner(full_name, email, phone)
+          profiles(full_name, email, phone)
         `)
         .eq('dia_semana', diaSemana)
         .eq('activo', true);
 
-
       if (errorRecurrentes) {
-        console.error('Error cargando horarios recurrentes:', errorRecurrentes);
+        console.error('❌ Error cargando horarios recurrentes:', errorRecurrentes);
+      } else {
+        console.log('✅ Horarios recurrentes cargados:', horariosRecurrentes?.length || 0);
       }
 
       // Cargar turnos variables
@@ -174,74 +176,79 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           turno_hora_fin,
           estado,
           cliente_id,
-          profiles!inner(full_name, email, phone)
+          profiles(full_name, email, phone)
         `)
         .eq('turno_fecha', fechaActual)
         .eq('estado', 'confirmada');
 
-
       if (errorVariables) {
-        console.error('Error cargando turnos variables:', errorVariables);
+        console.error('❌ Error cargando turnos variables:', errorVariables);
+      } else {
+        console.log('✅ Turnos variables cargados:', turnosVariables?.length || 0);
       }
 
-      // Cargar turnos cancelados (sin embeds para evitar 406 si falta FK)
+      // Cargar turnos cancelados
       const { data: turnosCancelados, error: errorCancelados } = await supabase
         .from('turnos_cancelados')
         .select('id, turno_fecha, turno_hora_inicio, turno_hora_fin, cliente_id')
         .eq('turno_fecha', fechaActual);
 
-
       if (errorCancelados) {
-        console.error('Error cargando turnos cancelados:', errorCancelados);
+        console.error('❌ Error cargando turnos cancelados:', errorCancelados);
+      } else {
+        console.log('✅ Turnos cancelados cargados:', turnosCancelados?.length || 0);
       }
 
       // Combinar todos los datos
       const todosAlumnos: AlumnoHorario[] = [];
 
       // Agregar horarios recurrentes
-      if (horariosRecurrentes) {
+      if (horariosRecurrentes && horariosRecurrentes.length > 0) {
         horariosRecurrentes.forEach(horario => {
           const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
-          todosAlumnos.push({
-            id: horario.id,
-            nombre: profile?.full_name || 'Sin nombre',
-            email: profile?.email || '',
-            telefono: profile?.phone,
-            tipo: 'recurrente',
-            hora_inicio: horario.hora_inicio,
-            hora_fin: horario.hora_fin,
-            fecha: fechaActual,
-            activo: horario.activo
-          });
+          if (profile) {
+            todosAlumnos.push({
+              id: horario.id,
+              nombre: profile.full_name || 'Sin nombre',
+              email: profile.email || '',
+              telefono: profile.phone,
+              tipo: 'recurrente',
+              hora_inicio: horario.hora_inicio,
+              hora_fin: horario.hora_fin,
+              fecha: fechaActual,
+              activo: horario.activo
+            });
+          }
         });
       }
 
       // Agregar turnos variables
-      if (turnosVariables) {
+      if (turnosVariables && turnosVariables.length > 0) {
         turnosVariables.forEach(turno => {
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
-          todosAlumnos.push({
-            id: turno.id,
-            nombre: profile?.full_name || 'Sin nombre',
-            email: profile?.email || '',
-            telefono: profile?.phone,
-            tipo: 'variable',
-            hora_inicio: turno.turno_hora_inicio,
-            hora_fin: turno.turno_hora_fin,
-            fecha: turno.turno_fecha
-          });
+          if (profile) {
+            todosAlumnos.push({
+              id: turno.id,
+              nombre: profile.full_name || 'Sin nombre',
+              email: profile.email || '',
+              telefono: profile.phone,
+              tipo: 'variable',
+              hora_inicio: turno.turno_hora_inicio,
+              hora_fin: turno.turno_hora_fin,
+              fecha: turno.turno_fecha
+            });
+          }
         });
       }
 
-      // Agregar turnos cancelados
-      if (turnosCancelados) {
+      // Agregar turnos cancelados (sin profile por ahora para evitar errores)
+      if (turnosCancelados && turnosCancelados.length > 0) {
         turnosCancelados.forEach(turno => {
-          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           todosAlumnos.push({
             id: turno.id,
-            nombre: profile?.full_name || 'Sin nombre',
-            email: profile?.email || '',
-            telefono: profile?.phone,
+            nombre: 'Usuario cancelado',
+            email: '',
+            telefono: '',
             tipo: 'cancelado',
             hora_inicio: turno.turno_hora_inicio,
             hora_fin: turno.turno_hora_fin,
@@ -250,9 +257,34 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         });
       }
 
+      console.log('📊 Total de alumnos cargados:', todosAlumnos.length);
+      console.log('📋 Alumnos por tipo:', {
+        recurrentes: todosAlumnos.filter(a => a.tipo === 'recurrente').length,
+        variables: todosAlumnos.filter(a => a.tipo === 'variable').length,
+        cancelados: todosAlumnos.filter(a => a.tipo === 'cancelado').length
+      });
+
+      // Si no hay datos, mostrar mensaje informativo
+      if (todosAlumnos.length === 0) {
+        console.log('ℹ️ No hay clases registradas para esta fecha');
+        // Agregar un mensaje informativo
+        todosAlumnos.push({
+          id: 'no-data',
+          nombre: 'Sin clases registradas',
+          email: '',
+          telefono: '',
+          tipo: 'recurrente',
+          hora_inicio: '00:00',
+          hora_fin: '00:00',
+          fecha: fechaActual,
+          activo: false
+        });
+      }
+
       setAlumnosHorarios(todosAlumnos);
     } catch (error) {
-      console.error('Error inesperado cargando horarios de alumnos:', error);
+      console.error('❌ Error inesperado cargando horarios de alumnos:', error);
+      showError('Error', 'No se pudieron cargar los horarios de los alumnos');
     } finally {
       setLoadingAlumnos(false);
     }
@@ -581,6 +613,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     // Si es vista de admin, mostrar información de alumnos
     if (isAdminView) {
+      if (loadingAlumnos) {
+        return (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-sm text-muted-foreground">Cargando clases registradas...</p>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-6">
           {/* Horarios AM */}
@@ -744,6 +787,24 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* Mensaje cuando no hay horarios */}
+          {amSlots.length === 0 && pmSlots.length === 0 && (
+            <div className="text-center py-12">
+              <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                No hay clases registradas
+              </h3>
+              <p className="text-sm text-muted-foreground">
+                Para el día {currentDate.toLocaleDateString('es-ES', { 
+                  weekday: 'long', 
+                  year: 'numeric', 
+                  month: 'long', 
+                  day: 'numeric' 
+                })}
+              </p>
             </div>
           )}
         </div>

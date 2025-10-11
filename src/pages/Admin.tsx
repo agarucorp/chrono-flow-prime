@@ -155,6 +155,38 @@ export default function Admin() {
     return dias[diaSemana] || 'Desconocido';
   };
 
+  // Función para obtener el nombre corto del día
+  const getDiaCorto = (diaSemana: number) => {
+    const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+    return dias[diaSemana] || '—';
+  };
+
+  // Función para obtener días de asistencia del usuario
+  const getDiasAsistencia = (userId: string) => {
+    const horariosUsuario = horariosRecurrentes.filter(h => h.usuario_id === userId && h.activo);
+    if (horariosUsuario.length === 0) return '—';
+    
+    // Obtener días únicos y ordenarlos
+    const diasUnicos = [...new Set(horariosUsuario.map(h => h.dia_semana))].sort((a, b) => a - b);
+    
+    // Convertir a nombres cortos
+    return diasUnicos.map(d => getDiaCorto(d)).join(', ');
+  };
+
+  // Función para calcular deuda del usuario (desde base de datos)
+  const getEstadoCuenta = (userId: string) => {
+    // Por ahora retornar "—" hasta que se implemente la tabla de pagos
+    // TODO: Consultar tabla pagos_usuarios cuando esté implementada
+    return '—';
+  };
+
+  // Función para obtener estado de pago del usuario
+  const getEstadoPago = (userId: string) => {
+    // Por ahora retornar "—" hasta que se implemente la tabla de pagos
+    // TODO: Consultar tabla pagos_usuarios cuando esté implementada
+    return '—';
+  };
+
   // Nombre a mostrar: preferir first_name + last_name; si no, full_name; si no, derivar de email
   const getDisplayFullName = (u: AdminUser) => {
     const looksLikeEmail = (value: string) => /@/.test(value || '');
@@ -211,8 +243,29 @@ export default function Admin() {
     if (isAdmin) {
       fetchAllUsers();
       fetchAdminUsers();
+      cargarTodosLosHorariosRecurrentes();
     }
   }, [isAdmin, fetchAllUsers, fetchAdminUsers]);
+
+  // Función para cargar todos los horarios recurrentes de todos los usuarios
+  const cargarTodosLosHorariosRecurrentes = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select('*')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('Error cargando horarios recurrentes:', error);
+        return;
+      }
+
+      setHorariosRecurrentes(data || []);
+      console.log('✅ Horarios recurrentes cargados:', data?.length || 0);
+    } catch (error) {
+      console.error('Error inesperado cargando horarios recurrentes:', error);
+    }
+  };
 
   // Refrescar verificación de admin cuando el componente se monta
   useEffect(() => {
@@ -441,7 +494,7 @@ export default function Admin() {
         </div>
       </header>
 
-      <div className="w-full max-w-full px-4 py-8 pb-4 md:pb-8 mx-auto">
+      <div className="w-full max-w-full px-4 pb-4 md:pb-8 mx-auto">
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
           {/* Tabs Desktop - oculto en móvil */}
@@ -494,46 +547,61 @@ export default function Admin() {
               <CardContent className="p-0 w-full max-w-full">
                 {/* Vista de escritorio - Tabla completa */}
                 <div className="hidden md:block overflow-x-auto w-full max-w-full">
-                  <table className="w-full min-w-[400px]">
+                  <table className="w-full min-w-[700px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-medium min-w-[200px]">Usuario</th>
-                        <th className="text-left p-3 font-medium min-w-[100px]">Pago</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Acciones</th>
+                        <th className="text-left p-3 font-medium min-w-[180px]">Usuario</th>
+                        <th className="text-left p-3 font-medium min-w-[140px]">Asistencia</th>
+                        <th className="text-left p-3 font-medium min-w-[120px]">Estado de pago</th>
+                        <th className="text-left p-3 font-medium min-w-[120px]">Estado de cuenta</th>
+                        <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedUsers.map((user) => (
-                        <tr key={user.id} className="border-b hover:bg-muted/50">
-                          <td className="p-3">
-                            <div className="min-w-0">
-                              <p className="font-medium truncate">{getDisplayFullName(user)}</p>
-                            </div>
-                          </td>
-                          <td className="p-3">
-                            <p className="text-sm text-muted-foreground">—</p>
-                          </td>
-                          <td className="p-3">
-                            <div className="flex items-center space-x-1">
-                              <Button 
-                                variant="outline" 
-                                size="sm" 
-                                onClick={async () => { 
-                                  setShowUserDetails(true);
-                                  await cargarDatosUsuario(user.id);
-                                  cargarHorariosRecurrentes(user.id);
-                                }}
-                                className="h-8 w-8 p-0"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                    <span className="sr-only">Abrir menú</span>
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
+                      {sortedUsers.map((user) => {
+                        const estadoPago = getEstadoPago(user.id);
+                        const estadoCuenta = getEstadoCuenta(user.id);
+                        const diasAsistencia = getDiasAsistencia(user.id);
+                        
+                        return (
+                          <tr key={user.id} className="border-b hover:bg-muted/50">
+                            <td className="p-3">
+                              <div className="min-w-0">
+                                <p className="font-medium truncate">{getDisplayFullName(user)}</p>
+                              </div>
+                            </td>
+                            <td className="p-3">
+                              <p className="text-sm text-muted-foreground">{diasAsistencia}</p>
+                            </td>
+                            <td className="p-3">
+                              <span className={`text-sm ${
+                                estadoPago === 'debe'
+                                  ? 'text-red-600 font-medium'
+                                  : estadoPago === 'no debe'
+                                  ? 'text-green-600 font-medium'
+                                  : 'text-muted-foreground'
+                              }`}>
+                                {estadoPago}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <span className={`text-sm ${
+                                estadoCuenta !== '—' 
+                                  ? 'text-red-600 font-medium' 
+                                  : 'text-muted-foreground'
+                              }`}>
+                                {estadoCuenta}
+                              </span>
+                            </td>
+                            <td className="p-3">
+                              <div className="flex items-center justify-start">
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                      <span className="sr-only">Abrir menú</span>
+                                      <MoreHorizontal className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
                                   <DropdownMenuItem onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}>
                                     <Eye className="w-4 h-4 mr-2" />
@@ -568,10 +636,11 @@ export default function Admin() {
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -595,35 +664,36 @@ export default function Admin() {
                   
                   {/* Lista de usuarios */}
                   <div className="divide-y">
-                    {sortedUsers.map((user) => (
-                      <div 
-                        key={user.id} 
-                        className="flex items-center justify-between py-3 px-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                        onClick={async () => { 
-                          setShowUserDetails(true);
-                          await cargarDatosUsuario(user.id);
-                          cargarHorariosRecurrentes(user.id);
-                        }}
-                      >
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
+                    {sortedUsers.map((user) => {
+                      const estadoPago = getEstadoPago(user.id);
+                      
+                      return (
+                        <div 
+                          key={user.id} 
+                          className="flex items-center justify-between py-3 px-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                          onClick={async () => { 
+                            setShowUserDetails(true);
+                            await cargarDatosUsuario(user.id);
+                            cargarHorariosRecurrentes(user.id);
+                          }}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
+                          </div>
+                          <div className="w-24 text-center flex-shrink-0">
+                            <span className={`text-xs ${
+                              estadoPago === 'debe'
+                                ? 'text-red-600 font-medium'
+                                : estadoPago === 'no debe'
+                                ? 'text-green-600 font-medium'
+                                : 'text-muted-foreground'
+                            }`}>
+                              {estadoPago}
+                            </span>
+                          </div>
                         </div>
-                        <div className="w-24 text-center flex-shrink-0">
-                          {(() => {
-                            const userPaymentStatus = parseInt(user.id.slice(-1), 16) % 2 === 0 ? 'debe' : 'no_debe';
-                            return (
-                              <span className={`text-xs font-medium ${
-                                userPaymentStatus === 'debe' 
-                                  ? 'text-red-600' 
-                                  : 'text-green-600'
-                              }`}>
-                                {userPaymentStatus === 'debe' ? 'debe' : 'no debe'}
-                              </span>
-                            );
-                          })()}
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
                 

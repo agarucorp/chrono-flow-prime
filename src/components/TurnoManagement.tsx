@@ -47,6 +47,7 @@ const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sáb
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
+  const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('20');
   const [horariosFijos, setHorariosFijos] = useState<HorarioClase[]>([
     { id: 1, nombre: 'Clase 1', horaInicio: '08:00', horaFin: '09:00' },
     { id: 2, nombre: 'Clase 2', horaInicio: '09:00', horaFin: '10:00' },
@@ -152,6 +153,9 @@ export const TurnoManagement = () => {
     fechaDesde: '',
     fechaHasta: ''
   });
+  
+  // Estado para mostrar resumen de ausencia
+  const [mostrarResumenAusencia, setMostrarResumenAusencia] = useState(false);
 
   const handleHorarioChange = (id: number, field: 'horaInicio' | 'horaFin', value: string) => {
     setHorariosFijos(prev => 
@@ -165,6 +169,25 @@ export const TurnoManagement = () => {
     // Aquí guardarías los horarios en la base de datos
     console.log('Guardando horarios:', horariosFijos);
     setIsDialogOpen(false);
+  };
+
+  const handleGuardarCapacidadMaxima = async () => {
+    try {
+      const { error } = await supabase
+        .from('configuracion_admin')
+        .update({ 
+          max_alumnos_por_clase: parseInt(capacidadMaximaGlobal),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id_configuracion', '1'); // Asumiendo que hay una configuración con ID 1
+
+      if (error) throw error;
+
+      toast({ title: 'Guardado', description: 'Capacidad máxima actualizada' });
+    } catch (error) {
+      console.error('Error actualizando capacidad máxima:', error);
+      toast({ title: 'Error', description: 'No se pudo actualizar la capacidad máxima', variant: 'destructive' });
+    }
   };
 
   const handleAgregarHorario = () => {
@@ -211,14 +234,20 @@ export const TurnoManagement = () => {
 
   const handleAgregarAusenciaPeriodo = () => {
     if (nuevaAusenciaPeriodo.fechaDesde && nuevaAusenciaPeriodo.fechaHasta) {
-      const nuevaAusencia: AusenciaPeriodo = {
-        id: Date.now().toString(),
-        ...nuevaAusenciaPeriodo
-      };
-      setAusenciasPeriodo(prev => [...prev, nuevaAusencia]);
-      setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
-      setTipoAusencia(null);
+      // Mostrar resumen en lugar de guardar automáticamente
+      setMostrarResumenAusencia(true);
     }
+  };
+
+  const confirmarAusenciaPeriodo = () => {
+    const nuevaAusencia: AusenciaPeriodo = {
+      id: Date.now().toString(),
+      ...nuevaAusenciaPeriodo
+    };
+    setAusenciasPeriodo(prev => [...prev, nuevaAusencia]);
+    setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
+    setTipoAusencia(null);
+    setMostrarResumenAusencia(false);
   };
 
   const handleEliminarAusencia = (id: string, tipo: 'unica' | 'periodo') => {
@@ -231,6 +260,17 @@ export const TurnoManagement = () => {
 
   // Generar opciones para días (1-31)
   const dias = Array.from({ length: 31 }, (_, i) => i + 1);
+
+  // Función para convertir hora 24h a 12h
+  const convertirHoraA12h = (hora24: string) => {
+    const [hora] = hora24.split(':');
+    const horaNum = parseInt(hora);
+    
+    if (horaNum === 0) return '12am';
+    if (horaNum < 12) return `${horaNum}am`;
+    if (horaNum === 12) return '12pm';
+    return `${horaNum - 12}pm`;
+  };
   const meses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -441,6 +481,22 @@ export const TurnoManagement = () => {
                   </DialogHeader>
                   
                   <div className="space-y-4">
+                    {/* Card para capacidad por clase */}
+                    <div className="p-3 border border-orange-500 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-center gap-4">
+                        <Label htmlFor="capacidad-maxima" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Capacidad por clase</Label>
+                        <Input
+                          id="capacidad-maxima"
+                          type="number"
+                          min="1"
+                          max="100"
+                          value={capacidadMaximaGlobal}
+                          onChange={(e) => setCapacidadMaximaGlobal(e.target.value)}
+                          className="w-20 text-center"
+                          style={{ fontSize: '12px' }}
+                        />
+                      </div>
+                    </div>
                     {horariosFijos.map((horario) => (
                       <div key={horario.id} className="relative grid grid-cols-1 md:grid-cols-3 gap-0 items-center py-4 px-2 border rounded-lg">
                         <div 
@@ -509,7 +565,7 @@ export const TurnoManagement = () => {
                       <div
                         onClick={handleAgregarHorario}
                         className="h-10 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
-                        style={{ padding: '8px 16px' }}
+                        style={{ padding: '8px 16px', fontSize: '14px' }}
                       >
                         <Plus className="h-4 w-4" />
                         Agregar horario
@@ -539,8 +595,25 @@ export const TurnoManagement = () => {
                     Editar ausencias
                   </div>
                 </DialogTrigger>
-                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
-                  <DialogHeader>
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[90vh] overflow-y-auto pt-6 pb-3 px-3 sm:p-6 rounded-xl">
+                  <DialogHeader className="relative">
+                    <DialogTitle style={{ fontSize: '12px' }}>
+                      {tipoAusencia === 'periodo' ? '' : ''}
+                    </DialogTitle>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="absolute -top-4 -right-2 h-6 w-6 p-0 z-10"
+                      onClick={() => {
+                        setIsDialogAusenciasOpen(false);
+                        setTipoAusencia(null);
+                        setMostrarResumenAusencia(false);
+                        setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
+                        setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
                   </DialogHeader>
 
                   {!tipoAusencia ? (
@@ -553,7 +626,7 @@ export const TurnoManagement = () => {
                           variant="outline"
                           style={{ fontSize: '14px' }}
                         >
-                          <span className="font-medium">Ausencia Única</span>
+                          <span className="font-medium">Ausencia única</span>
                           <span className="text-xs text-muted-foreground text-center">
                             Cancelar clases de un día específico
                           </span>
@@ -565,7 +638,7 @@ export const TurnoManagement = () => {
                           variant="outline"
                           style={{ fontSize: '14px' }}
                         >
-                          <span className="font-medium">Ausencia por Período</span>
+                          <span className="font-medium">Ausencia por periodo</span>
                           <span className="text-xs text-muted-foreground text-center">
                             Cancelar todas las clases por un período
                           </span>
@@ -577,7 +650,7 @@ export const TurnoManagement = () => {
                     <div className="space-y-4">
                       <div className="border-b pb-3">
                         <div className="space-y-2">
-                          <Label>Fecha</Label>
+                          <Label style={{ fontSize: '14px' }}>Fecha</Label>
                           <Input
                             type="date"
                             value={nuevaAusenciaUnica.fechaCompleta}
@@ -595,28 +668,29 @@ export const TurnoManagement = () => {
                               }
                             }}
                             className="w-full"
+                            style={{ fontSize: '14px' }}
                           />
                         </div>
                       </div>
 
                       <div className="space-y-3">
-                        <Label>Clases a cancelar (selección múltiple)</Label>
+                        <Label style={{ fontSize: '14px' }}>Clases a cancelar</Label>
                         <div className="grid grid-cols-3 md:grid-cols-4 gap-2">
                           {horariosFijos.map((clase) => (
                             <Button
                               key={clase.id}
                               variant={nuevaAusenciaUnica.clasesCanceladas.includes(clase.id) ? "default" : "outline"}
                               onClick={() => handleToggleClase(clase.id)}
-                              className="h-10 flex flex-col items-center justify-center text-xs"
+                              className="h-10 flex flex-col items-center justify-center"
                             >
-                              <span className="font-medium text-xs">{clase.nombre}</span>
-                              <span className="text-xs">{clase.horaInicio} - {clase.horaFin}</span>
+                              <span className="text-xs font-light" style={{ fontSize: '10px' }}>{clase.nombre}</span>
+                              <span className="text-xs font-light" style={{ fontSize: '10px' }}>{convertirHoraA12h(clase.horaInicio)} - {convertirHoraA12h(clase.horaFin)}</span>
                             </Button>
                           ))}
                         </div>
                       </div>
 
-                      <div className="flex space-x-2">
+                      <div className="flex justify-center space-x-2">
                         <Button variant="outline" onClick={() => setTipoAusencia(null)} size="sm" style={{ fontSize: '14px' }}>
                           Volver
                         </Button>
@@ -628,89 +702,64 @@ export const TurnoManagement = () => {
                   ) : (
                     // Formulario para ausencia por período
                     <div className="space-y-6">
-                      <div className="border-b pb-4">
-                        <h3 className="font-medium mb-4">Ausencia por Período</h3>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                            <Label>Fecha desde</Label>
-                            <Input
-                              type="date"
-                              value={nuevaAusenciaPeriodo.fechaDesde}
-                              onChange={(e) => setNuevaAusenciaPeriodo(prev => ({ ...prev, fechaDesde: e.target.value }))}
-                            />
-                          </div>
-                          <div className="space-y-2">
-                            <Label>Fecha hasta</Label>
-                            <Input
-                              type="date"
-                              value={nuevaAusenciaPeriodo.fechaHasta}
-                              onChange={(e) => setNuevaAusenciaPeriodo(prev => ({ ...prev, fechaHasta: e.target.value }))}
-                            />
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex space-x-2">
-                        <Button variant="outline" onClick={() => setTipoAusencia(null)} style={{ fontSize: '14px' }}>
-                          Volver
-                        </Button>
-                        <Button onClick={handleAgregarAusenciaPeriodo} disabled={!nuevaAusenciaPeriodo.fechaDesde || !nuevaAusenciaPeriodo.fechaHasta} style={{ fontSize: '14px' }}>
-                          Guardar
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Lista de ausencias existentes */}
-                  {(ausenciasUnicas.length > 0 || ausenciasPeriodo.length > 0) && (
-                    <div className="space-y-4 pt-6 border-t">
-                      <h3 className="font-medium">Ausencias Configuradas</h3>
-                      
-                      {/* Ausencias únicas */}
-                      {ausenciasUnicas.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-muted-foreground">Ausencias Únicas</h4>
-                          {ausenciasUnicas.map((ausencia) => (
-                            <div key={ausencia.id} className="flex items-center justify-between p-3 border-orange-500 border rounded-lg">
-                              <div>
-                                <span className="font-medium">
-                                  {ausencia.dia}/{ausencia.mes}/{ausencia.año}
-                                </span>
-                                <span className="text-sm text-muted-foreground ml-2">
-                                  Clases: {ausencia.clasesCanceladas.map(id => `Clase ${id}`).join(', ')}
-                                </span>
+                      {!mostrarResumenAusencia ? (
+                        <>
+                          <div className="border-b pb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="space-y-2">
+                                <Label style={{ fontSize: '14px' }}>Fecha desde</Label>
+                                <Input
+                                  type="date"
+                                  value={nuevaAusenciaPeriodo.fechaDesde}
+                                  onChange={(e) => setNuevaAusenciaPeriodo(prev => ({ ...prev, fechaDesde: e.target.value }))}
+                                  style={{ fontSize: '14px' }}
+                                />
+                              </div>
+                              <div className="space-y-2">
+                                <Label style={{ fontSize: '14px' }}>Fecha hasta</Label>
+                                <Input
+                                  type="date"
+                                  value={nuevaAusenciaPeriodo.fechaHasta}
+                                  onChange={(e) => setNuevaAusenciaPeriodo(prev => ({ ...prev, fechaHasta: e.target.value }))}
+                                  style={{ fontSize: '14px' }}
+                                />
                               </div>
                             </div>
-                          ))}
-                        </div>
-                      )}
+                          </div>
 
-                      {/* Ausencias por período */}
-                      {ausenciasPeriodo.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium text-muted-foreground">Ausencias por Período</h4>
-                          {ausenciasPeriodo.map((ausencia) => (
-                            <div key={ausencia.id} className="flex items-center justify-between p-3 border-orange-500 border rounded-lg">
-                              <div>
-                                <span className="font-medium">
-                                  {ausencia.fechaDesde} - {ausencia.fechaHasta}
-                                </span>
-                                <span className="text-sm text-muted-foreground ml-2">
-                                  Todas las clases canceladas
-                                </span>
-                              </div>
-                            </div>
-                          ))}
+                          <div className="flex justify-center space-x-2">
+                            <Button variant="outline" onClick={() => setTipoAusencia(null)} style={{ fontSize: '14px' }}>
+                              Volver
+                            </Button>
+                            <Button onClick={handleAgregarAusenciaPeriodo} disabled={!nuevaAusenciaPeriodo.fechaDesde || !nuevaAusenciaPeriodo.fechaHasta} style={{ fontSize: '14px' }}>
+                              Continuar
+                            </Button>
+                          </div>
+                        </>
+                      ) : (
+                        // Resumen de ausencia por período
+                        <div className="space-y-4">
+                          <div className="text-center space-y-2">
+                            <h3 className="font-medium" style={{ fontSize: '16px' }}>Resumen de Ausencia</h3>
+                            <p className="text-muted-foreground" style={{ fontSize: '14px' }}>
+                              Se cancelarán todas las clases desde el <strong>{nuevaAusenciaPeriodo.fechaDesde}</strong> hasta el <strong>{nuevaAusenciaPeriodo.fechaHasta}</strong>
+                            </p>
+                          </div>
+
+                          <div className="flex justify-center space-x-2">
+                            <Button variant="outline" onClick={() => setMostrarResumenAusencia(false)} style={{ fontSize: '14px' }}>
+                              Volver
+                            </Button>
+                            <Button onClick={confirmarAusenciaPeriodo} style={{ fontSize: '14px' }}>
+                              Confirmar
+                            </Button>
+                          </div>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogAusenciasOpen(false)} style={{ fontSize: '14px' }}>
-                      Cerrar
-                    </Button>
-                  </DialogFooter>
+
                 </DialogContent>
               </Dialog>
             </div>
