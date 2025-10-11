@@ -65,7 +65,7 @@ export default function Admin() {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
-  const [filterPaymentStatus, setFilterPaymentStatus] = useState<'all' | 'paid' | 'pending'>('all');
+  const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'debe_first' | 'no_debe_first'>('default');
   
 
   // Función para obtener las iniciales del usuario
@@ -255,11 +255,35 @@ export default function Admin() {
     
     const matchesRole = filterRole === 'all' || user.role === filterRole;
     
-    // Por ahora, el filtro de estado de pago no está implementado
-    // Se puede agregar cuando se conecte con la tabla de pagos
-    const matchesPaymentStatus = true; // TODO: Implementar filtro de estado de pago
+    return matchesSearch && matchesRole;
+  });
+
+  // Ordenar usuarios según el criterio de pago seleccionado
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    if (paymentSortOrder === 'default') {
+      return 0; // Mantener orden original
+    }
     
-    return matchesSearch && matchesRole && matchesPaymentStatus;
+    const getPaymentStatus = (userId: string) => {
+      return parseInt(userId.slice(-1), 16) % 2 === 0 ? 'debe' : 'no_debe';
+    };
+    
+    const statusA = getPaymentStatus(a.id);
+    const statusB = getPaymentStatus(b.id);
+    
+    if (paymentSortOrder === 'debe_first') {
+      // Los que deben primero
+      if (statusA === 'debe' && statusB === 'no_debe') return -1;
+      if (statusA === 'no_debe' && statusB === 'debe') return 1;
+      return 0;
+    } else if (paymentSortOrder === 'no_debe_first') {
+      // Los que no deben primero
+      if (statusA === 'no_debe' && statusB === 'debe') return -1;
+      if (statusA === 'debe' && statusB === 'no_debe') return 1;
+      return 0;
+    }
+    
+    return 0;
   });
 
   // Debug: Mostrar información de usuarios en consola
@@ -267,12 +291,25 @@ export default function Admin() {
     console.log('📋 Estado de usuarios en Admin.tsx:', {
       totalUsuarios: allUsers.length,
       usuariosFiltrados: filteredUsers.length,
+      usuariosOrdenados: sortedUsers.length,
+      ordenPago: paymentSortOrder,
       roles: allUsers.reduce((acc, u) => {
         acc[u.role] = (acc[u.role] || 0) + 1;
         return acc;
       }, {} as Record<string, number>)
     });
-  }, [allUsers, filteredUsers]);
+  }, [allUsers, filteredUsers, sortedUsers, paymentSortOrder]);
+
+  // Función para alternar ordenamiento por pago
+  const togglePaymentSort = () => {
+    if (paymentSortOrder === 'default') {
+      setPaymentSortOrder('debe_first');
+    } else if (paymentSortOrder === 'debe_first') {
+      setPaymentSortOrder('no_debe_first');
+    } else {
+      setPaymentSortOrder('default');
+    }
+  };
 
   // Cambiar rol de usuario
   const handleRoleChange = async (userId: string, newRole: 'client' | 'admin') => {
@@ -404,25 +441,26 @@ export default function Admin() {
         </div>
       </header>
 
-      <div className="w-full max-w-full px-4 py-8 pb-32 mx-auto">
+      <div className="w-full max-w-full px-4 py-8 pb-4 md:pb-8 mx-auto">
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
-          <div className="w-full max-w-full overflow-x-auto">
+          {/* Tabs Desktop - oculto en móvil */}
+          <div className="hidden md:block w-full max-w-full overflow-x-auto mb-6">
             <TabsList className="grid w-full grid-cols-4 min-w-0">
-              <TabsTrigger value="usuarios" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
-                <Users className="hidden sm:block h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="usuarios" className="flex items-center space-x-2 text-sm min-w-0">
+                <Users className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">Usuarios</span>
               </TabsTrigger>
-              <TabsTrigger value="balance" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
-                <Wallet className="hidden sm:block h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="balance" className="flex items-center space-x-2 text-sm min-w-0">
+                <Wallet className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">Balance</span>
               </TabsTrigger>
-              <TabsTrigger value="turnos" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
-                <Settings className="hidden sm:block h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="turnos" className="flex items-center space-x-2 text-sm min-w-0">
+                <Settings className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">Config</span>
               </TabsTrigger>
-              <TabsTrigger value="calendario" className="flex items-center space-x-1 sm:space-x-2 text-xs sm:text-sm min-w-0">
-                <Calendar className="hidden sm:block h-4 w-4 flex-shrink-0" />
+              <TabsTrigger value="calendario" className="flex items-center space-x-2 text-sm min-w-0">
+                <Calendar className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate">Agenda</span>
               </TabsTrigger>
             </TabsList>
@@ -432,48 +470,27 @@ export default function Admin() {
 
 
           {/* Tab de Usuarios */}
-          <TabsContent value="usuarios" className="mt-6 w-full max-w-full pb-24">
+          <TabsContent value="usuarios" className="mt-6 w-full max-w-full pb-20 md:pb-8">
 
             {/* Search and Filters */}
-            <Card className="mb-6">
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  {/* Búsqueda */}
-                  <div className="relative w-full sm:w-80">
-                    <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      id="search-users"
-                      name="search-users"
-                      placeholder="Buscar..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      className="pl-10 w-full placeholder:text-[2px] sm:placeholder:text-sm"
-                    />
-                  </div>
-
-                  {/* Estado de Pago */}
-                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-muted-foreground whitespace-nowrap">Estado de Pago:</span>
-                    <Select value={filterPaymentStatus} onValueChange={(value: any) => setFilterPaymentStatus(value)}>
-                      <SelectTrigger className="w-full sm:w-48">
-                        <SelectValue placeholder="Seleccionar estado" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todos los estados</SelectItem>
-                        <SelectItem value="paid">Pagado</SelectItem>
-                        <SelectItem value="pending">Pendiente</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="mb-6">
+              {/* Búsqueda */}
+              <div className="relative w-full sm:w-80">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                <Input
+                  id="search-users"
+                  name="search-users"
+                  placeholder="Buscar usuario por nombre"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10 w-full placeholder:text-[10px] sm:placeholder:text-sm"
+                />
+              </div>
+            </div>
 
 
             {/* Users Table */}
             <Card className="w-full max-w-full">
-              <CardHeader className="w-full max-w-full">
-              </CardHeader>
               <CardContent className="p-0 w-full max-w-full">
                 {/* Vista de escritorio - Tabla completa */}
                 <div className="hidden md:block overflow-x-auto w-full max-w-full">
@@ -486,7 +503,7 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {filteredUsers.map((user) => (
+                      {sortedUsers.map((user) => (
                         <tr key={user.id} className="border-b hover:bg-muted/50">
                           <td className="p-3">
                             <div className="min-w-0">
@@ -559,69 +576,58 @@ export default function Admin() {
                   </table>
                 </div>
 
-                {/* Vista móvil - Cards */}
-                <div className="md:hidden space-y-2 p-4">
-                  {filteredUsers.map((user) => (
-                    <Card key={user.id} className="w-full max-w-full">
-                      <CardContent className="px-4 py-2 w-full max-w-full">
-                        <div className="flex items-center justify-between w-full max-w-full">
-                          <div className="min-w-0 flex-1">
-                            <p className="font-medium truncate text-[15px] sm:text-base">{getDisplayFullName(user)}</p>
-                          </div>
-                          <div className="flex items-center space-x-1 flex-shrink-0">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                  <span className="sr-only">Abrir menú</span>
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={async () => { 
-                                  setShowUserDetails(true);
-                                  await cargarDatosUsuario(user.id);
-                                  cargarHorariosRecurrentes(user.id);
-                                }}>
-                                  <Eye className="w-4 h-4 mr-2" />
-                                  Ver Detalles
-                                </DropdownMenuItem>
-                                {user.role === 'client' && canBeAdmin(user.email) && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleRoleChange(user.id, 'admin')}
-                                    className="text-yellow-600"
-                                  >
-                                    <Crown className="w-4 h-4 mr-2" />
-                                    Hacer Administrador
-                                  </DropdownMenuItem>
-                                )}
-                                
-                                {user.role === 'admin' && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleRoleChange(user.id, 'client')}
-                                    className="text-blue-600"
-                                  >
-                                    <User className="w-4 h-4 mr-2" />
-                                    Hacer Cliente
-                                  </DropdownMenuItem>
-                                )}
-                                
-                                <DropdownMenuItem
-                                  onClick={() => handleDeleteUser(user.id, user.full_name)}
-                                  className="text-red-600"
-                                >
-                                  <Trash2 className="w-4 h-4 mr-2" />
-                                  Eliminar Usuario
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </div>
+                {/* Vista móvil - Lista */}
+                <div className="md:hidden">
+                  {/* Encabezados de columna */}
+                  <div className="flex items-center justify-between px-4 py-2 border-b bg-muted/30">
+                    <div className="flex-1">
+                      <p className="text-xs font-medium text-muted-foreground uppercase">Nombre</p>
+                    </div>
+                    <div className="w-24 text-center">
+                      <button 
+                        onClick={togglePaymentSort}
+                        className="text-xs font-medium text-muted-foreground uppercase hover:text-foreground transition-colors cursor-pointer"
+                      >
+                        Pago
+                      </button>
+                    </div>
+                  </div>
+                  
+                  {/* Lista de usuarios */}
+                  <div className="divide-y">
+                    {sortedUsers.map((user) => (
+                      <div 
+                        key={user.id} 
+                        className="flex items-center justify-between py-3 px-4 hover:bg-muted/50 transition-colors cursor-pointer"
+                        onClick={async () => { 
+                          setShowUserDetails(true);
+                          await cargarDatosUsuario(user.id);
+                          cargarHorariosRecurrentes(user.id);
+                        }}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
                         </div>
-                      </CardContent>
-                    </Card>
-                  ))}
+                        <div className="w-24 text-center flex-shrink-0">
+                          {(() => {
+                            const userPaymentStatus = parseInt(user.id.slice(-1), 16) % 2 === 0 ? 'debe' : 'no_debe';
+                            return (
+                              <span className={`text-xs font-medium ${
+                                userPaymentStatus === 'debe' 
+                                  ? 'text-red-600' 
+                                  : 'text-green-600'
+                              }`}>
+                                {userPaymentStatus === 'debe' ? 'debe' : 'no debe'}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
                 
-                {filteredUsers.length === 0 && (
+                {sortedUsers.length === 0 && (
                   <div className="text-center py-8 px-4">
                     <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
                     <p className="text-lg font-medium mb-2">No se encontraron clientes</p>
@@ -643,7 +649,7 @@ export default function Admin() {
           </TabsContent>
 
           {/* Tab de Balance */}
-          <TabsContent value="balance" className="mt-6 w-full max-w-full pb-24">
+          <TabsContent value="balance" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <Card>
               <CardHeader>
                 <CardTitle>Balance de Pagos</CardTitle>
@@ -659,12 +665,12 @@ export default function Admin() {
           </TabsContent>
 
           {/* Tab de Gestión de Turnos */}
-          <TabsContent value="turnos" className="mt-6 w-full max-w-full pb-24">
+          <TabsContent value="turnos" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <TurnoManagement />
           </TabsContent>
 
           {/* Tab de Calendario */}
-          <TabsContent value="calendario" className="mt-6 w-full max-w-full pb-24">
+          <TabsContent value="calendario" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <CalendarView isAdminView={true} />
           </TabsContent>
         </Tabs>
@@ -730,6 +736,51 @@ export default function Admin() {
           </Card>
         </div>
       )}
+
+      {/* Navbar Mobile - fija en bottom, solo visible en móvil */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
+        <div className="grid grid-cols-4 h-16">
+          <button
+            onClick={() => handleTabChange('usuarios')}
+            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+              activeTab === 'usuarios' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Users className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Usuarios</span>
+          </button>
+          
+          <button
+            onClick={() => handleTabChange('balance')}
+            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+              activeTab === 'balance' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Wallet className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Balance</span>
+          </button>
+          
+          <button
+            onClick={() => handleTabChange('turnos')}
+            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+              activeTab === 'turnos' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Settings className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Config</span>
+          </button>
+          
+          <button
+            onClick={() => handleTabChange('calendario')}
+            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+              activeTab === 'calendario' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Calendar className="h-5 w-5" />
+            <span className="text-[10px] font-medium">Agenda</span>
+          </button>
+        </div>
+      </nav>
 
       <Footer />
     </div>

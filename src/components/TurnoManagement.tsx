@@ -245,7 +245,7 @@ export const TurnoManagement = () => {
           <div className="grid grid-cols-1 gap-2 md:hidden mb-2 sm:mb-0">
             <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
               <DialogTrigger asChild>
-                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                   Alumnos por clase
                 </div>
               </DialogTrigger>
@@ -258,8 +258,8 @@ export const TurnoManagement = () => {
                 }}
               >
                 <DialogHeader>
-                  <DialogTitle>Capacidad por clase</DialogTitle>
-                  <DialogDescription>Edite la capacidad de alumnos para cada horario.</DialogDescription>
+                  <DialogTitle style={{ fontSize: '12px' }}>Capacidad por clase</DialogTitle>
+                  <DialogDescription style={{ fontSize: '12px' }}>Edite la capacidad de alumnos para cada horario.</DialogDescription>
                 </DialogHeader>
                 
                 {loadingHorarios ? (
@@ -305,29 +305,29 @@ export const TurnoManagement = () => {
                 )}
                 
                 <DialogFooter className="gap-2">
-                  <Button onClick={() => setIsCapacidadDialogOpen(false)}>Cerrar</Button>
+                  <Button onClick={() => setIsCapacidadDialogOpen(false)} style={{ fontSize: '14px' }}>Cerrar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
             <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
               <DialogTrigger asChild>
-                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                   Tarifa por clase
                 </div>
               </DialogTrigger>
               <DialogContent className="w-[90vw] max-w-[90vw] p-2 rounded-xl">
                 <div className="w-full">
                   <DialogHeader>
-                    <DialogTitle>Tarifa por clase</DialogTitle>
-                    <DialogDescription>Defina el valor de cada clase.</DialogDescription>
+                    <DialogTitle style={{ fontSize: '12px' }}>Tarifa por clase</DialogTitle>
+                    <DialogDescription style={{ fontSize: '12px' }}>Defina el valor de cada clase.</DialogDescription>
                   </DialogHeader>
                   <div className="flex items-center justify-between gap-4">
                     <Label htmlFor="tarifa-global" className="text-xs">Precio (ARS)</Label>
                     <Input id="tarifa-global" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
                   </div>
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
-                    <Button onClick={guardarTarifa}>Guardar</Button>
+                    <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)} style={{ fontSize: '14px' }}>Cancelar</Button>
+                    <Button onClick={guardarTarifa} style={{ fontSize: '14px' }}>Guardar</Button>
                   </DialogFooter>
                 </div>
               </DialogContent>
@@ -338,14 +338,14 @@ export const TurnoManagement = () => {
           <div className="hidden md:grid md:grid-cols-2 md:gap-4">
             <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
               <DialogTrigger asChild>
-                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                   Alumnos por clase
                 </div>
               </DialogTrigger>
               <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col">
                 <DialogHeader>
-                  <DialogTitle>Capacidad por clase</DialogTitle>
-                  <DialogDescription>Edite la capacidad de alumnos para cada horario.</DialogDescription>
+                  <DialogTitle style={{ fontSize: '12px' }}>Capacidad por clase</DialogTitle>
+                  <DialogDescription style={{ fontSize: '12px' }}>Edite la capacidad de alumnos para cada horario.</DialogDescription>
                 </DialogHeader>
                 
                 {loadingHorarios ? (
@@ -391,13 +391,13 @@ export const TurnoManagement = () => {
                 )}
                 
                 <DialogFooter className="gap-2">
-                  <Button onClick={() => setIsCapacidadDialogOpen(false)}>Cerrar</Button>
+                  <Button onClick={() => setIsCapacidadDialogOpen(false)} style={{ fontSize: '14px' }}>Cerrar</Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
             <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
               <DialogTrigger asChild>
-                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                   Tarifa por clase
                 </div>
               </DialogTrigger>
@@ -431,13 +431,13 @@ export const TurnoManagement = () => {
               {/* CTA 1: Editar horarios fijos */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Editar horarios fijos
                   </div>
                 </DialogTrigger>
                 <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2">Configurar Horarios Fijos</DialogTitle>
+                    <DialogTitle className="flex items-center space-x-2" style={{ fontSize: '12px' }}>Configurar Horarios Fijos</DialogTitle>
                   </DialogHeader>
                   
                   <div className="space-y-4">
@@ -493,14 +493,14 @@ export const TurnoManagement = () => {
                     <AlertDialog open={confirmDeleteId !== null} onOpenChange={(open) => !open && setConfirmDeleteId(null)}>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Eliminar clase</AlertDialogTitle>
-                          <AlertDialogDescription>
+                          <AlertDialogTitle style={{ fontSize: '12px' }}>Eliminar clase</AlertDialogTitle>
+                          <AlertDialogDescription style={{ fontSize: '12px' }}>
                             ¿Está seguro que desea eliminar esta clase?
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={handleConfirmarEliminar}>Eliminar</AlertDialogAction>
+                          <AlertDialogCancel style={{ fontSize: '14px' }}>Cancelar</AlertDialogCancel>
+                          <AlertDialogAction onClick={handleConfirmarEliminar} style={{ fontSize: '14px' }}>Eliminar</AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
@@ -521,10 +521,11 @@ export const TurnoManagement = () => {
                     <Button 
                       variant="outline" 
                       onClick={() => setIsDialogOpen(false)}
+                      style={{ fontSize: '14px' }}
                     >
                       Cancelar
                     </Button>
-                    <Button onClick={handleGuardarHorarios}>
+                    <Button onClick={handleGuardarHorarios} style={{ fontSize: '14px' }}>
                       Guardar
                     </Button>
                   </DialogFooter>
@@ -534,7 +535,7 @@ export const TurnoManagement = () => {
               {/* CTA 2: Editar ausencias */}
               <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Editar ausencias
                   </div>
                 </DialogTrigger>
@@ -550,6 +551,7 @@ export const TurnoManagement = () => {
                           onClick={() => setTipoAusencia('unica')}
                           className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
                           variant="outline"
+                          style={{ fontSize: '14px' }}
                         >
                           <span className="font-medium">Ausencia Única</span>
                           <span className="text-xs text-muted-foreground text-center">
@@ -561,6 +563,7 @@ export const TurnoManagement = () => {
                           onClick={() => setTipoAusencia('periodo')}
                           className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
                           variant="outline"
+                          style={{ fontSize: '14px' }}
                         >
                           <span className="font-medium">Ausencia por Período</span>
                           <span className="text-xs text-muted-foreground text-center">
@@ -614,10 +617,10 @@ export const TurnoManagement = () => {
                       </div>
 
                       <div className="flex space-x-2">
-                        <Button variant="outline" onClick={() => setTipoAusencia(null)} size="sm">
+                        <Button variant="outline" onClick={() => setTipoAusencia(null)} size="sm" style={{ fontSize: '14px' }}>
                           Volver
                         </Button>
-                        <Button onClick={handleAgregarAusenciaUnica} disabled={!nuevaAusenciaUnica.fechaCompleta || nuevaAusenciaUnica.clasesCanceladas.length === 0} size="sm">
+                        <Button onClick={handleAgregarAusenciaUnica} disabled={!nuevaAusenciaUnica.fechaCompleta || nuevaAusenciaUnica.clasesCanceladas.length === 0} size="sm" style={{ fontSize: '14px' }}>
                           Guardar
                         </Button>
                       </div>
@@ -648,10 +651,10 @@ export const TurnoManagement = () => {
                       </div>
 
                       <div className="flex space-x-2">
-                        <Button variant="outline" onClick={() => setTipoAusencia(null)}>
+                        <Button variant="outline" onClick={() => setTipoAusencia(null)} style={{ fontSize: '14px' }}>
                           Volver
                         </Button>
-                        <Button onClick={handleAgregarAusenciaPeriodo} disabled={!nuevaAusenciaPeriodo.fechaDesde || !nuevaAusenciaPeriodo.fechaHasta}>
+                        <Button onClick={handleAgregarAusenciaPeriodo} disabled={!nuevaAusenciaPeriodo.fechaDesde || !nuevaAusenciaPeriodo.fechaHasta} style={{ fontSize: '14px' }}>
                           Guardar
                         </Button>
                       </div>
@@ -704,7 +707,7 @@ export const TurnoManagement = () => {
                   )}
 
                   <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsDialogAusenciasOpen(false)}>
+                    <Button variant="outline" onClick={() => setIsDialogAusenciasOpen(false)} style={{ fontSize: '14px' }}>
                       Cerrar
                     </Button>
                   </DialogFooter>

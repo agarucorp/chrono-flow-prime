@@ -27,8 +27,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     firstName: "",
     lastName: "",
     phone: "",
-    gender: "",
-    birthDate: undefined as Date | undefined,
     email: "",
     confirmEmail: "",
     password: "",
@@ -84,7 +82,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     // Manejo del registro por pasos
     if (currentStep === 1) {
       // Validación paso 1
-      if (!registerData.firstName || !registerData.lastName || !registerData.phone || !registerData.gender || !registerData.birthDate) {
+      if (!registerData.firstName || !registerData.lastName || !registerData.phone) {
         showWarning("Campos incompletos", "Por favor complete todos los campos del paso 1");
         setError("Por favor complete todos los campos del paso 1");
         return;
@@ -115,9 +113,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
           first_name: registerData.firstName,
           last_name: registerData.lastName,
           full_name: `${registerData.firstName} ${registerData.lastName}`,
-          phone: registerData.phone,
-          gender: registerData.gender,
-          birth_date: registerData.birthDate?.toISOString().split('T')[0]
+          phone: registerData.phone
         });
         
         if (result.success && result.user) {
@@ -145,8 +141,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               firstName: "",
               lastName: "",
               phone: "",
-              gender: "",
-              birthDate: undefined,
               email: "",
               confirmEmail: "",
               password: "",
@@ -339,31 +333,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       placeholder="+54 11 1234-5678"
                       value={registerData.phone}
                       onChange={(e) => setRegisterData(prev => ({ ...prev, phone: e.target.value }))}
-                      className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="gender">Género</Label>
-                    <Select value={registerData.gender} onValueChange={(value) => setRegisterData(prev => ({ ...prev, gender: value }))}>
-                      <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-primary/50">
-                        <SelectValue placeholder="Seleccione su género" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="masculino">Masculino</SelectItem>
-                        <SelectItem value="femenino">Femenino</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
-                    <Input
-                      id="birthDate"
-                      type="date"
-                      value={registerData.birthDate ? registerData.birthDate.toISOString().split('T')[0] : ""}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, birthDate: e.target.value ? new Date(e.target.value) : undefined }))}
                       className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                       required
                     />
