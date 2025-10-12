@@ -22,6 +22,8 @@ interface RecurringScheduleModalProps {
   onComplete: () => void;
 }
 
+// ⚡ VERSION: 2025-01-12T16:00:00Z - CRITICAL FIX
+// Fixed: Removed horario_clase_id and created_at from insert
 export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   isOpen,
   onClose,
@@ -29,6 +31,9 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 }) => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  
+  // Build timestamp to force cache invalidation
+  const BUILD_VERSION = '2025-01-12T16:00:00Z';
   
   const [horariosClase, setHorariosClase] = useState<HorarioClase[]>([]);
   const [horariosSeleccionados, setHorariosSeleccionados] = useState<Set<string>>(new Set());
@@ -49,6 +54,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   // Cargar horarios de clase disponibles
   useEffect(() => {
     if (isOpen) {
+      console.log(`🔥 RecurringScheduleModal VERSION: ${BUILD_VERSION}`);
+      console.log('📌 This version DOES NOT include horario_clase_id or created_at in inserts');
       fetchHorariosClase();
     }
   }, [isOpen]);
@@ -121,19 +128,59 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       setSaving(true);
       const loadingToast = showLoading('Guardando horarios...');
 
+      console.log('🔄 Iniciando confirmación de horarios recurrentes...');
+      console.log('👤 Usuario:', user?.id);
+      console.log('📅 Horarios seleccionados:', Array.from(horariosSeleccionados));
+
+      // Verificar que el usuario tiene perfil, si no, crearlo
+      const { data: profile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user?.id)
+        .single();
+
+      if (profileError && profileError.code === 'PGRST116') {
+        console.log('📝 Creando perfil para usuario...');
+        // El perfil no existe, crearlo
+        const { error: createProfileError } = await supabase
+          .from('profiles')
+          .insert({
+            id: user?.id,
+            email: user?.email,
+            role: 'client',
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          });
+
+        if (createProfileError) {
+          console.error('❌ Error creando perfil:', createProfileError);
+          dismissToast(loadingToast);
+          showError('Error', 'Error al crear el perfil de usuario');
+          return;
+        }
+        console.log('✅ Perfil creado exitosamente');
+      } else if (profileError) {
+        console.error('❌ Error verificando perfil:', profileError);
+        dismissToast(loadingToast);
+        showError('Error', 'Error al verificar el perfil de usuario');
+        return;
+      } else {
+        console.log('✅ Perfil existe:', profile?.id);
+      }
+
       const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
         const horario = horariosClase.find(h => h.id === horarioId);
         return {
           usuario_id: user?.id,
-          horario_clase_id: horarioId,
           dia_semana: horario?.dia_semana,
           hora_inicio: horario?.hora_inicio,
           hora_fin: horario?.hora_fin,
           activo: true,
-          fecha_inicio: new Date().toISOString().split('T')[0],
-          created_at: new Date().toISOString()
+          fecha_inicio: new Date().toISOString().split('T')[0]
         };
       });
+
+      console.log('💾 Datos a insertar:', horariosRecurrentes);
 
       const { error } = await supabase
         .from('horarios_recurrentes_usuario')
@@ -142,17 +189,22 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       dismissToast(loadingToast);
 
       if (error) {
-        console.error('Error guardando horarios recurrentes:', error);
-        showError('Error', 'No se pudieron guardar tus horarios recurrentes');
+        console.error('❌ Error guardando horarios recurrentes:', error);
+        showError('Error', `No se pudieron guardar tus horarios recurrentes: ${error.message}`);
         return;
       }
 
+      console.log('✅ Horarios recurrentes guardados exitosamente');
       showSuccess('¡Horarios confirmados!', 'Tus horarios recurrentes fueron guardados');
+      
       // Notificar al panel para recargar "Mis Clases"
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
+      
+      console.log('🔄 Llamando onComplete...');
       onComplete();
+      console.log('✅ onComplete ejecutado');
     } catch (error) {
-      console.error('Error inesperado:', error);
+      console.error('❌ Error inesperado:', error);
       showError('Error', 'Error inesperado al guardar horarios');
     } finally {
       setSaving(false);

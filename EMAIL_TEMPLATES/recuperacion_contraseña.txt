@@ -1,0 +1,29 @@
+============================================
+    MALDAGYM
+    Sistema de gestión de clases y horarios
+============================================
+
+🔐 RECUPERAR CONTRASEÑA
+
+Restablecer tu contraseña
+-------------------------------------------
+
+Hola,
+
+Recibimos una solicitud para restablecer la contraseña de tu cuenta en MaldaGym.
+
+Si fuiste tú quien solicitó este cambio, haz clic en el enlace de abajo para crear una nueva contraseña:
+
+🔗 RESTABLECER MI CONTRASEÑA:
+{{ .ConfirmationURL }}
+
+⚠️ IMPORTANTE: 
+- Este enlace expirará en 1 hora por razones de seguridad.
+- Si no solicitaste este cambio, ignora este correo y tu contraseña permanecerá sin cambios.
+
+-------------------------------------------
+
+¿Necesitas ayuda?
+Visita nuestro sitio web: {{ .SiteURL }}
+
+© 2025 MaldaGym. Todos los derechos reservados.

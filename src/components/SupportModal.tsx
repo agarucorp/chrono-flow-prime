@@ -37,37 +37,37 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-center text-xl font-semibold">
+      <DialogContent className="w-[95vw] max-w-[95vw] sm:w-auto sm:max-w-md p-4 sm:p-6">
+        <DialogHeader className="space-y-1.5">
+          <DialogTitle className="text-center text-base sm:text-xl font-semibold">
             Soporte y Contacto
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4 py-4">
+        <div className="space-y-3 py-2 sm:py-4">
           {/* Email de contacto */}
           <Card className="border-primary/20">
-            <CardContent className="p-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary/10 rounded-full">
-                    <Mail className="h-5 w-5 text-primary" />
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div className="flex items-start sm:items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
+                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-full flex-shrink-0">
+                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Email de contacto</p>
-                    <p className="text-sm font-mono">{contactEmail}</p>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Email</p>
+                    <p className="text-xs sm:text-sm font-mono truncate">{contactEmail}</p>
                   </div>
                 </div>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={handleCopyEmail}
-                  className="flex items-center space-x-2"
+                  className="flex items-center justify-center space-x-1 h-8 px-3 text-xs w-full sm:w-auto flex-shrink-0"
                 >
                   {copied ? (
-                    <Check className="h-4 w-4 text-green-600" />
+                    <Check className="h-3.5 w-3.5 text-green-600" />
                   ) : (
-                    <Copy className="h-4 w-4" />
+                    <Copy className="h-3.5 w-3.5" />
                   )}
                   <span className="text-xs">
                     {copied ? 'Copiado' : 'Copiar'}
@@ -80,34 +80,34 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
           {/* WhatsApp */}
           <Card className="border-green-200 hover:border-green-300 transition-colors cursor-pointer"
                 onClick={handleWhatsAppClick}>
-            <CardContent className="p-4">
-              <div className="flex items-center space-x-3">
-                <div className="p-2 bg-green-100 rounded-full">
+            <CardContent className="p-3 sm:p-4">
+              <div className="flex items-center space-x-2 sm:space-x-3">
+                <div className="p-1.5 sm:p-2 bg-green-100 rounded-full flex-shrink-0">
                   <img 
                     src="/WhatsApp.png" 
                     alt="WhatsApp" 
-                    className="h-5 w-5"
+                    className="h-4 w-4 sm:h-5 sm:w-5"
                   />
                 </div>
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-green-700">WhatsApp</p>
-                  <p className="text-xs text-green-600">Chatea con nosotros</p>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm font-medium text-green-700">WhatsApp</p>
+                  <p className="text-[10px] sm:text-xs text-green-600">Chatea con nosotros</p>
                 </div>
-                <MessageCircle className="h-4 w-4 text-green-600" />
+                <MessageCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
               </div>
             </CardContent>
           </Card>
 
           {/* Información adicional */}
-          <div className="text-center pt-2">
-            <p className="text-xs text-muted-foreground">
+          <div className="text-center pt-1 sm:pt-2 px-2">
+            <p className="text-[10px] sm:text-xs text-muted-foreground">
               Envíanos tus comentarios para seguir mejorando la plataforma
             </p>
           </div>
         </div>
 
         <div className="flex justify-end pt-2">
-          <Button variant="outline" onClick={onClose}>
+          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
             Cerrar
           </Button>
         </div>

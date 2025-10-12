@@ -19,6 +19,7 @@ import { supabase } from '@/lib/supabase';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
+import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 
 interface HorarioRecurrente {
   id: string;
@@ -81,6 +82,9 @@ export const RecurringScheduleView = () => {
     const saved = localStorage.getItem('lastLoadTime');
     return saved ? parseInt(saved) : 0;
   });
+
+  // Estado para modal de edición de perfil
+  const [showProfileSettings, setShowProfileSettings] = useState(false);
 
   // Función para formatear horas sin segundos
   const formatTime = (timeString: string) => {
@@ -807,80 +811,55 @@ export const RecurringScheduleView = () => {
               <CardTitle className="text-lg sm:text-2xl">Mi Perfil</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {/* Nombre y Apellido */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Nombre y Apellido</label>
-                <p className="text-sm px-3 py-2 bg-muted/50 rounded-md">
-                  {profileData?.full_name || 
-                   (profileData?.first_name && profileData?.last_name 
-                     ? `${profileData.first_name} ${profileData.last_name}` 
-                     : user?.user_metadata?.full_name || 
-                       (user?.user_metadata?.first_name && user?.user_metadata?.last_name
-                         ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
-                         : 'No configurado'))}
-                </p>
-              </div>
+              {/* Información del perfil */}
+              <div className="space-y-3">
+                <div className="p-4 bg-muted/50 rounded-lg space-y-2">
+                  <div>
+                    <p className="text-xs text-muted-foreground">Email</p>
+                    <p className="text-sm font-medium">{user?.email}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Nombre</p>
+                    <p className="text-sm font-medium">
+                      {profileData?.first_name && profileData?.last_name 
+                        ? `${profileData.first_name} ${profileData.last_name}` 
+                        : user?.user_metadata?.first_name && user?.user_metadata?.last_name
+                          ? `${user.user_metadata.first_name} ${user.user_metadata.last_name}`
+                          : 'No configurado'}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Teléfono</p>
+                    <p className="text-sm font-medium">
+                      {profileData?.phone || user?.user_metadata?.phone || 'No configurado'}
+                    </p>
+                  </div>
+                </div>
 
-              {/* Correo */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Correo Electrónico</label>
+                {/* Botón Editar Perfil */}
                 <Button
-                  variant="outline"
-                  className="w-full justify-between h-auto py-2 px-3"
-                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-email'))}
+                  variant="default"
+                  className="w-full text-xs sm:text-sm"
+                  onClick={() => setShowProfileSettings(true)}
                 >
-                  <span className="text-sm">{user?.email}</span>
-                  <span className="text-xs text-primary">Editar</span>
+                  <UserIcon className="h-4 w-4 mr-2" />
+                  Editar Perfil
+                </Button>
+
+                {/* Cerrar Sesión */}
+                <Button
+                  variant="destructive"
+                  className="w-full text-xs sm:text-sm"
+                  onClick={() => {
+                    if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
+                      window.dispatchEvent(new CustomEvent('auth:signout'));
+                    }
+                  }}
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Cerrar Sesión
                 </Button>
               </div>
-
-              {/* Fecha de Nacimiento */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Fecha de Nacimiento</label>
-                <p className="text-sm px-3 py-2 bg-muted/50 rounded-md">
-                  {profileData?.birth_date || user?.user_metadata?.birth_date || 'No configurado'}
-                </p>
-              </div>
-
-              {/* Teléfono */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Número de Teléfono</label>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between h-auto py-2 px-3"
-                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-phone'))}
-                >
-                  <span className="text-sm">{profileData?.phone || user?.user_metadata?.phone || 'No configurado'}</span>
-                  <span className="text-xs text-primary">Editar</span>
-                </Button>
-              </div>
-
-              {/* Contraseña */}
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-muted-foreground">Contraseña</label>
-                <Button
-                  variant="outline"
-                  className="w-full justify-between h-auto py-2 px-3"
-                  onClick={() => window.dispatchEvent(new CustomEvent('profile:edit-password'))}
-                >
-                  <span className="text-sm">••••••••</span>
-                  <span className="text-xs text-primary">Cambiar</span>
-                </Button>
-              </div>
-
-              {/* Cerrar Sesión */}
-              <Button
-                variant="destructive"
-                className="w-full justify-center mt-6"
-                onClick={() => {
-                  if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-                    window.dispatchEvent(new CustomEvent('auth:signout'));
-                  }
-                }}
-              >
-                <X className="h-4 w-4 mr-2" />
-                Cerrar Sesión
-              </Button>
             </CardContent>
           </Card>
         </div>
@@ -891,7 +870,7 @@ export const RecurringScheduleView = () => {
         <div className="w-full md:w-[35%] mx-auto animate-view-swap pb-24 sm:pb-0">
         <Card>
           <CardHeader>
-            <CardTitle className="text-xl">Turnos Cancelados Disponibles</CardTitle>
+            <CardTitle className="text-sm sm:text-xl">Turnos Cancelados Disponibles</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTurnosCancelados ? (
@@ -1083,6 +1062,18 @@ export const RecurringScheduleView = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Modal de Configuración de Perfil - Mismo formato que desktop */}
+      <ProfileSettingsDialog
+        open={showProfileSettings}
+        onClose={() => {
+          setShowProfileSettings(false);
+          // Recargar datos del perfil después de cerrar
+          cargarDatosPerfil();
+        }}
+        userId={user?.id || null}
+        email={user?.email || null}
+      />
     </div>
   );
 };

@@ -124,12 +124,10 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
               <Input id="lastName-mobile" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} className="text-sm" />
             </div>
 
-            {/* Teléfono - solo lectura */}
+            {/* Teléfono - editable */}
             <div className="space-y-2">
-              <Label htmlFor="phone" className="text-sm">Teléfono</Label>
-              <div className="p-3 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground">{phone || 'No configurado'}</p>
-              </div>
+              <Label htmlFor="phone-mobile" className="text-sm">Teléfono</Label>
+              <Input id="phone-mobile" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-sm" placeholder="+54 9 11 1234-5678" />
             </div>
 
             {/* CTA Cambiar Contraseña */}

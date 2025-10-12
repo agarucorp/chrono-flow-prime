@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Recuperar contraseña - MaldaGym</title>
+    <style>
+        /* Reseteo de estilos */
+        body, table, td, a {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+        }
+        
+        /* Estilos generales */
+        body {
+            margin: 0;
+            padding: 0;
+            width: 100% !important;
+            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        
+        /* Contenedor principal */
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        
+        /* Header con color primario */
+        .email-header {
+            background: linear-gradient(135deg, #FB8500 0%, #FFB347 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+        
+        .email-header h1 {
+            color: #ffffff;
+            font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            font-size: 28px;
+            font-weight: 700;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Contenido */
+        .email-content {
+            padding: 40px 30px;
+            color: #2d3748;
+        }
+        
+        .email-content p {
+            font-size: 16px;
+            line-height: 1.6;
+            margin: 0 0 20px 0;
+            color: #2d3748;
+        }
+        
+        .email-content h2 {
+            font-family: 'Open Sans', -apple-system, sans-serif;
+            font-size: 22px;
+            font-weight: 600;
+            color: #1a202c;
+            margin: 0 0 20px 0;
+        }
+        
+        /* Botón de recuperación */
+        .reset-button {
+            display: inline-block;
+            background: linear-gradient(135deg, #FB8500 0%, #FFB347 100%);
+            color: #ffffff !important;
+            text-decoration: none;
+            padding: 16px 40px;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            margin: 30px 0;
+            box-shadow: 0 4px 20px -4px rgba(251, 133, 0, 0.3);
+            transition: all 0.3s ease;
+        }
+        
+        .reset-button:hover {
+            box-shadow: 0 6px 30px -4px rgba(251, 133, 0, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        /* Caja de advertencia */
+        .warning-box {
+            background-color: #fef2f2;
+            border-left: 4px solid #dc2626;
+            padding: 20px;
+            margin: 30px 0;
+            border-radius: 4px;
+        }
+        
+        .warning-box p {
+            margin: 0;
+            font-size: 14px;
+            color: #991b1b;
+        }
+        
+        /* Footer */
+        .email-footer {
+            background-color: #f7fafc;
+            padding: 30px;
+            text-align: center;
+            border-top: 1px solid #e2e8f0;
+        }
+        
+        .email-footer p {
+            margin: 5px 0;
+            font-size: 14px;
+            color: #718096;
+        }
+        
+        .email-footer a {
+            color: #FB8500;
+            text-decoration: none;
+        }
+        
+        /* Responsive */
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            
+            .email-header {
+                padding: 30px 20px;
+            }
+            
+            .email-header h1 {
+                font-size: 24px;
+            }
+            
+            .email-content {
+                padding: 30px 20px;
+            }
+            
+            .email-content h2 {
+                font-size: 20px;
+            }
+            
+            .email-content p {
+                font-size: 15px;
+            }
+            
+            .reset-button {
+                display: block;
+                padding: 14px 30px;
+                font-size: 15px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
+        <tr>
+            <td style="padding: 20px 0;">
+                <table role="presentation" class="email-container" cellspacing="0" cellpadding="0" border="0" width="600" align="center">
+                    <!-- Header -->
+                    <tr>
+                        <td class="email-header">
+                            <h1>🔐 Recuperar Contraseña</h1>
+                        </td>
+                    </tr>
+                    
+                    <!-- Content -->
+                    <tr>
+                        <td class="email-content">
+                            <h2>Restablecer tu contraseña</h2>
+                            
+                            <p>Hola,</p>
+                            
+                            <p>Recibimos una solicitud para restablecer la contraseña de tu cuenta en <strong>MaldaGym</strong>.</p>
+                            
+                            <p>Si fuiste tú quien solicitó este cambio, haz clic en el botón de abajo para crear una nueva contraseña:</p>
+                            
+                            <div style="text-align: center;">
+                                <a href="{{ .ConfirmationURL }}" class="reset-button">
+                                    Restablecer mi contraseña
+                                </a>
+                            </div>
+                            
+                            <div class="warning-box">
+                                <p><strong>⚠️ Importante:</strong> Este enlace expirará en 1 hora por razones de seguridad. Si no solicitaste este cambio, ignora este correo y tu contraseña permanecerá sin cambios.</p>
+                            </div>
+                            
+                            <p style="margin-top: 30px;">
+                                <strong>¿Problemas con el botón?</strong><br>
+                                Copia y pega este enlace en tu navegador:
+                            </p>
+                            <p style="word-break: break-all; font-size: 13px; color: #718096; background-color: #f7fafc; padding: 10px; border-radius: 4px;">
+                                {{ .ConfirmationURL }}
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td class="email-footer">
+                            <p style="font-weight: 600; color: #2d3748; margin-bottom: 10px;">MaldaGym</p>
+                            <p>Sistema de gestión de clases y horarios</p>
+                            <p style="margin-top: 15px;">
+                                <a href="{{ .SiteURL }}">Visitar sitio web</a>
+                            </p>
+                            <p style="margin-top: 20px; font-size: 12px;">
+                                © 2025 MaldaGym. Todos los derechos reservados.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
