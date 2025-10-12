@@ -56,14 +56,14 @@ export const useSystemConfig = () => {
     try {
       setLoading(true);
 
-      // Cargar horarios fijos (usar horarios_clase sin filtros problemáticos)
+      // Cargar horarios semanales
       let horarios = [];
       let errorHorarios = null;
       
       try {
-        // Consultar horarios_clase sin filtros que puedan causar error 400
+        // Consultar horarios_semanales (tabla correcta)
         const { data, error } = await supabase
-          .from('horarios_clase')
+          .from('horarios_semanales')
           .select('*');
         horarios = data;
         errorHorarios = error;

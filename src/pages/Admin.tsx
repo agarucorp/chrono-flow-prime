@@ -18,7 +18,10 @@ import {
   Clock,
   LogOut,
   X,
-  Wallet
+  Wallet,
+  DollarSign,
+  Save,
+  XCircle
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -66,6 +69,10 @@ export default function Admin() {
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'debe_first' | 'no_debe_first'>('default');
+  const [editingTarifa, setEditingTarifa] = useState(false);
+  const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
+  const [tarifaActual, setTarifaActual] = useState<number | null>(null);
+  const [loadingTarifa, setLoadingTarifa] = useState(false);
   
 
   // Función para obtener las iniciales del usuario
@@ -90,6 +97,76 @@ export default function Admin() {
       ).join(' ');
     }
     return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  // Función para cargar tarifa del usuario
+  const cargarTarifaUsuario = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .rpc('obtener_tarifa_usuario', { p_usuario_id: userId });
+      
+      if (error) {
+        console.error('Error cargando tarifa:', error);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        setTarifaActual(data[0].tarifa_efectiva);
+        setNuevaTarifa(data[0].tarifa_efectiva.toString());
+      }
+    } catch (error) {
+      console.error('Error:', error);
+    }
+  };
+
+  // Función para guardar tarifa personalizada
+  const guardarTarifaUsuario = async () => {
+    if (!selectedUser) return;
+    
+    const tarifaNumero = parseFloat(nuevaTarifa);
+    
+    if (isNaN(tarifaNumero) || tarifaNumero < 0) {
+      showError('Error', 'Por favor ingresa una tarifa válida');
+      return;
+    }
+    
+    setLoadingTarifa(true);
+    const loadingToast = showLoading('Actualizando tarifa...');
+    
+    try {
+      const { data, error } = await supabase
+        .rpc('cambiar_tarifa_usuario', {
+          p_usuario_afectado: selectedUser.id,
+          p_nueva_tarifa: tarifaNumero,
+          p_motivo_cambio: 'Actualización desde panel admin',
+          p_usuario_modificador: user?.id
+        });
+      
+      dismissToast(loadingToast);
+      
+      if (error) {
+        console.error('Error guardando tarifa:', error);
+        showError('Error', 'No se pudo actualizar la tarifa');
+        return;
+      }
+      
+      if (data && data.length > 0 && data[0].exito) {
+        showSuccess('Tarifa actualizada', data[0].mensaje);
+        setTarifaActual(tarifaNumero);
+        setEditingTarifa(false);
+        
+        // Recargar datos del usuario
+        await fetchAllUsers();
+      } else {
+        showError('Error', data?.[0]?.mensaje || 'No se pudo actualizar la tarifa');
+      }
+    } catch (error) {
+      dismissToast(loadingToast);
+      console.error('Error:', error);
+      showError('Error', 'Ocurrió un error al actualizar la tarifa');
+    } finally {
+      setLoadingTarifa(false);
+    }
   };
 
   // Función para cargar horarios recurrentes del usuario
@@ -603,7 +680,11 @@ export default function Admin() {
                                     </Button>
                                   </DropdownMenuTrigger>
                                 <DropdownMenuContent align="end">
-                                  <DropdownMenuItem onClick={() => { setSelectedUser(user); setShowUserDetails(true); }}>
+                                  <DropdownMenuItem onClick={() => { 
+                                    setSelectedUser(user); 
+                                    setShowUserDetails(true); 
+                                    cargarTarifaUsuario(user.id);
+                                  }}>
                                     <Eye className="w-4 h-4 mr-2" />
                                     Ver Detalles
                                   </DropdownMenuItem>
@@ -675,6 +756,7 @@ export default function Admin() {
                             setShowUserDetails(true);
                             await cargarDatosUsuario(user.id);
                             cargarHorariosRecurrentes(user.id);
+                            cargarTarifaUsuario(user.id);
                           }}
                         >
                           <div className="min-w-0 flex-1">
@@ -752,7 +834,13 @@ export default function Admin() {
           <Card className="relative w-full max-w-md max-h-[85vh] overflow-hidden">
             <button
               type="button"
-              onClick={() => { setShowUserDetails(false); setHorariosRecurrentes([]); }}
+              onClick={() => { 
+                setShowUserDetails(false); 
+                setHorariosRecurrentes([]); 
+                setEditingTarifa(false);
+                setNuevaTarifa('');
+                setTarifaActual(null);
+              }}
               aria-label="Cerrar"
               className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
             >
@@ -776,6 +864,85 @@ export default function Admin() {
                   {selectedUser.phone || 'No especificado'}
                 </p>
               </div>
+              
+              {/* Sección de Tarifa */}
+              <div className="border-t pt-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium flex items-center gap-2">
+                    <DollarSign className="h-4 w-4" />
+                    Tarifa Personalizada
+                  </label>
+                  {!editingTarifa && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setEditingTarifa(true)}
+                      className="h-8 text-xs"
+                    >
+                      <Edit className="h-3 w-3 mr-1" />
+                      Editar
+                    </Button>
+                  )}
+                </div>
+                
+                {editingTarifa ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm text-muted-foreground">$</span>
+                      <Input
+                        type="number"
+                        value={nuevaTarifa}
+                        onChange={(e) => setNuevaTarifa(e.target.value)}
+                        placeholder="0.00"
+                        step="0.01"
+                        min="0"
+                        className="flex-1"
+                        disabled={loadingTarifa}
+                      />
+                      <span className="text-sm text-muted-foreground">ARS</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={guardarTarifaUsuario}
+                        disabled={loadingTarifa}
+                        className="flex-1"
+                      >
+                        {loadingTarifa ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        ) : (
+                          <>
+                            <Save className="h-3 w-3 mr-1" />
+                            Guardar
+                          </>
+                        )}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setEditingTarifa(false);
+                          setNuevaTarifa(tarifaActual?.toString() || '');
+                        }}
+                        disabled={loadingTarifa}
+                      >
+                        <XCircle className="h-3 w-3 mr-1" />
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <p className="text-lg font-semibold text-primary">
+                      ${tarifaActual?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {tarifaActual ? 'Tarifa personalizada activa' : 'Usando tarifa del sistema'}
+                    </p>
+                  </div>
+                )}
+              </div>
+              
               <div>
                 <label className="text-sm font-medium">Días de Asistencia</label>
                 {loadingHorarios ? (

@@ -1012,53 +1012,33 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
       {/* Modal de cancelación de clase de alumno (Admin) */}
       <Dialog open={showCancelAlumnoModal} onOpenChange={setShowCancelAlumnoModal}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="w-[90vw] max-w-[90vw] sm:max-w-[425px] p-3 sm:p-6 mx-1 sm:mx-auto max-h-[85vh] overflow-y-auto rounded-xl">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Trash2 className="h-5 w-5 text-red-500" />
+            <DialogTitle className="flex items-center gap-2 text-[12px]">
+              <Trash2 className="h-4 w-4 text-red-500" />
               Cancelar Clase de Alumno
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="text-[12px]">
               ¿Desea cancelar la clase de este alumno?
             </DialogDescription>
           </DialogHeader>
           
           {selectedAlumno && (
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
+            <div className="space-y-4 py-3">
+              <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Alumno</p>
-                    <p className="text-sm text-muted-foreground">{selectedAlumno.nombre}</p>
+                    <p className="text-[12px] font-medium">Alumno</p>
+                    <p className="text-[12px] text-muted-foreground">{selectedAlumno.nombre}</p>
                   </div>
                 </div>
-                
-                {selectedAlumno.email && (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4" /> {/* Espaciador */}
-                    <div>
-                      <p className="text-sm font-medium">Email</p>
-                      <p className="text-sm text-muted-foreground">{selectedAlumno.email}</p>
-                    </div>
-                  </div>
-                )}
-                
-                {selectedAlumno.telefono && (
-                  <div className="flex items-center gap-2">
-                    <div className="h-4 w-4" /> {/* Espaciador */}
-                    <div>
-                      <p className="text-sm font-medium">Teléfono</p>
-                      <p className="text-sm text-muted-foreground">{selectedAlumno.telefono}</p>
-                    </div>
-                  </div>
-                )}
                 
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Horario</p>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-[12px] font-medium">Horario</p>
+                    <p className="text-[12px] text-muted-foreground">
                       {selectedAlumno.hora_inicio} - {selectedAlumno.hora_fin}
                     </p>
                   </div>
@@ -1067,12 +1047,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium">Tipo</p>
-                    <Badge variant="outline" className={
+                    <p className="text-[12px] font-medium">Tipo</p>
+                    <Badge variant="outline" className={`text-[12px] ${
                       selectedAlumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
                       selectedAlumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
                       'text-red-600 border-red-300'
-                    }>
+                    }`}>
                       {selectedAlumno.tipo === 'recurrente' ? 'Clase Recurrente' :
                        selectedAlumno.tipo === 'variable' ? 'Clase Variable' : 'Cancelada'}
                     </Badge>
@@ -1080,8 +1060,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 </div>
               </div>
               
-              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
-                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
+                <p className="text-[12px] text-yellow-800 dark:text-yellow-200">
                   <strong>Importante:</strong> Esta acción cancelará la clase para esta fecha específica. 
                   El alumno verá esta clase como cancelada en su panel.
                 </p>
@@ -1089,7 +1069,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             </div>
           )}
           
-          <DialogFooter>
+          <DialogFooter className="gap-3">
             <Button
               variant="outline"
               onClick={() => {
@@ -1097,6 +1077,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 setSelectedAlumno(null);
               }}
               disabled={cancelingAlumno}
+              className="text-[12px]"
             >
               No, mantener clase
             </Button>
@@ -1104,6 +1085,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               variant="destructive"
               onClick={cancelarClaseAlumno}
               disabled={cancelingAlumno}
+              className="text-[12px]"
             >
               {cancelingAlumno ? 'Cancelando...' : 'Sí, cancelar clase'}
             </Button>

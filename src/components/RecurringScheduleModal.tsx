@@ -57,7 +57,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     try {
       setLoading(true);
       const { data, error } = await supabase
-        .from('horarios_clase')
+        .from('horarios_semanales')
         .select('*')
         .eq('activo', true)
         .order('dia_semana', { ascending: true })

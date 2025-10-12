@@ -165,10 +165,145 @@ export const TurnoManagement = () => {
     );
   };
 
-  const handleGuardarHorarios = () => {
-    // Aquí guardarías los horarios en la base de datos
-    console.log('Guardando horarios:', horariosFijos);
-    setIsDialogOpen(false);
+  // Función para validar capacidad vs alumnos existentes
+  const validarCapacidad = async (nuevaCapacidad: number) => {
+    try {
+      // Obtener horarios con alumnos agendados
+      const { data: horariosConAlumnos, error } = await supabase
+        .from('horarios_semanales')
+        .select('id, capacidad, alumnos_agendados, dia_semana, hora_inicio, hora_fin')
+        .gte('alumnos_agendados', 1);
+
+      if (error) {
+        console.error('Error obteniendo horarios:', error);
+        return { valido: false, conflictos: [], error: 'Error al validar capacidad' };
+      }
+
+      // Verificar conflictos
+      const conflictos = horariosConAlumnos?.filter(horario => 
+        horario.alumnos_agendados > nuevaCapacidad
+      ) || [];
+
+      return {
+        valido: conflictos.length === 0,
+        conflictos: conflictos.map(conflicto => ({
+          ...conflicto,
+          diaNombre: DIAS_SEMANA[conflicto.dia_semana - 1]
+        }))
+      };
+    } catch (error) {
+      console.error('Error inesperado validando capacidad:', error);
+      return { valido: false, conflictos: [], error: 'Error inesperado' };
+    }
+  };
+
+  const handleGuardarHorarios = async () => {
+    const nuevaCapacidad = parseInt(capacidadMaximaGlobal);
+    
+    // Validar capacidad
+    const validacion = await validarCapacidad(nuevaCapacidad);
+    
+    if (!validacion.valido) {
+      if (validacion.conflictos.length > 0) {
+        // Mostrar alerta de conflictos
+        const conflictosText = validacion.conflictos.map(c => 
+          `${c.diaNombre} ${c.hora_inicio.substring(0,5)} (${c.alumnos_agendados} alumnos)`
+        ).join('\n');
+        
+        if (!confirm(`⚠️ ADVERTENCIA: La nueva capacidad (${nuevaCapacidad}) es menor que el número actual de alumnos agendados en:\n\n${conflictosText}\n\n¿Está seguro de continuar? Esto podría afectar el funcionamiento del sistema.`)) {
+          return; // Usuario canceló
+        }
+      } else {
+        toast({ 
+          title: 'Error', 
+          description: validacion.error || 'Error validando capacidad', 
+          variant: 'destructive' 
+        });
+        return;
+      }
+    }
+
+    try {
+      // Calcular horarios de apertura y cierre basándose en los horarios del popup
+      const horariosInicio = horariosFijos.map(h => h.horaInicio).sort();
+      const horariosFin = horariosFijos.map(h => h.horaFin).sort();
+      const horarioApertura = horariosInicio[0] || '08:00';
+      const horarioCierre = horariosFin[horariosFin.length - 1] || '20:00';
+
+      // Preparar datos para actualizar configuracion_admin
+      const updateData: any = {
+        max_alumnos_por_clase: nuevaCapacidad,
+        horario_apertura: horarioApertura,
+        horario_cierre: horarioCierre,
+        updated_at: new Date().toISOString()
+      };
+
+      // Agregar tarifa si fue modificada
+      if (tarifaClase && parseFloat(tarifaClase) >= 0) {
+        updateData.tarifa_horaria = parseFloat(tarifaClase);
+      }
+
+      // Actualizar configuración en la tabla configuracion_admin existente
+      console.log('Intentando actualizar con datos:', updateData);
+      
+      const { data: updateResult, error: errorConfiguracion } = await supabase
+        .from('configuracion_admin')
+        .update(updateData)
+        .eq('sistema_activo', true)
+        .select();
+
+      console.log('Resultado de actualización:', { updateResult, errorConfiguracion });
+
+      if (errorConfiguracion) {
+        console.error('Error guardando configuración:', errorConfiguracion);
+        toast({ 
+          title: 'Error', 
+          description: `No se pudo guardar la configuración: ${errorConfiguracion.message}`, 
+          variant: 'destructive' 
+        });
+        return;
+      }
+
+      // Actualizar capacidad en horarios_semanales (master switch global)
+      console.log('Actualizando capacidad global en horarios_semanales...');
+      
+      const { error: errorCapacidadHorarios } = await supabase
+        .from('horarios_semanales')
+        .update({ 
+          capacidad: nuevaCapacidad,
+          updated_at: new Date().toISOString()
+        })
+        .eq('activo', true);
+
+      if (errorCapacidadHorarios) {
+        console.error('Error actualizando capacidad en horarios_semanales:', errorCapacidadHorarios);
+        toast({ 
+          title: 'Advertencia', 
+          description: 'Capacidad guardada en configuración pero error actualizando horarios', 
+          variant: 'destructive' 
+        });
+      } else {
+        console.log('Capacidad actualizada exitosamente en todos los horarios semanales');
+      }
+
+      toast({ 
+        title: 'Guardado exitoso', 
+        description: 'Configuración actualizada correctamente' 
+      });
+      
+      setIsDialogOpen(false);
+      
+      // Recargar configuraciones
+      window.location.reload(); // Temporal - después se puede optimizar
+      
+    } catch (error) {
+      console.error('Error guardando configuración:', error);
+      toast({ 
+        title: 'Error', 
+        description: 'Error inesperado al guardar', 
+        variant: 'destructive' 
+      });
+    }
   };
 
   const handleGuardarCapacidadMaxima = async () => {
@@ -281,203 +416,20 @@ export const TurnoManagement = () => {
     <div className="space-y-6 w-full max-w-full">
       <Card className="w-full max-w-full">
         <CardContent className="space-y-6 w-full max-w-full pt-6 md:space-y-6 space-y-0">
-          {/* Configuración: mobile muestra CTAs; desktop mantiene controles actuales */}
-          <div className="grid grid-cols-1 gap-2 md:hidden mb-2 sm:mb-0">
-            <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
-              <DialogTrigger asChild>
-                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
-                  Alumnos por clase
-                </div>
-              </DialogTrigger>
-              <DialogContent 
-                className="p-2 rounded-xl" 
-                style={{ 
-                  width: '90vw', 
-                  maxWidth: '90vw',
-                  minWidth: '90vw'
-                }}
-              >
-                <DialogHeader>
-                  <DialogTitle style={{ fontSize: '12px' }}>Capacidad por clase</DialogTitle>
-                  <DialogDescription style={{ fontSize: '12px' }}>Edite la capacidad de alumnos para cada horario.</DialogDescription>
-                </DialogHeader>
-                
-                {loadingHorarios ? (
-                  <div className="py-8 text-center text-muted-foreground">Cargando...</div>
-                ) : (
-                  <div className="max-h-[60vh] overflow-y-auto space-y-3">
-                    {horariosSemanales.map((horario) => (
-                      <div key={horario.id} className="flex items-center justify-between gap-4 p-3 border rounded-lg">
-                        <div className="flex-1">
-                          <div className="font-medium text-sm">
-                            {DIAS_SEMANA[horario.dia_semana - 1]}
-                          </div>
-                          <div className="text-xs text-muted-foreground">
-                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <Users className="w-3 h-3" />
-                            {horario.alumnos_agendados}/{horario.capacidad} agendados
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`capacidad-${horario.id}`} className="text-xs whitespace-nowrap">Capacidad:</Label>
-                          <Input 
-                            id={`capacidad-${horario.id}`}
-                            type="number" 
-                            min={horario.alumnos_agendados} 
-                            value={horario.capacidad}
-                            onChange={(e) => {
-                              const nuevaCapacidad = parseInt(e.target.value) || horario.alumnos_agendados;
-                              actualizarCapacidadHorario(horario.id, Math.max(horario.alumnos_agendados, nuevaCapacidad));
-                            }}
-                            className="w-16 text-center" 
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {horariosSemanales.length === 0 && (
-                      <div className="py-8 text-center text-muted-foreground">
-                        No hay horarios configurados
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <DialogFooter className="gap-2">
-                  <Button onClick={() => setIsCapacidadDialogOpen(false)} style={{ fontSize: '14px' }}>Cerrar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
-              <DialogTrigger asChild>
-                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
-                  Tarifa por clase
-                </div>
-              </DialogTrigger>
-              <DialogContent className="w-[90vw] max-w-[90vw] p-2 rounded-xl">
-                <div className="w-full">
-                  <DialogHeader>
-                    <DialogTitle style={{ fontSize: '12px' }}>Tarifa por clase</DialogTitle>
-                    <DialogDescription style={{ fontSize: '12px' }}>Defina el valor de cada clase.</DialogDescription>
-                  </DialogHeader>
-                  <div className="flex items-center justify-between gap-4">
-                    <Label htmlFor="tarifa-global" className="text-xs">Precio (ARS)</Label>
-                    <Input id="tarifa-global" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
-                  </div>
-                  <DialogFooter>
-                    <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)} style={{ fontSize: '14px' }}>Cancelar</Button>
-                    <Button onClick={guardarTarifa} style={{ fontSize: '14px' }}>Guardar</Button>
-                  </DialogFooter>
-                </div>
-              </DialogContent>
-            </Dialog>
-          </div>
 
-          {/* CTAs para desktop también */}
-          <div className="hidden md:grid md:grid-cols-2 md:gap-4">
-            <Dialog open={isCapacidadDialogOpen} onOpenChange={setIsCapacidadDialogOpen}>
-              <DialogTrigger asChild>
-                <div onClick={abrirCapacidad} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
-                  Alumnos por clase
-                </div>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[600px] max-h-[80vh] overflow-hidden flex flex-col">
-                <DialogHeader>
-                  <DialogTitle style={{ fontSize: '12px' }}>Capacidad por clase</DialogTitle>
-                  <DialogDescription style={{ fontSize: '12px' }}>Edite la capacidad de alumnos para cada horario.</DialogDescription>
-                </DialogHeader>
-                
-                {loadingHorarios ? (
-                  <div className="py-8 text-center text-muted-foreground">Cargando...</div>
-                ) : (
-                  <div className="max-h-[60vh] overflow-y-auto space-y-3 pr-2">
-                    {horariosSemanales.map((horario) => (
-                      <div key={horario.id} className="flex items-center justify-between gap-4 p-3 border rounded-lg hover:bg-accent/50 transition-colors">
-                        <div className="flex-1">
-                          <div className="font-medium">
-                            {DIAS_SEMANA[horario.dia_semana - 1]}
-                          </div>
-                          <div className="text-sm text-muted-foreground">
-                            {horario.hora_inicio.substring(0, 5)} - {horario.hora_fin.substring(0, 5)}
-                          </div>
-                          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-1">
-                            <Users className="w-3 h-3" />
-                            {horario.alumnos_agendados}/{horario.capacidad} agendados
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Label htmlFor={`capacidad-desktop-${horario.id}`} className="text-sm whitespace-nowrap">Capacidad:</Label>
-                          <Input 
-                            id={`capacidad-desktop-${horario.id}`}
-                            type="number" 
-                            min={horario.alumnos_agendados} 
-                            value={horario.capacidad}
-                            onChange={(e) => {
-                              const nuevaCapacidad = parseInt(e.target.value) || horario.alumnos_agendados;
-                              actualizarCapacidadHorario(horario.id, Math.max(horario.alumnos_agendados, nuevaCapacidad));
-                            }}
-                            className="w-20 text-center" 
-                          />
-                        </div>
-                      </div>
-                    ))}
-                    {horariosSemanales.length === 0 && (
-                      <div className="py-8 text-center text-muted-foreground">
-                        No hay horarios configurados
-                      </div>
-                    )}
-                  </div>
-                )}
-                
-                <DialogFooter className="gap-2">
-                  <Button onClick={() => setIsCapacidadDialogOpen(false)} style={{ fontSize: '14px' }}>Cerrar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-            <Dialog open={isTarifaDialogOpen} onOpenChange={setIsTarifaDialogOpen}>
-              <DialogTrigger asChild>
-                <div onClick={abrirTarifa} className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
-                  Tarifa por clase
-                </div>
-              </DialogTrigger>
-              <DialogContent 
-                className="p-2 rounded-xl" 
-                style={{ 
-                  width: '90vw', 
-                  maxWidth: '90vw',
-                  minWidth: '90vw'
-                }}
-              >
-                <DialogHeader>
-                  <DialogTitle>Tarifa por clase</DialogTitle>
-                  <DialogDescription>Defina el valor de cada clase.</DialogDescription>
-                </DialogHeader>
-                <div className="flex items-center justify-between gap-4">
-                  <Label htmlFor="tarifa-global-desktop" className="text-xs">Precio (ARS)</Label>
-                  <Input id="tarifa-global-desktop" type="number" min={0} step="0.01" value={tarifaValor} onChange={(e) => setTarifaValor(e.target.value)} className="w-32 text-center" />
-                </div>
-                <DialogFooter className="gap-2">
-                  <Button variant="outline" onClick={() => setIsTarifaDialogOpen(false)}>Cancelar</Button>
-                  <Button onClick={guardarTarifa}>Guardar</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
 
           {/* Botones de acción */}
           <div className="space-y-0 sm:space-y-4 pt-0 sm:pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
-              {/* CTA 1: Editar horarios fijos */}
+              {/* CTA 1: Capacidad, tarifa y horarios */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
                   <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
-                    Editar horarios fijos
+                    Capacidad, tarifa y horarios
                   </div>
                 </DialogTrigger>
                 <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
                   <DialogHeader>
-                    <DialogTitle className="flex items-center space-x-2" style={{ fontSize: '12px' }}>Configurar Horarios Fijos</DialogTitle>
                   </DialogHeader>
                   
                   <div className="space-y-4">
@@ -497,6 +449,25 @@ export const TurnoManagement = () => {
                         />
                       </div>
                     </div>
+
+                    {/* Card para tarifa por clase */}
+                    <div className="p-3 border border-blue-500 rounded-lg bg-muted/50">
+                      <div className="flex items-center justify-center gap-4">
+                        <Label htmlFor="tarifa-clase" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Tarifa por clase</Label>
+                        <Input
+                          id="tarifa-clase"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={tarifaClase}
+                          onChange={(e) => setTarifaClase(e.target.value)}
+                          className="w-20 text-center"
+                          style={{ fontSize: '12px' }}
+                          placeholder="0.00"
+                        />
+                      </div>
+                    </div>
+
                     {horariosFijos.map((horario) => (
                       <div key={horario.id} className="relative grid grid-cols-1 md:grid-cols-3 gap-0 items-center py-4 px-2 border rounded-lg">
                         <div 
@@ -565,7 +536,7 @@ export const TurnoManagement = () => {
                       <div
                         onClick={handleAgregarHorario}
                         className="h-10 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
-                        style={{ padding: '8px 16px', fontSize: '14px' }}
+                        style={{ padding: '8px 16px', fontSize: '12px' }}
                       >
                         <Plus className="h-4 w-4" />
                         Agregar horario
@@ -574,14 +545,14 @@ export const TurnoManagement = () => {
                   </div>
 
                   <DialogFooter className="gap-2">
-                    <Button 
-                      variant="outline" 
+                    <Button
+                      variant="outline"
                       onClick={() => setIsDialogOpen(false)}
-                      style={{ fontSize: '14px' }}
+                      style={{ fontSize: '12px' }}
                     >
                       Cancelar
                     </Button>
-                    <Button onClick={handleGuardarHorarios} style={{ fontSize: '14px' }}>
+                    <Button onClick={handleGuardarHorarios} style={{ fontSize: '12px' }}>
                       Guardar
                     </Button>
                   </DialogFooter>
