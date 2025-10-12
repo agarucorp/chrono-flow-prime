@@ -140,3 +140,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 SELECT 'ausencias_periodo_ok' AS status;
 
 
+

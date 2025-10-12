@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
@@ -35,6 +35,7 @@ interface AlumnoHorario {
   hora_fin: string;
   fecha?: string;
   activo?: boolean;
+  usuario_id?: string;
 }
 
 
@@ -66,6 +67,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   
   // Estado para acordeón
   const [horariosExpandidos, setHorariosExpandidos] = useState<Set<string>>(new Set());
+  
+  // Estado para modal de cancelación de alumno
+  const [showCancelAlumnoModal, setShowCancelAlumnoModal] = useState(false);
+  const [selectedAlumno, setSelectedAlumno] = useState<AlumnoHorario | null>(null);
+  const [cancelingAlumno, setCancelingAlumno] = useState(false);
 
   // Función para toggle del acordeón - solo permite un dropdown abierto a la vez
   const toggleHorario = (horarioKey: string) => {
@@ -99,8 +105,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         .from('turnos')
         .select(`
           *,
-          clientes:cliente_id(full_name),
-          profesionales:profesional_id(full_name)
+          profiles!cliente_id(full_name),
+          profiles!profesional_id(full_name)
         `)
         .gte('fecha', startDate.toISOString().split('T')[0])
         .lte('fecha', endDate.toISOString().split('T')[0])
@@ -120,9 +126,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         hora_fin: turno.hora_fin,
         estado: turno.estado,
         cliente_id: turno.cliente_id,
-        cliente_nombre: turno.clientes?.full_name || 'Sin asignar',
+        cliente_nombre: turno.profiles?.full_name || 'Sin asignar',
         profesional_id: turno.profesional_id,
-        profesional_nombre: turno.profesionales?.full_name || 'Sin asignar',
+        profesional_nombre: turno.profiles?.full_name || 'Sin asignar',
         servicio: turno.servicio || 'Sin especificar'
       })) || [];
 
@@ -155,7 +161,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           hora_fin,
           activo,
           usuario_id,
-          profiles(full_name, email, phone)
+          profiles(full_name, email, phone, role)
         `)
         .eq('dia_semana', diaSemana)
         .eq('activo', true);
@@ -176,7 +182,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           turno_hora_fin,
           estado,
           cliente_id,
-          profiles(full_name, email, phone)
+          profiles(full_name, email, phone, role)
         `)
         .eq('turno_fecha', fechaActual)
         .eq('estado', 'confirmada');
@@ -190,7 +196,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Cargar turnos cancelados
       const { data: turnosCancelados, error: errorCancelados } = await supabase
         .from('turnos_cancelados')
-        .select('id, turno_fecha, turno_hora_inicio, turno_hora_fin, cliente_id')
+        .select(`
+          id,
+          turno_fecha,
+          turno_hora_inicio,
+          turno_hora_fin,
+          cliente_id,
+          profiles(full_name, email, phone, role)
+        `)
         .eq('turno_fecha', fechaActual);
 
       if (errorCancelados) {
@@ -202,11 +215,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Combinar todos los datos
       const todosAlumnos: AlumnoHorario[] = [];
 
-      // Agregar horarios recurrentes
+      // Agregar horarios recurrentes (excluyendo admins)
       if (horariosRecurrentes && horariosRecurrentes.length > 0) {
         horariosRecurrentes.forEach(horario => {
           const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
-          if (profile) {
+          // Filtrar admins: solo agregar si el perfil existe y NO es admin
+          if (profile && profile.role !== 'admin') {
             todosAlumnos.push({
               id: horario.id,
               nombre: profile.full_name || 'Sin nombre',
@@ -216,17 +230,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               hora_inicio: horario.hora_inicio,
               hora_fin: horario.hora_fin,
               fecha: fechaActual,
-              activo: horario.activo
+              activo: horario.activo,
+              usuario_id: horario.usuario_id
             });
           }
         });
       }
 
-      // Agregar turnos variables
+      // Agregar turnos variables (excluyendo admins)
       if (turnosVariables && turnosVariables.length > 0) {
         turnosVariables.forEach(turno => {
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
-          if (profile) {
+          // Filtrar admins: solo agregar si el perfil existe y NO es admin
+          if (profile && profile.role !== 'admin') {
             todosAlumnos.push({
               id: turno.id,
               nombre: profile.full_name || 'Sin nombre',
@@ -235,25 +251,31 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               tipo: 'variable',
               hora_inicio: turno.turno_hora_inicio,
               hora_fin: turno.turno_hora_fin,
-              fecha: turno.turno_fecha
+              fecha: turno.turno_fecha,
+              usuario_id: turno.cliente_id
             });
           }
         });
       }
 
-      // Agregar turnos cancelados (sin profile por ahora para evitar errores)
+      // Agregar turnos cancelados (excluyendo admins)
       if (turnosCancelados && turnosCancelados.length > 0) {
         turnosCancelados.forEach(turno => {
-          todosAlumnos.push({
-            id: turno.id,
-            nombre: 'Usuario cancelado',
-            email: '',
-            telefono: '',
-            tipo: 'cancelado',
-            hora_inicio: turno.turno_hora_inicio,
-            hora_fin: turno.turno_hora_fin,
-            fecha: turno.turno_fecha
-          });
+          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
+          // Filtrar admins: solo agregar si el perfil existe y NO es admin
+          if (profile && profile.role !== 'admin') {
+            todosAlumnos.push({
+              id: turno.id,
+              nombre: profile.full_name || 'Usuario sin nombre',
+              email: profile.email || '',
+              telefono: profile.phone || '',
+              tipo: 'cancelado',
+              hora_inicio: turno.turno_hora_inicio,
+              hora_fin: turno.turno_hora_fin,
+              fecha: turno.turno_fecha,
+              usuario_id: turno.cliente_id
+            });
+          }
         });
       }
 
@@ -287,6 +309,74 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       showError('Error', 'No se pudieron cargar los horarios de los alumnos');
     } finally {
       setLoadingAlumnos(false);
+    }
+  };
+
+  // Función para abrir modal de cancelación de alumno
+  const handleAlumnoClick = (alumno: AlumnoHorario) => {
+    if (alumno.tipo === 'cancelado' || !isAdminView) return;
+    setSelectedAlumno(alumno);
+    setShowCancelAlumnoModal(true);
+  };
+
+  // Función para cancelar clase de alumno (solo admin)
+  const cancelarClaseAlumno = async () => {
+    if (!selectedAlumno || !selectedAlumno.usuario_id) {
+      showError('Error', 'No se pudo identificar al alumno');
+      return;
+    }
+
+    try {
+      setCancelingAlumno(true);
+      const loadingToast = showLoading('Cancelando clase...');
+
+      // Verificar si ya existe una cancelación para este turno
+      const { data: cancelacionExistente } = await supabase
+        .from('turnos_cancelados')
+        .select('id')
+        .eq('cliente_id', selectedAlumno.usuario_id)
+        .eq('turno_fecha', selectedAlumno.fecha || currentDate.toISOString().split('T')[0])
+        .eq('turno_hora_inicio', selectedAlumno.hora_inicio)
+        .eq('turno_hora_fin', selectedAlumno.hora_fin);
+
+      if (cancelacionExistente && cancelacionExistente.length > 0) {
+        dismissToast(loadingToast);
+        showError('Error', 'Esta clase ya ha sido cancelada');
+        return;
+      }
+
+      // Crear registro de cancelación
+      const { error } = await supabase
+        .from('turnos_cancelados')
+        .insert({
+          cliente_id: selectedAlumno.usuario_id,
+          turno_fecha: selectedAlumno.fecha || currentDate.toISOString().split('T')[0],
+          turno_hora_inicio: selectedAlumno.hora_inicio,
+          turno_hora_fin: selectedAlumno.hora_fin,
+          tipo_cancelacion: 'admin',
+          motivo_cancelacion: 'Cancelada por administrador'
+        });
+
+      dismissToast(loadingToast);
+
+      if (error) {
+        console.error('Error al cancelar clase:', error);
+        showError('Error', `No se pudo cancelar la clase: ${error.message}`);
+        return;
+      }
+
+      showSuccess('Clase cancelada', `La clase de ${selectedAlumno.nombre} ha sido cancelada exitosamente`);
+      
+      // Recargar horarios de alumnos
+      await fetchAlumnosHorarios();
+      
+      setShowCancelAlumnoModal(false);
+      setSelectedAlumno(null);
+    } catch (error) {
+      console.error('Error inesperado al cancelar clase:', error);
+      showError('Error', 'No se pudo cancelar la clase');
+    } finally {
+      setCancelingAlumno(false);
     }
   };
 
@@ -607,9 +697,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       });
     }
 
-    // Agrupar por AM/PM
-    const amSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) < 12);
-    const pmSlots = timeSlots.filter(slot => parseInt(slot.horaInicio) >= 12);
+    // Función para formatear hora de "08:00" a "8am" o "15:00" a "3pm"
+    const formatearHora = (hora: string): string => {
+      const [horaStr] = hora.split(':');
+      const horaNum = parseInt(horaStr);
+      if (horaNum === 0) return '12am';
+      if (horaNum < 12) return `${horaNum}am`;
+      if (horaNum === 12) return '12pm';
+      return `${horaNum - 12}pm`;
+    };
 
     // Si es vista de admin, mostrar información de alumnos
     if (isAdminView) {
@@ -625,173 +721,77 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       return (
-        <div className="space-y-6">
-          {/* Horarios AM */}
-          {amSlots.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-muted-foreground mb-3">AM</h4>
-              <div className="space-y-3">
-                {amSlots.map((slot, index) => {
-                  const horarioKey = `am-${slot.horaInicio}`;
-                  const isExpanded = horariosExpandidos.has(horarioKey);
+        <div className="space-y-3">
+          {timeSlots.map((slot, index) => {
+            const horarioKey = `slot-${slot.horaInicio}`;
+            const isExpanded = horariosExpandidos.has(horarioKey);
+            
+            return (
+              <Card key={`slot-${index}`} className="border-l-4 border-l-blue-500">
+                <CardContent className="p-4">
+                  <div 
+                    className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
+                    onClick={() => toggleHorario(horarioKey)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="font-light text-foreground text-[12px] sm:text-base">
+                        {formatearHora(slot.horaInicio)} - {formatearHora(slot.horaFin)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-light text-[10px]">
+                        {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
+                      </Badge>
+                      {isExpanded ? (
+                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                      ) : (
+                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                      )}
+                    </div>
+                  </div>
                   
-                  return (
-                    <Card key={`am-${index}`} className="border-l-4 border-l-blue-500">
-                      <CardContent className="p-4">
-                        <div 
-                          className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
-                          onClick={() => toggleHorario(horarioKey)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground text-sm sm:text-base">
-                              {slot.horaInicio} - {slot.horaFin}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px]">
-                              {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
-                            </Badge>
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
+                  {isExpanded && (
+                    <div className="mt-4">
+                      {slot.alumnos.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {slot.alumnos.map((alumno, alumnoIndex) => {
+                            // Separar nombre y apellido
+                            const nombreCompleto = alumno.nombre || '';
+                            const partesNombre = nombreCompleto.split(' ');
+                            const nombre = partesNombre[0] || '';
+                            const apellido = partesNombre.slice(1).join(' ') || '';
+                            
+                            return (
+                              <div 
+                                key={alumnoIndex} 
+                                onClick={() => handleAlumnoClick(alumno)}
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${
+                                  alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                  alumno.tipo === 'variable' ? 'border-blue-200' :
+                                  'border-red-200'
+                                } ${alumno.tipo !== 'cancelado' && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : ''}`}
+                              >
+                                <div className="font-light text-[10px] sm:text-[12px]">
+                                  {nombre} {apellido}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        
-                        {isExpanded && (
-                          <div className="mt-4">
-                            {slot.alumnos.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {slot.alumnos.map((alumno, alumnoIndex) => {
-                                  // Separar nombre y apellido
-                                  const nombreCompleto = alumno.nombre || '';
-                                  const partesNombre = nombreCompleto.split(' ');
-                                  const nombre = partesNombre[0] || '';
-                                  const apellido = partesNombre.slice(1).join(' ') || '';
-                                  
-                                  return (
-                                    <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
-                                      alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                      alumno.tipo === 'variable' ? 'border-blue-200' :
-                                      'border-red-200'
-                                    }`}>
-                                      <div className="font-medium">
-                                        {nombre} {apellido}
-                                      </div>
-                                      <div className="ml-2">
-                                        <Badge variant="outline" className={
-                                          alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
-                                          alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
-                                          'text-red-600 border-red-300'
-                                        }>
-                                          {alumno.tipo === 'recurrente' ? 'Fijo' :
-                                           alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-center py-4 text-muted-foreground text-sm">
-                                Sin alumnos en este horario
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Horarios PM */}
-          {pmSlots.length > 0 && (
-            <div>
-              <h4 className="text-xs font-medium text-muted-foreground mb-3">PM</h4>
-              <div className="space-y-3">
-                {pmSlots.map((slot, index) => {
-                  const horarioKey = `pm-${slot.horaInicio}`;
-                  const isExpanded = horariosExpandidos.has(horarioKey);
-                  
-                  return (
-                    <Card key={`pm-${index}`} className="border-l-4 border-l-blue-500">
-                      <CardContent className="p-4">
-                        <div 
-                          className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
-                          onClick={() => toggleHorario(horarioKey)}
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium text-foreground text-sm sm:text-base">
-                              {slot.horaInicio} - {slot.horaFin}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="bg-blue-100 text-blue-800 text-[10px]">
-                              {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
-                            </Badge>
-                            {isExpanded ? (
-                              <ChevronUp className="h-4 w-4 text-muted-foreground" />
-                            ) : (
-                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                            )}
-                          </div>
+                      ) : (
+                        <div className="text-center py-4 text-muted-foreground text-sm">
+                          Sin alumnos en este horario
                         </div>
-                        
-                        {isExpanded && (
-                          <div className="mt-4">
-                            {slot.alumnos.length > 0 ? (
-                              <div className="flex flex-wrap gap-2">
-                                {slot.alumnos.map((alumno, alumnoIndex) => {
-                                  // Separar nombre y apellido
-                                  const nombreCompleto = alumno.nombre || '';
-                                  const partesNombre = nombreCompleto.split(' ');
-                                  const nombre = partesNombre[0] || '';
-                                  const apellido = partesNombre.slice(1).join(' ') || '';
-                                  
-                                  return (
-                                    <div key={alumnoIndex} className={`flex items-center justify-between px-3 py-2 rounded-lg border text-sm text-white ${
-                                      alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                      alumno.tipo === 'variable' ? 'border-blue-200' :
-                                      'border-red-200'
-                                    }`}>
-                                      <div className="font-medium">
-                                        {nombre} {apellido}
-                                      </div>
-                                      <div className="ml-2">
-                                        <Badge variant="outline" className={
-                                          alumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
-                                          alumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
-                                          'text-red-600 border-red-300'
-                                        }>
-                                          {alumno.tipo === 'recurrente' ? 'Fijo' :
-                                           alumno.tipo === 'variable' ? 'Variable' : 'Cancelado'}
-                                        </Badge>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-center py-4 text-muted-foreground text-sm">
-                                Sin alumnos en este horario
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
 
           {/* Mensaje cuando no hay horarios */}
-          {amSlots.length === 0 && pmSlots.length === 0 && (
+          {timeSlots.length === 0 && (
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-muted-foreground mb-2">
@@ -1009,6 +1009,107 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           }}
         />
       )}
+
+      {/* Modal de cancelación de clase de alumno (Admin) */}
+      <Dialog open={showCancelAlumnoModal} onOpenChange={setShowCancelAlumnoModal}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-red-500" />
+              Cancelar Clase de Alumno
+            </DialogTitle>
+            <DialogDescription>
+              ¿Desea cancelar la clase de este alumno?
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedAlumno && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Alumno</p>
+                    <p className="text-sm text-muted-foreground">{selectedAlumno.nombre}</p>
+                  </div>
+                </div>
+                
+                {selectedAlumno.email && (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4" /> {/* Espaciador */}
+                    <div>
+                      <p className="text-sm font-medium">Email</p>
+                      <p className="text-sm text-muted-foreground">{selectedAlumno.email}</p>
+                    </div>
+                  </div>
+                )}
+                
+                {selectedAlumno.telefono && (
+                  <div className="flex items-center gap-2">
+                    <div className="h-4 w-4" /> {/* Espaciador */}
+                    <div>
+                      <p className="text-sm font-medium">Teléfono</p>
+                      <p className="text-sm text-muted-foreground">{selectedAlumno.telefono}</p>
+                    </div>
+                  </div>
+                )}
+                
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Horario</p>
+                    <p className="text-sm text-muted-foreground">
+                      {selectedAlumno.hora_inicio} - {selectedAlumno.hora_fin}
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Tipo</p>
+                    <Badge variant="outline" className={
+                      selectedAlumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                      selectedAlumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                      'text-red-600 border-red-300'
+                    }>
+                      {selectedAlumno.tipo === 'recurrente' ? 'Clase Recurrente' :
+                       selectedAlumno.tipo === 'variable' ? 'Clase Variable' : 'Cancelada'}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-3">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  <strong>Importante:</strong> Esta acción cancelará la clase para esta fecha específica. 
+                  El alumno verá esta clase como cancelada en su panel.
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCancelAlumnoModal(false);
+                setSelectedAlumno(null);
+              }}
+              disabled={cancelingAlumno}
+            >
+              No, mantener clase
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={cancelarClaseAlumno}
+              disabled={cancelingAlumno}
+            >
+              {cancelingAlumno ? 'Cancelando...' : 'Sí, cancelar clase'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
