@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Lock } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
 
@@ -87,51 +87,113 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>Configurar Perfil</DialogTitle>
-          <DialogDescription>Actualiza tus datos personales.</DialogDescription>
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+        {/* Botón X para mobile */}
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onClose}
+          className="absolute right-2 top-2 sm:hidden h-8 w-8 p-0"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+        
+        <DialogHeader className="pb-3 sm:block hidden">
+          <DialogTitle className="text-sm">Configurar Perfil</DialogTitle>
+          <DialogDescription className="text-sm">Actualiza tus datos personales.</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
-            <Input id="email" value={email ?? ''} disabled />
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="space-y-3">
+          {/* Mobile view */}
+          <div className="sm:hidden space-y-4">
+            {/* Email - solo lectura */}
             <div className="space-y-2">
-              <Label htmlFor="firstName">Nombre</Label>
-              <Input id="firstName" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} />
+              <Label htmlFor="email" className="text-sm">Email</Label>
+              <div className="p-3 bg-muted rounded-md">
+                <p className="text-sm text-muted-foreground">{email || 'No configurado'}</p>
+              </div>
+            </div>
+
+            {/* Nombre y Apellido - editables */}
+            <div className="space-y-2">
+              <Label htmlFor="firstName-mobile" className="text-sm">Nombre</Label>
+              <Input id="firstName-mobile" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} className="text-sm" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastName">Apellido</Label>
-              <Input id="lastName" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} />
+              <Label htmlFor="lastName-mobile" className="text-sm">Apellido</Label>
+              <Input id="lastName-mobile" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} className="text-sm" />
             </div>
-          </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">Teléfono</Label>
-            <Input id="phone" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} />
-          </div>
+            {/* Teléfono - solo lectura */}
+            <div className="space-y-2">
+              <Label htmlFor="phone" className="text-sm">Teléfono</Label>
+              <div className="p-3 bg-muted rounded-md">
+                <p className="text-sm text-muted-foreground">{phone || 'No configurado'}</p>
+              </div>
+            </div>
 
-          <div className="space-y-2">
-            <Label>Seguridad</Label>
+            {/* CTA Cambiar Contraseña */}
             <Button
               type="button"
-              variant="outline"
               onClick={() => setShowChangePassword(true)}
-              className="w-full justify-start"
+              className="w-full text-sm h-10"
               disabled={loading}
             >
               <Lock className="w-4 h-4 mr-2" />
               Cambiar Contraseña
             </Button>
+
+            {/* Botón Guardar */}
+            <Button 
+              className="w-full text-sm h-10" 
+              onClick={handleSave} 
+              disabled={saving}
+            >
+              {saving ? 'Guardando...' : 'Guardar Cambios'}
+            </Button>
           </div>
 
-          <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="flex-1" onClick={onClose} disabled={saving}>Cancelar</Button>
-            <Button className="flex-1" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+          {/* Desktop view */}
+          <div className="hidden sm:block space-y-3">
+            <div className="space-y-2">
+              <Label htmlFor="email-desktop" className="text-sm">Email</Label>
+              <Input id="email-desktop" value={email ?? ''} disabled className="text-sm" />
+            </div>
+
+            <div className="grid grid-cols-1 gap-3">
+              <div className="space-y-2">
+                <Label htmlFor="firstName-desktop" className="text-sm">Nombre</Label>
+                <Input id="firstName-desktop" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} className="text-sm" />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastName-desktop" className="text-sm">Apellido</Label>
+                <Input id="lastName-desktop" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} className="text-sm" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone-desktop" className="text-sm">Teléfono</Label>
+              <Input id="phone-desktop" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-sm" />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm">Seguridad</Label>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowChangePassword(true)}
+                className="w-full justify-start text-sm h-9"
+                disabled={loading}
+              >
+                <Lock className="w-4 h-4 mr-2" />
+                Cambiar Contraseña
+              </Button>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1 text-sm h-9" onClick={onClose} disabled={saving}>Cancelar</Button>
+              <Button className="flex-1 text-sm h-9" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+            </div>
           </div>
         </div>
       </DialogContent>

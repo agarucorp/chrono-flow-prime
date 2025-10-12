@@ -59,9 +59,6 @@ export const TurnoReservation = () => {
   const fetchTurnos = async () => {
     try {
       setLoading(true);
-      console.log('🔍 fetchTurnos: Iniciando carga de turnos...');
-      console.log('🔍 fetchTurnos: Fecha seleccionada:', selectedDate.toISOString().split('T')[0]);
-      console.log('🔍 fetchTurnos: Usuario actual:', user?.id);
       
       // Obtener turnos disponibles
       const { data: disponibles, error: errorDisponibles } = await supabase
@@ -76,7 +73,6 @@ export const TurnoReservation = () => {
         return;
       }
 
-      console.log('✅ Turnos disponibles obtenidos:', disponibles);
 
       // Ya no filtramos por servicio - todos son entrenamiento personal
       setTurnosDisponibles(disponibles || []);
@@ -97,7 +93,6 @@ export const TurnoReservation = () => {
         return;
       }
 
-      console.log('✅ Turnos reservados obtenidos:', reservados);
 
       const turnosReservadosFormateados = reservados?.map(turno => ({
         id: turno.id,
@@ -125,9 +120,6 @@ export const TurnoReservation = () => {
   const handleConfirmReservation = async (turno: Turno) => {
     try {
       setConfirmingReservation(true);
-      console.log('🔍 handleConfirmReservation: Iniciando reserva...');
-      console.log('🔍 handleConfirmReservation: Turno a reservar:', turno);
-      console.log('🔍 handleConfirmReservation: Usuario actual:', user?.id);
       
       // Verificar que el usuario no tenga ya una reserva para este día
       const { data: reservasExistentes, error: errorVerificacion } = await supabase
@@ -157,7 +149,6 @@ export const TurnoReservation = () => {
         updated_at: new Date().toISOString()
       };
       
-      console.log('🔍 handleConfirmReservation: Datos a actualizar:', datosActualizacion);
       
       const { data, error, count } = await supabase
         .from('turnos')
@@ -206,7 +197,6 @@ export const TurnoReservation = () => {
       
       // Forzar recarga de turnos con un pequeño delay
       setTimeout(async () => {
-        console.log('🔄 Recargando turnos después de delay...');
         await fetchTurnos();
       }, 500);
     } catch (error) {

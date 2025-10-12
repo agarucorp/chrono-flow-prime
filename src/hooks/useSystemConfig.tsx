@@ -76,7 +76,6 @@ export const useSystemConfig = () => {
 
       if (errorHorarios) {
         // Si hay error, usar datos por defecto
-        console.log('Error cargando horarios_clase, usando horarios por defecto');
         setHorariosFijos([]);
       } else {
         setHorariosFijos(horarios || []);

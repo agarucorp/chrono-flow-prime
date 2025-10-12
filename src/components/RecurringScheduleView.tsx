@@ -724,8 +724,8 @@ export const RecurringScheduleView = () => {
                     </thead>
                     <tbody>
                       {diasDelMes.map((dia, index) => {
-                        // Ocultar días anteriores a la fecha actual para evitar cancelaciones retroactivas
-                        if (isFechaPasada(dia)) return null;
+                        // Mostrar todos los días, incluyendo los pasados
+                        // if (isFechaPasada(dia)) return null;
                         const clasesDelDia = clasesDelMes.filter(clase => 
                           isSameDay(clase.dia, dia)
                         );
@@ -888,10 +888,10 @@ export const RecurringScheduleView = () => {
 
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (
-        <div className="w-full md:w-[55%] mx-auto animate-view-swap pb-24 sm:pb-0">
+        <div className="w-full md:w-[35%] mx-auto animate-view-swap pb-24 sm:pb-0">
         <Card>
           <CardHeader>
-            <CardTitle className="text-base sm:text-2xl">Turnos Cancelados Disponibles</CardTitle>
+            <CardTitle className="text-xl">Turnos Cancelados Disponibles</CardTitle>
           </CardHeader>
           <CardContent>
             {loadingTurnosCancelados ? (
@@ -932,10 +932,10 @@ export const RecurringScheduleView = () => {
                       variant="default"
                       size="sm"
                       onClick={() => handleReservarClick(turno)}
-                      disabled={turno.reservado || turno.canceladoPorUsuario}
+                      disabled={turno.reservado}
                       className="w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm"
                     >
-                      {turno.reservado ? 'Reservado' : turno.canceladoPorUsuario ? 'No disponible' : 'Reservar Clase'}
+                      {turno.reservado ? 'Reservado' : 'Reservar Clase'}
                     </Button>
                   </div>
                 ))}
@@ -994,14 +994,12 @@ export const RecurringScheduleView = () => {
                     setShowModal(false);
                     setConfirmOpen(true);
                   }}
-                  disabled={selectedClase.horario.cancelada || isFechaPasada(selectedClase.dia)}
+                  disabled={selectedClase.horario.cancelada}
                   className="flex-1"
                 >
                   {selectedClase.horario.cancelada 
                     ? 'Ya Cancelada' 
-                    : isFechaPasada(selectedClase.dia) 
-                      ? 'Fecha Pasada' 
-                      : 'Cancelar Clase'}
+                    : 'Cancelar Clase'}
                 </Button>
                 <Button
                   variant="outline"

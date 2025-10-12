@@ -139,3 +139,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Verificar tablas creadas
 SELECT 'ausencias_periodo_ok' AS status;
 
+

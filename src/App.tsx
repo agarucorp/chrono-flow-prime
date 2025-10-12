@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
+import { SupportModal } from "./components/SupportModal";
 import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
 
@@ -27,6 +28,7 @@ const Dashboard = () => {
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
+  const [supportOpen, setSupportOpen] = useState(false);
   const { isAdmin, isLoading: adminLoading } = useAdmin();
   
   // Función para obtener las iniciales del usuario
@@ -78,13 +80,16 @@ const Dashboard = () => {
   useEffect(() => {
     const handleProfileOpen = () => setProfileOpen(true);
     const handleSignOutEvent = () => handleSignOut();
+    const handleSupportOpen = () => setSupportOpen(true);
     window.addEventListener('profile:open', handleProfileOpen);
     window.addEventListener('auth:signout', handleSignOutEvent);
+    window.addEventListener('soporte:open', handleSupportOpen);
     return () => {
       window.removeEventListener('profile:open', handleProfileOpen);
       window.removeEventListener('auth:signout', handleSignOutEvent);
+      window.removeEventListener('soporte:open', handleSupportOpen);
     };
-  }, []);
+  }, [handleSignOut]);
 
   // Si el usuario es admin y está en /user, redirigir a /admin
   useEffect(() => {
@@ -197,13 +202,17 @@ const Dashboard = () => {
         onClose={() => setShowRecurringModal(false)}
         onComplete={handleRecurringSetupComplete}
       />
+
+      {/* Modal de soporte */}
+      <SupportModal
+        isOpen={supportOpen}
+        onClose={() => setSupportOpen(false)}
+      />
     </div>
   );
 };
 
 const App = () => {
-  console.log("App renderizando...");
-  
   return (
     <ThemeProvider
       attribute="class"
