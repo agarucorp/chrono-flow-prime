@@ -48,9 +48,8 @@ export const RecurringScheduleView = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [loading, setLoading] = useState(() => {
-    // Solo mostrar loading si no hay datos guardados
-    const saved = localStorage.getItem('horariosRecurrentes');
-    return !saved;
+    // Mostrar loading inicial hasta que se carguen los datos
+    return true;
   });
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClase, setSelectedClase] = useState<ClaseDelDia | null>(null);
@@ -81,6 +80,7 @@ export const RecurringScheduleView = () => {
     const saved = localStorage.getItem('lastLoadTime');
     return saved ? parseInt(saved) : 0;
   });
+  const [loadingMonth, setLoadingMonth] = useState(false);
 
   // Estado para modal de edición de perfil
   const [showProfileSettings, setShowProfileSettings] = useState(false);
@@ -299,8 +299,12 @@ export const RecurringScheduleView = () => {
   // Cargar datos iniciales
   useEffect(() => {
     if (user?.id) {
+      // Cargar datos iniciales con loading visible
       cargarHorariosRecurrentes();
       cargarDatosPerfil();
+    } else {
+      // Si no hay usuario, ocultar loading
+      setLoading(false);
     }
   }, [user?.id]);
 
@@ -350,6 +354,9 @@ export const RecurringScheduleView = () => {
         return; // Usar datos del caché
       }
     }
+
+    // Mostrar loading solo si vamos a cargar datos nuevos
+    setLoadingMonth(true);
 
     try {
       const diasDelMes = eachDayOfInterval({ 
@@ -423,6 +430,8 @@ export const RecurringScheduleView = () => {
       localStorage.setItem(lastLoadKey, now.toString());
     } catch (error) {
       console.error('Error al cargar clases del mes:', error);
+    } finally {
+      setLoadingMonth(false);
     }
   };
 
@@ -791,7 +800,14 @@ export const RecurringScheduleView = () => {
           <div className="w-full md:w-[55%] mx-auto animate-view-swap">
           <Card>
             <CardContent className="p-0">
-              {horariosRecurrentes.length === 0 ? (
+              {loading || loadingMonth ? (
+                <div className="p-8 text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                  <p className="text-muted-foreground">
+                    {loading ? 'Cargando tus clases...' : 'Cargando mes actual...'}
+                  </p>
+                </div>
+              ) : horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No tienes clases configuradas</p>
