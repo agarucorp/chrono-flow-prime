@@ -264,31 +264,49 @@ export const TurnoManagement = () => {
         return;
       }
 
-      // Actualizar capacidad en horarios_semanales (master switch global)
-      console.log('Actualizando capacidad global en horarios_semanales...');
-      
-      const { error: errorCapacidadHorarios } = await supabase
-        .from('horarios_semanales')
-        .update({ 
-          capacidad: nuevaCapacidad,
-          updated_at: new Date().toISOString()
-        })
-        .eq('activo', true);
+      // Sincronización NO destructiva con horarios_semanales (no elimina existentes)
+      console.log('Sincronizando horarios_semanales (actualización/alta, sin borrados)...');
+      const diasLaborales = [1,2,3,4,5];
+      const nowIso = new Date().toISOString();
 
-      if (errorCapacidadHorarios) {
-        console.error('Error actualizando capacidad en horarios_semanales:', errorCapacidadHorarios);
-        toast({ 
-          title: 'Advertencia', 
-          description: 'Capacidad guardada en configuración pero error actualizando horarios', 
-          variant: 'destructive' 
-        });
-      } else {
-        console.log('Capacidad actualizada exitosamente en todos los horarios semanales');
+      for (const ds of diasLaborales) {
+        // Traer existentes del día
+        const { data: existentes, error: errorExistentes } = await supabase
+          .from('horarios_semanales')
+          .select('id, hora_inicio, hora_fin')
+          .eq('dia_semana', ds);
+        if (errorExistentes) {
+          console.error('Error leyendo horarios existentes:', errorExistentes);
+          continue;
+        }
+        const existenteSet = new Set((existentes || []).map((r: any) => `${(r.hora_inicio||'').substring(0,5)}-${(r.hora_fin||'').substring(0,5)}`));
+
+        for (const h of horariosFijos) {
+          const hi = (h.horaInicio || '00:00').substring(0,5) + ':00';
+          const hf = (h.horaFin || '00:00').substring(0,5) + ':00';
+          const key = `${hi.substring(0,5)}-${hf.substring(0,5)}`;
+          if (existenteSet.has(key)) {
+            // Actualizar capacidad/activo del slot existente
+            const { error: errorUpd } = await supabase
+              .from('horarios_semanales')
+              .update({ capacidad: nuevaCapacidad, activo: true, updated_at: nowIso })
+              .eq('dia_semana', ds)
+              .eq('hora_inicio', hi)
+              .eq('hora_fin', hf);
+            if (errorUpd) console.error('Error actualizando horario:', { ds, hi, hf, errorUpd });
+          } else {
+            // Insertar nuevo slot
+            const { error: errorIns } = await supabase
+              .from('horarios_semanales')
+              .insert({ dia_semana: ds, hora_inicio: hi, hora_fin: hf, capacidad: nuevaCapacidad, activo: true, updated_at: nowIso });
+            if (errorIns) console.error('Error insertando horario:', { ds, hi, hf, errorIns });
+          }
+        }
       }
 
       toast({ 
         title: 'Guardado exitoso', 
-        description: 'Configuración actualizada correctamente' 
+        description: 'Configuración y horarios sincronizados correctamente' 
       });
       
       setIsDialogOpen(false);

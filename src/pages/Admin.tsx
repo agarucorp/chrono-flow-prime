@@ -44,9 +44,21 @@ import { Footer } from '@/components/Footer';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
+import { 
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle
+} from '@/components/ui/alert-dialog';
 
 export default function Admin() {
   const { user, signOut } = useAuthContext();
+  const navigate = useNavigate();
   const { activeTab, handleTabChange } = useAdminNavigation();
   const { 
     isAdmin, 
@@ -73,6 +85,32 @@ export default function Admin() {
   const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
   const [tarifaActual, setTarifaActual] = useState<number | null>(null);
   const [loadingTarifa, setLoadingTarifa] = useState(false);
+  // Estado de pago por usuario (persistido localmente)
+  type EstadoPago = 'debe' | 'no_debe';
+  const STORAGE_PAGO = 'adminPaymentStatus';
+  const leerEstadoPagoMap = (): Record<string, EstadoPago> => {
+    try {
+      const raw = localStorage.getItem(STORAGE_PAGO);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      return typeof parsed === 'object' && parsed ? parsed : {};
+    } catch {
+      return {};
+    }
+  };
+  const escribirEstadoPagoMap = (mapa: Record<string, EstadoPago>) => {
+    localStorage.setItem(STORAGE_PAGO, JSON.stringify(mapa));
+  };
+  const getEstadoPagoLocal = (userId: string): EstadoPago => {
+    const mapa = leerEstadoPagoMap();
+    return mapa[userId] || 'debe'; // por defecto Debe (rojo)
+  };
+  const setEstadoPagoLocal = (userId: string, estado: EstadoPago) => {
+    const mapa = leerEstadoPagoMap();
+    mapa[userId] = estado;
+    escribirEstadoPagoMap(mapa);
+  };
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
 
   // Función para obtener las iniciales del usuario
@@ -226,27 +264,35 @@ export default function Admin() {
     }
   };
 
-  // Función para obtener el nombre del día
+  // Función para obtener el nombre del día (BD usa 1=Lun..7=Dom)
   const getDiaNombre = (diaSemana: number) => {
     const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
-    return dias[diaSemana] || 'Desconocido';
+    const idx = diaSemana % 7; // 7 -> 0 (Dom), 1..6 -> 1..6
+    return dias[idx] || 'Desconocido';
   };
 
-  // Función para obtener el nombre corto del día
+  // Función para obtener el nombre corto del día (BD usa 1=Lun..7=Dom)
   const getDiaCorto = (diaSemana: number) => {
     const dias = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-    return dias[diaSemana] || '—';
+    const idx = diaSemana % 7; // normaliza 7 a 0
+    return dias[idx] || '—';
   };
 
   // Función para obtener días de asistencia del usuario
   const getDiasAsistencia = (userId: string) => {
     const horariosUsuario = horariosRecurrentes.filter(h => h.usuario_id === userId && h.activo);
     if (horariosUsuario.length === 0) return '—';
-    
-    // Obtener días únicos y ordenarlos
-    const diasUnicos = [...new Set(horariosUsuario.map(h => h.dia_semana))].sort((a, b) => a - b);
-    
-    // Convertir a nombres cortos
+
+    // Días únicos normalizados (BD: 1=Lun..7=Dom). Queremos orden Lun..Dom
+    const diasSet = new Set<number>();
+    for (const h of horariosUsuario) {
+      const d = typeof h.dia_semana === 'number' ? h.dia_semana : parseInt(String(h.dia_semana));
+      if (!Number.isNaN(d)) diasSet.add(d);
+    }
+    const diasUnicos = Array.from(diasSet);
+    const orderKey = (d: number) => (d === 7 ? 7 : d); // ya queda 1..7 (Lun..Dom)
+    diasUnicos.sort((a, b) => orderKey(a) - orderKey(b));
+
     return diasUnicos.map(d => getDiaCorto(d)).join(', ');
   };
 
@@ -257,11 +303,9 @@ export default function Admin() {
     return '—';
   };
 
-  // Función para obtener estado de pago del usuario
-  const getEstadoPago = (userId: string) => {
-    // Por ahora retornar "—" hasta que se implemente la tabla de pagos
-    // TODO: Consultar tabla pagos_usuarios cuando esté implementada
-    return '—';
+  // Función para obtener estado de pago del usuario (local hasta tener backend)
+  const getEstadoPago = (userId: string): EstadoPago => {
+    return getEstadoPagoLocal(userId);
   };
 
   // Nombre a mostrar: preferir first_name + last_name; si no, full_name; si no, derivar de email
@@ -467,20 +511,26 @@ export default function Admin() {
     }
   }, [showUserDetails]);
 
-  // Eliminar usuario
-  const handleDeleteUser = async (userId: string, userName: string) => {
-    if (!confirm(`¿Estás seguro de que quieres eliminar a ${userName}? Esta acción no se puede deshacer.`)) {
-      return;
-    }
+  // Estado popup confirmación eliminar usuario
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
+  // Abrir confirmación
+  const requestDeleteUser = (userId: string, userName: string) => {
+    setDeleteTarget({ id: userId, name: userName });
+    setConfirmDeleteOpen(true);
+  };
+
+  // Confirmar eliminación
+  const handleConfirmDeleteUser = async () => {
+    if (!deleteTarget) return;
     const loadingToast = showLoading('Eliminando usuario...');
-    
-    const result = await deleteUser(userId);
-    
+    const result = await deleteUser(deleteTarget.id);
     dismissToast(loadingToast);
-    
     if (result.success) {
       showSuccess('Usuario eliminado', 'El usuario ha sido eliminado exitosamente');
+      setConfirmDeleteOpen(false);
+      setDeleteTarget(null);
     } else {
       showError('Error al eliminar usuario', result.error || 'No se pudo eliminar el usuario');
     }
@@ -560,7 +610,7 @@ export default function Admin() {
                     </p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut} className="text-red-600">
+                  <DropdownMenuItem onClick={() => setShowLogoutConfirm(true)} className="text-red-600">
                     <LogOut className="mr-2 h-4 w-4" />
                     <span>Cerrar Sesión</span>
                   </DropdownMenuItem>
@@ -570,6 +620,29 @@ export default function Admin() {
           </div>
         </div>
       </header>
+
+      {/* Espaciado superior solo para desktop entre navbar y barra superior */}
+      <div className="hidden sm:block h-4" />
+
+      {/* Dialog de confirmación de cerrar sesión (Admin) */}
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent className="w-[85vw] sm:w-[360px] max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogDescription className="text-center">
+              ¿Estás seguro de que quieres cerrar sesión?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between items-stretch gap-2">
+            <AlertDialogCancel className="text-xs sm:text-sm m-0 w-full sm:flex-1">Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => { setShowLogoutConfirm(false); await signOut(); navigate('/login'); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:flex-1"
+            >
+              Cerrar sesión
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="w-full max-w-full px-4 pb-4 md:pb-8 mx-auto">
         {/* Tabs principales */}
@@ -635,7 +708,9 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedUsers.map((user) => {
+                      {sortedUsers
+                        .filter(u => !(u.email || '').toLowerCase().includes('test'))
+                        .map((user) => {
                         const estadoPago = getEstadoPago(user.id);
                         const estadoCuenta = getEstadoCuenta(user.id);
                         const diasAsistencia = getDiasAsistencia(user.id);
@@ -651,15 +726,21 @@ export default function Admin() {
                               <p className="text-sm text-muted-foreground">{diasAsistencia}</p>
                             </td>
                             <td className="p-3">
-                              <span className={`text-sm ${
-                                estadoPago === 'debe'
-                                  ? 'text-red-600 font-medium'
-                                  : estadoPago === 'no debe'
-                                  ? 'text-green-600 font-medium'
-                                  : 'text-muted-foreground'
-                              }`}>
-                                {estadoPago}
-                              </span>
+                              <Select value={estadoPago} onValueChange={(v) => { setEstadoPagoLocal(user.id, v as any); }}>
+                                <SelectTrigger className={`w-[130px] h-8 ${
+                                  estadoPago === 'debe' ? 'text-red-600' : 'text-green-600'
+                                }`}>
+                                  <SelectValue placeholder="Estado" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="debe">
+                                    <span className="text-red-600">Debe</span>
+                                  </SelectItem>
+                                  <SelectItem value="no_debe">
+                                    <span className="text-green-600">No debe</span>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
                             </td>
                             <td className="p-3">
                               <span className={`text-sm ${
@@ -688,28 +769,10 @@ export default function Admin() {
                                     <Eye className="w-4 h-4 mr-2" />
                                     Ver Detalles
                                   </DropdownMenuItem>
-                                  {user.role === 'client' && canBeAdmin(user.email) && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleRoleChange(user.id, 'admin')}
-                                      className="text-yellow-600"
-                                    >
-                                      <Crown className="w-4 h-4 mr-2" />
-                                      Hacer Administrador
-                                    </DropdownMenuItem>
-                                  )}
-                                  
-                                  {user.role === 'admin' && (
-                                    <DropdownMenuItem
-                                      onClick={() => handleRoleChange(user.id, 'client')}
-                                      className="text-blue-600"
-                                    >
-                                      <User className="w-4 h-4 mr-2" />
-                                      Hacer Cliente
-                                    </DropdownMenuItem>
-                                  )}
+                                  {/* Acciones de cambio de rol deshabilitadas por requerimiento */}
                                   
                                   <DropdownMenuItem
-                                    onClick={() => handleDeleteUser(user.id, user.full_name)}
+                                    onClick={() => requestDeleteUser(user.id, getDisplayFullName(user))}
                                     className="text-red-600"
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
@@ -745,7 +808,9 @@ export default function Admin() {
                   
                   {/* Lista de usuarios */}
                   <div className="divide-y">
-                    {sortedUsers.map((user) => {
+                    {sortedUsers
+                      .filter(u => !(u.email || '').toLowerCase().includes('test'))
+                      .map((user) => {
                       const estadoPago = getEstadoPago(user.id);
                       
                       return (
@@ -861,7 +926,7 @@ export default function Admin() {
               <div>
                 <label className="text-sm font-medium">Teléfono</label>
                 <p className="text-sm text-muted-foreground">
-                  {selectedUser.phone || 'No especificado'}
+                  {(selectedUser.phone || selectedUser.user_metadata?.phone || '').toString().trim() || 'No especificado'}
                 </p>
               </div>
               
@@ -950,29 +1015,54 @@ export default function Admin() {
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
                     <span className="text-sm text-muted-foreground">Cargando horarios...</span>
                   </div>
-                ) : horariosRecurrentes.length > 0 ? (
-                  <div className="space-y-2">
-                    {horariosRecurrentes.map((horario) => (
-                      <div key={horario.id} className="flex items-center justify-start gap-3 p-2 bg-muted/50 rounded-lg">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-sm font-medium">
-                            {getDiaNombre(horario.dia_semana)}
-                          </span>
-                          <span className="text-sm text-muted-foreground">
-                            {horario.hora_inicio} - {horario.hora_fin}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
                 ) : (
-                  <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>
+                  (() => {
+                    const userId = selectedUser?.id;
+                    const userHorarios = (horariosRecurrentes || []).filter(h => h.usuario_id === userId && h.activo);
+                    if (userHorarios.length === 0) {
+                      return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
+                    }
+                    const diasSet = new Set<number>();
+                    for (const h of userHorarios) {
+                      const d = typeof h.dia_semana === 'number' ? h.dia_semana : parseInt(String(h.dia_semana));
+                      if (!Number.isNaN(d)) diasSet.add(d);
+                    }
+                    const dias = Array.from(diasSet).sort((a,b) => (a===7?7:a) - (b===7?7:b));
+                    return (
+                      <div className="flex flex-wrap gap-2">
+                        {dias.map(d => (
+                          <span key={d} className="px-2 py-1 rounded bg-muted text-sm">
+                            {getDiaCorto(d)}
+                          </span>
+                        ))}
+                      </div>
+                    );
+                  })()
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
       )}
+
+      {/* Confirmación eliminar usuario */}
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent className="w-[85vw] sm:w-[380px] max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Estás seguro de que deseas eliminar a {deleteTarget?.name || 'este usuario'}?
+              Esta acción no se puede deshacer.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:flex-1">Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDeleteUser} className="w-full sm:flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Eliminar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Navbar Mobile - fija en bottom, solo visible en móvil */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">

@@ -24,6 +24,24 @@ export const useAdmin = () => {
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
 
+  // Utilidad de ocultamiento local (soft-delete en interfaz)
+  const getHiddenUserIds = (): string[] => {
+    try {
+      const raw = localStorage.getItem('adminHiddenUsers');
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  };
+
+  const addHiddenUserId = (id: string) => {
+    const curr = new Set(getHiddenUserIds());
+    curr.add(id);
+    localStorage.setItem('adminHiddenUsers', JSON.stringify(Array.from(curr)));
+  };
+
   // Verificar si el usuario actual es administrador
   useEffect(() => {
     const checkAdminStatus = async () => {
@@ -180,7 +198,10 @@ export const useAdmin = () => {
         })
       );
 
-      setAllUsers(usersWithHorarios);
+      // Filtrar usuarios ocultos (soft-delete en sistema)
+      const hidden = new Set(getHiddenUserIds());
+      const visibleUsers = usersWithHorarios.filter(u => !hidden.has(u.id));
+      setAllUsers(visibleUsers);
       console.log('✅ Usuarios cargados exitosamente');
     } catch (err) {
       console.error('❌ Error inesperado obteniendo usuarios:', err);
@@ -239,24 +260,14 @@ export const useAdmin = () => {
   const deleteUser = async (userId: string) => {
     if (!isAdmin) return { success: false, error: 'No tienes permisos de administrador' };
 
+    // Soft-delete a nivel de sistema: ocultar en Admin sin tocar la BD
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-
-      if (error) {
-        console.error('Error eliminando usuario:', error);
-        return { success: false, error: error.message };
-      }
-
-      // Actualizar listas locales
+      addHiddenUserId(userId);
       await fetchAllUsers();
       await fetchAdminUsers();
-
       return { success: true };
     } catch (err) {
-      console.error('Error inesperado eliminando usuario:', err);
+      console.error('Error realizando soft-delete:', err);
       return { success: false, error: 'Error inesperado' };
     }
   };

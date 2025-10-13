@@ -64,6 +64,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Estado para alumnos
   const [alumnosHorarios, setAlumnosHorarios] = useState<AlumnoHorario[]>([]);
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
+  const [adminSlots, setAdminSlots] = useState<{ horaInicio: string; horaFin: string; capacidad: number }[]>([]);
+  
+  // Formatear fecha local a YYYY-MM-DD para evitar TZ
+  const formatLocalDate = (d: Date) => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
   
   // Estado para acordeón
   const [horariosExpandidos, setHorariosExpandidos] = useState<Set<string>>(new Set());
@@ -91,8 +100,69 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     fetchTurnos();
     if (isAdminView) {
       fetchAlumnosHorarios();
+      fetchAdminSlots();
     }
   }, [currentDate, isAdminView]);
+
+  // Suscripciones en tiempo real para admin: reflejar altas/bajas al instante
+  useEffect(() => {
+    if (!isAdminView) return;
+    const ch1 = supabase
+      .channel('rt_turnos_variables')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
+        fetchAlumnosHorarios();
+      })
+      .subscribe();
+    const ch2 = supabase
+      .channel('rt_horarios_recurrentes_usuario')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario' }, () => {
+        fetchAlumnosHorarios();
+      })
+      .subscribe();
+    const chSlots = supabase
+      .channel('rt_horarios_semanales')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_semanales' }, () => {
+        fetchAdminSlots();
+      })
+      .subscribe();
+    const ch3 = supabase
+      .channel('rt_turnos_cancelados')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_cancelados' }, () => {
+        fetchAlumnosHorarios();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(ch1);
+      supabase.removeChannel(ch2);
+      supabase.removeChannel(chSlots);
+      supabase.removeChannel(ch3);
+    };
+  }, [isAdminView, currentDate]);
+
+  // Cargar slots configurados por admin desde horarios_semanales
+  const fetchAdminSlots = async () => {
+    try {
+      const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('hora_inicio, hora_fin, capacidad, dia_semana, activo')
+        .eq('dia_semana', diaSemana)
+        .eq('activo', true)
+        .order('hora_inicio', { ascending: true });
+      if (error) {
+        console.error('❌ Error cargando slots admin:', error);
+        return;
+      }
+      const slots = (data || []).map((h: any) => ({
+        horaInicio: (h.hora_inicio || '').substring(0,5),
+        horaFin: (h.hora_fin || '').substring(0,5),
+        capacidad: Number(h.capacidad) || 0,
+      }));
+      setAdminSlots(slots);
+    } catch (e) {
+      console.error('❌ Error inesperado cargando slots admin:', e);
+    }
+  };
 
   const fetchTurnos = async () => {
     try {
@@ -108,8 +178,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           profiles!cliente_id(full_name),
           profiles!profesional_id(full_name)
         `)
-        .gte('fecha', startDate.toISOString().split('T')[0])
-        .lte('fecha', endDate.toISOString().split('T')[0])
+        .gte('fecha', formatLocalDate(startDate))
+        .lte('fecha', formatLocalDate(endDate))
         .order('fecha', { ascending: true })
         .order('hora_inicio', { ascending: true });
 
@@ -145,7 +215,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const fetchAlumnosHorarios = async () => {
     try {
       setLoadingAlumnos(true);
-      const fechaActual = currentDate.toISOString().split('T')[0];
+      const fechaActual = formatLocalDate(currentDate);
       // Convertir día de la semana: JS (0=domingo) -> DB (1=lunes)
       const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
 
@@ -161,7 +231,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           hora_fin,
           activo,
           usuario_id,
-          profiles(full_name, email, phone, role)
+          profiles(full_name, first_name, last_name, email, phone, role)
         `)
         .eq('dia_semana', diaSemana)
         .eq('activo', true);
@@ -182,7 +252,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           turno_hora_fin,
           estado,
           cliente_id,
-          profiles(full_name, email, phone, role)
+          profiles(full_name, first_name, last_name, email, phone, role)
         `)
         .eq('turno_fecha', fechaActual)
         .eq('estado', 'confirmada');
@@ -202,7 +272,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           turno_hora_inicio,
           turno_hora_fin,
           cliente_id,
-          profiles(full_name, email, phone, role)
+          profiles(full_name, first_name, last_name, email, phone, role)
         `)
         .eq('turno_fecha', fechaActual);
 
@@ -211,6 +281,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       } else {
         console.log('✅ Turnos cancelados cargados:', turnosCancelados?.length || 0);
       }
+
+      // Helper para nombre completo
+      const getProfileFullName = (profile: any) => {
+        if (!profile) return 'Sin nombre';
+        const composed = [profile.first_name, profile.last_name].filter(Boolean).join(' ').trim();
+        return (profile.full_name || composed || 'Sin nombre').trim();
+      };
 
       // Combinar todos los datos
       const todosAlumnos: AlumnoHorario[] = [];
@@ -223,12 +300,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           if (profile && profile.role !== 'admin') {
             todosAlumnos.push({
               id: horario.id,
-              nombre: profile.full_name || 'Sin nombre',
+              nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone,
               tipo: 'recurrente',
-              hora_inicio: horario.hora_inicio,
-              hora_fin: horario.hora_fin,
+              hora_inicio: (horario.hora_inicio || '').substring(0,5),
+              hora_fin: (horario.hora_fin || '').substring(0,5),
               fecha: fechaActual,
               activo: horario.activo,
               usuario_id: horario.usuario_id
@@ -245,12 +322,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           if (profile && profile.role !== 'admin') {
             todosAlumnos.push({
               id: turno.id,
-              nombre: profile.full_name || 'Sin nombre',
+              nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone,
               tipo: 'variable',
-              hora_inicio: turno.turno_hora_inicio,
-              hora_fin: turno.turno_hora_fin,
+              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
+              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
               fecha: turno.turno_fecha,
               usuario_id: turno.cliente_id
             });
@@ -266,12 +343,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           if (profile && profile.role !== 'admin') {
             todosAlumnos.push({
               id: turno.id,
-              nombre: profile.full_name || 'Usuario sin nombre',
+              nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone || '',
               tipo: 'cancelado',
-              hora_inicio: turno.turno_hora_inicio,
-              hora_fin: turno.turno_hora_fin,
+              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
+              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
               fecha: turno.turno_fecha,
               usuario_id: turno.cliente_id
             });
@@ -335,7 +412,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         .from('turnos_cancelados')
         .select('id')
         .eq('cliente_id', selectedAlumno.usuario_id)
-        .eq('turno_fecha', selectedAlumno.fecha || currentDate.toISOString().split('T')[0])
+        .eq('turno_fecha', selectedAlumno.fecha || formatLocalDate(currentDate))
         .eq('turno_hora_inicio', selectedAlumno.hora_inicio)
         .eq('turno_hora_fin', selectedAlumno.hora_fin);
 
@@ -350,7 +427,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         .from('turnos_cancelados')
         .insert({
           cliente_id: selectedAlumno.usuario_id,
-          turno_fecha: selectedAlumno.fecha || currentDate.toISOString().split('T')[0],
+          turno_fecha: selectedAlumno.fecha || formatLocalDate(currentDate),
           turno_hora_inicio: selectedAlumno.hora_inicio,
           turno_hora_fin: selectedAlumno.hora_fin,
           tipo_cancelacion: 'admin',
@@ -540,7 +617,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   };
 
   const getTurnosForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = formatLocalDate(date);
     const turnosDelDia = turnos.filter(turno => turno.fecha === dateStr);
     
     // Retornar todos los turnos del día (hasta 24: 8 horarios × 3 turnos por horario)
@@ -675,27 +752,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       );
     }
 
-    // Generar los 8 horarios estándar (8:00 a 15:00)
-    const timeSlots = [];
-    
-    for (let hour = 8; hour < 16; hour++) {
-      const horaInicio = `${hour.toString().padStart(2, '0')}:00`;
-      const horaFin = `${(hour + 1).toString().padStart(2, '0')}:00`;
-      
-      // Buscar alumnos para este horario
-      const alumnosEnHorario = alumnosHorarios.filter(alumno => {
-        // Normalizar formato de hora: "09:00:00" -> "09:00"
-        const horaAlumno = alumno.hora_inicio.substring(0, 5);
-        return horaAlumno === horaInicio;
-      });
-      
-      
-      timeSlots.push({
-        horaInicio,
-        horaFin,
-        alumnos: alumnosEnHorario
-      });
-    }
+    // Generar horarios dinámicos definidos por admin (horarios_semanales)
+    const timeSlots = adminSlots.map(slot => {
+      const alumnos = alumnosHorarios.filter(alumno => (alumno.hora_inicio || '').substring(0,5) === slot.horaInicio);
+      return {
+        horaInicio: slot.horaInicio,
+        horaFin: slot.horaFin,
+        alumnos,
+        capacidad: slot.capacidad,
+        cupoDisponible: Math.max(0, (slot.capacidad || 0) - alumnos.length),
+      };
+    });
 
     // Función para formatear hora de "08:00" a "8am" o "15:00" a "3pm"
     const formatearHora = (hora: string): string => {
@@ -740,7 +807,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-light text-[10px]">
-                        {slot.alumnos.length} Alumno{slot.alumnos.length !== 1 ? 's' : ''}
+                        {slot.alumnos.length}/{slot.capacidad || 0} alumnos
                       </Badge>
                       {isExpanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
@@ -795,15 +862,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                No hay clases registradas
+                No hay horarios configurados para este día
               </h3>
               <p className="text-sm text-muted-foreground">
-                Para el día {currentDate.toLocaleDateString('es-ES', { 
-                  weekday: 'long', 
-                  year: 'numeric', 
-                  month: 'long', 
-                  day: 'numeric' 
-                })}
+                Configura los horarios desde el panel de administración para este día.
               </p>
             </div>
           )}

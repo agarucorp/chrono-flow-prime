@@ -110,6 +110,13 @@ export const RecurringScheduleView = () => {
     }
   }, [user?.id]);
 
+  // Escuchar confirmación de cerrar sesión disparada desde el menú desktop
+  useEffect(() => {
+    const handleSignoutConfirm = () => setShowLogoutConfirm(true);
+    window.addEventListener('auth:signout-confirm', handleSignoutConfirm);
+    return () => window.removeEventListener('auth:signout-confirm', handleSignoutConfirm);
+  }, []);
+
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
     { numero: 0, nombre: 'Domingo', nombreCorto: 'Dom' },
@@ -641,7 +648,7 @@ export const RecurringScheduleView = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6">
+    <div className="space-y-3 sm:space-y-6 pt-3">
       {/* Subnavbar */}
       <div className="space-y-3 sm:space-y-4 mt-2 sm:mt-6">
         {/* Desktop navbar (centered pills) */}
@@ -1122,20 +1129,20 @@ export const RecurringScheduleView = () => {
 
       {/* Dialog de confirmación de cerrar sesión */}
       <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
-        <AlertDialogContent className="w-[85vw] sm:w-full max-w-md">
+        <AlertDialogContent className="w-[85vw] sm:w-[360px] max-w-sm">
           <AlertDialogHeader>
             <AlertDialogDescription className="text-center">
               ¿Estás seguro de que quieres cerrar sesión?
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="text-xs sm:text-sm m-0 w-full sm:w-auto">Cancelar</AlertDialogCancel>
+          <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between items-stretch gap-2">
+            <AlertDialogCancel className="text-xs sm:text-sm m-0 w-full sm:flex-1">Cancelar</AlertDialogCancel>
             <AlertDialogAction 
               onClick={() => {
                 setShowLogoutConfirm(false);
                 window.dispatchEvent(new CustomEvent('auth:signout'));
               }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:w-auto"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:flex-1"
             >
               Cerrar sesión
             </AlertDialogAction>

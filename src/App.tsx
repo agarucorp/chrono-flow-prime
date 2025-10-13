@@ -154,7 +154,7 @@ const Dashboard = () => {
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 
                       className="cursor-pointer text-destructive focus:text-destructive"
-                      onClick={handleSignOut}
+                      onClick={() => window.dispatchEvent(new CustomEvent('auth:signout-confirm'))}
                     >
                       <LogOut className="h-4 w-4 mr-2" />
                       Cerrar Sesión
