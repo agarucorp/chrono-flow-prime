@@ -41,18 +41,23 @@ const Dashboard = () => {
     return email[0].toUpperCase();
   };
 
-  // Función para obtener el nombre del usuario
-  const getUserName = (email: string) => {
+  // Nombre mostrado en el menú del avatar: profiles/user_metadata/email
+  const getDisplayName = () => {
+    const meta: any = user?.user_metadata || {};
+    const first = (meta.first_name || '').toString().trim();
+    const last = (meta.last_name || '').toString().trim();
+    if (first || last) return `${first} ${last}`.trim();
+    const email = user?.email || '';
     if (!email) return 'Usuario';
-    const name = email.split('@')[0];
-    // Separar por punto y capitalizar cada parte
-    const parts = name.split('.');
+    const base = email.split('@')[0];
+    const parts = base.split('.');
     if (parts.length >= 2) {
-      return parts.map(part => 
-        part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-      ).join(' ');
+      return parts
+        .map((p) => (p ? p.charAt(0).toUpperCase() + p.slice(1).toLowerCase() : ''))
+        .join(' ')
+        .trim();
     }
-    return name.charAt(0).toUpperCase() + name.slice(1);
+    return base.charAt(0).toUpperCase() + base.slice(1);
   };
 
   const handleSignOut = async () => {
@@ -138,7 +143,7 @@ const Dashboard = () => {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
                     <div className="px-3 py-2">
-                      <p className="text-sm font-medium">{getUserName(user?.email || '')}</p>
+                      <p className="text-sm font-medium">{getDisplayName()}</p>
                       <p className="text-xs text-muted-foreground">{user?.email}</p>
                     </div>
                     <DropdownMenuSeparator />

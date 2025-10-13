@@ -34,10 +34,21 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           .eq('id', userId)
           .single();
 
+        // Obtener metadata fresca del usuario como fallback
+        const { data: authUserResp } = await supabase.auth.getUser();
+        const meta = authUserResp?.user?.user_metadata || {};
+
         if (!error && data) {
-          setFirstName(data.first_name || '');
-          setLastName(data.last_name || '');
-          setPhone(data.phone || '');
+          setFirstName(data.first_name || meta.first_name || '');
+          setLastName(data.last_name || meta.last_name || '');
+          // Fallback al teléfono del user_metadata si profiles.phone está vacío
+          const mergedPhone = (data.phone ?? meta.phone ?? '') as string;
+          setPhone(mergedPhone);
+        } else {
+          // Si no hay fila en profiles o hubo error, usar metadata
+          setFirstName(meta.first_name || '');
+          setLastName(meta.last_name || '');
+          setPhone(meta.phone || '');
         }
       } catch (_) {
         // Ignorar errores (p. ej. tabla inexistente)
@@ -108,7 +119,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           <div className="sm:hidden space-y-4">
             {/* Email - solo lectura */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-xs">Email</Label>
+              <Label className="text-xs">Email</Label>
               <div className="p-3 bg-muted rounded-md">
                 <p className="text-xs text-muted-foreground">{email || 'No configurado'}</p>
               </div>

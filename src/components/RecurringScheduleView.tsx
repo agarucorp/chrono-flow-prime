@@ -92,6 +92,11 @@ export const RecurringScheduleView = () => {
   };
 
   const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+  const getDisplayPhone = () => {
+    const phoneValue = (profileData?.phone ?? user?.user_metadata?.phone ?? '') as string;
+    const trimmed = (phoneValue || '').toString().trim();
+    return trimmed.length > 0 ? trimmed : 'No configurado';
+  };
 
   // Función para cambiar la vista activa
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
@@ -237,7 +242,7 @@ export const RecurringScheduleView = () => {
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, first_name, last_name, phone, birth_date')
+        .select('full_name, first_name, last_name, phone')
         .eq('id', user.id)
         .maybeSingle();
       
@@ -249,21 +254,27 @@ export const RecurringScheduleView = () => {
           first_name: user?.user_metadata?.first_name,
           last_name: user?.user_metadata?.last_name,
           phone: user?.user_metadata?.phone,
-          birth_date: user?.user_metadata?.birth_date
         });
         return;
       }
       
+      // Obtener metadata fresca del usuario
+      const { data: authUserResp } = await supabase.auth.getUser();
+      const metaPhone = authUserResp?.user?.user_metadata?.phone ?? user?.user_metadata?.phone ?? null;
+
       if (data) {
-        setProfileData(data);
+        // Combinar datos de profiles con metadata por si falta teléfono
+        setProfileData({
+          ...data,
+          phone: (data as any).phone ?? metaPhone,
+        });
       } else {
         // Si no hay datos en la tabla, usar user_metadata
         setProfileData({
           full_name: user?.user_metadata?.full_name,
           first_name: user?.user_metadata?.first_name,
           last_name: user?.user_metadata?.last_name,
-          phone: user?.user_metadata?.phone,
-          birth_date: user?.user_metadata?.birth_date
+          phone: metaPhone,
         });
       }
     } catch (error) {
@@ -274,7 +285,6 @@ export const RecurringScheduleView = () => {
         first_name: user?.user_metadata?.first_name,
         last_name: user?.user_metadata?.last_name,
         phone: user?.user_metadata?.phone,
-        birth_date: user?.user_metadata?.birth_date
       });
     }
   };
@@ -286,6 +296,13 @@ export const RecurringScheduleView = () => {
       cargarDatosPerfil();
     }
   }, [user?.id]);
+
+  // Forzar recarga del perfil al entrar en la vista de Perfil
+  useEffect(() => {
+    if (activeView === 'perfil' && user?.id) {
+      cargarDatosPerfil();
+    }
+  }, [activeView, user?.id]);
 
   // Escuchar actualización desde el modal y recargar inmediatamente
   useEffect(() => {
@@ -865,7 +882,7 @@ export const RecurringScheduleView = () => {
                   <div>
                     <p className="text-xs text-muted-foreground">Teléfono</p>
                     <p className="text-sm font-medium">
-                      {profileData?.phone || user?.user_metadata?.phone || 'No configurado'}
+                      {getDisplayPhone()}
                     </p>
                   </div>
                 </div>
