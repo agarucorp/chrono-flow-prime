@@ -23,6 +23,9 @@ export const useAdmin = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
+  // Estado de periodo (mes/año) compartido para Usuarios
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1..12
 
   // Utilidad de ocultamiento local (soft-delete en interfaz)
   const getHiddenUserIds = (): string[] => {
@@ -208,6 +211,45 @@ export const useAdmin = () => {
     }
   }, [isAdmin, fetchUserHorarios]);
 
+  // Lectura de cuotas por mes/año
+  const fetchCuotasMensuales = useCallback(async (anio: number, mes: number) => {
+    try {
+      const { data, error } = await supabase
+        .from('cuotas_mensuales')
+        .select('usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, estado_pago')
+        .eq('anio', anio)
+        .eq('mes', mes);
+      if (error) {
+        console.error('Error leyendo cuotas_mensuales:', error);
+        return [] as any[];
+      }
+      return data || [];
+    } catch (err) {
+      console.error('Error inesperado leyendo cuotas_mensuales:', err);
+      return [] as any[];
+    }
+  }, []);
+
+  // Actualizar estado_pago por usuario (persistir en BD)
+  const updateCuotaEstadoPago = useCallback(async (usuarioId: string, anio: number, mes: number, estado: 'pendiente' | 'abonada' | 'vencida') => {
+    try {
+      const { error } = await supabase
+        .from('cuotas_mensuales')
+        .update({ estado_pago: estado, generado_el: new Date().toISOString() })
+        .eq('usuario_id', usuarioId)
+        .eq('anio', anio)
+        .eq('mes', mes);
+      if (error) {
+        console.error('Error actualizando estado_pago:', error);
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err) {
+      console.error('Error inesperado actualizando estado_pago:', err);
+      return { success: false, error: 'Error inesperado' };
+    }
+  }, []);
+
   // Obtener solo usuarios administradores
   const fetchAdminUsers = useCallback(async () => {
     if (!isAdmin) return;
@@ -292,10 +334,16 @@ export const useAdmin = () => {
     isLoading,
     adminUsers,
     allUsers,
+    selectedYear,
+    selectedMonth,
+    setSelectedYear,
+    setSelectedMonth,
     fetchAllUsers,
     fetchAdminUsers,
     changeUserRole,
     deleteUser,
+    fetchCuotasMensuales,
+    updateCuotaEstadoPago,
     canBeAdmin,
   };
 };

@@ -197,6 +197,25 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       console.log('✅ Horarios recurrentes guardados exitosamente');
       showSuccess('¡Horarios confirmados!', 'Tus horarios recurrentes fueron guardados');
       
+      // Generar cuota mensual automáticamente para el mes actual
+      const ahora = new Date();
+      const mesActual = ahora.getMonth() + 1;
+      const anioActual = ahora.getFullYear();
+      
+      console.log('💰 Generando cuota mensual para:', { anio: anioActual, mes: mesActual });
+      
+      const { error: cuotaError } = await supabase.rpc('fn_generar_cuotas_mes', {
+        p_anio: anioActual,
+        p_mes: mesActual
+      });
+      
+      if (cuotaError) {
+        console.error('⚠️ Error generando cuota mensual:', cuotaError);
+        // No bloqueamos el flujo, solo advertimos
+      } else {
+        console.log('✅ Cuota mensual generada exitosamente');
+      }
+      
       // Notificar al panel para recargar "Mis Clases"
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
       

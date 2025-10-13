@@ -69,7 +69,9 @@ export default function Admin() {
     fetchAdminUsers,
     changeUserRole,
     deleteUser,
-    canBeAdmin
+    canBeAdmin,
+    selectedYear, selectedMonth, setSelectedYear, setSelectedMonth,
+    fetchCuotasMensuales, updateCuotaEstadoPago
   } = useAdmin();
   
   const { showSuccess, showError, showWarning, showLoading, dismissToast } = useNotifications();
@@ -81,10 +83,16 @@ export default function Admin() {
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'debe_first' | 'no_debe_first'>('default');
+  const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
+  const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>([]);
+  const [balanceTotals, setBalanceTotals] = useState<{ totalAbonado: number; totalPendiente: number }>({ totalAbonado: 0, totalPendiente: 0 });
   const [editingTarifa, setEditingTarifa] = useState(false);
   const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
   const [tarifaActual, setTarifaActual] = useState<number | null>(null);
   const [loadingTarifa, setLoadingTarifa] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [selectedUserForHistory, setSelectedUserForHistory] = useState<string | null>(null);
+  const [userHistory, setUserHistory] = useState<Array<{ anio: number; mes: string; monto: number; estado: string }>>([]);
   // Estado de pago por usuario (persistido localmente)
   type EstadoPago = 'debe' | 'no_debe';
   const STORAGE_PAGO = 'adminPaymentStatus';
@@ -285,7 +293,7 @@ export default function Admin() {
   const getDiasAsistencia = (userId: string) => {
     const horariosUsuario = horariosRecurrentes.filter(h => h.usuario_id === userId && h.activo);
     if (horariosUsuario.length === 0) return '—';
-
+    
     // Días únicos normalizados (BD: 1=Lun..7=Dom). Queremos orden Lun..Dom
     const diasSet = new Set<number>();
     for (const h of horariosUsuario) {
@@ -514,6 +522,34 @@ export default function Admin() {
     }
   }, [showUserDetails]);
 
+  // Cargar cuotas del periodo seleccionado y mapear por usuario
+  useEffect(() => {
+    (async () => {
+      const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+      const map: Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = {};
+      for (const c of cuotas) {
+        map[c.usuario_id] = { monto: Number(c.monto_total) || 0, estado: (c.estado_pago as any) || 'pendiente' };
+      }
+      setCuotasMap(map);
+
+      // Construir filas para Balance
+      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = [];
+      let totalAbonado = 0;
+      let totalPendiente = 0;
+      for (const c of cuotas) {
+        const u = allUsers.find(u => u.id === c.usuario_id);
+        const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
+        const email = u?.email || '';
+        const monto = Number(c.monto_total) || 0;
+        const estado = (c.estado_pago as any) || 'pendiente';
+        rows.push({ usuario_id: c.usuario_id, nombre, email, monto, estado });
+        if (estado === 'abonada') totalAbonado += monto; else totalPendiente += monto;
+      }
+      setBalanceRows(rows);
+      setBalanceTotals({ totalAbonado, totalPendiente });
+    })();
+  }, [selectedYear, selectedMonth, fetchCuotasMensuales, allUsers]);
+
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
@@ -538,6 +574,42 @@ export default function Admin() {
       showError('Error al eliminar usuario', result.error || 'No se pudo eliminar el usuario');
     }
   };
+
+  // Cargar historial de pagos de un usuario
+  const loadUserHistory = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('cuotas_mensuales')
+        .select('anio, mes, monto_total, estado_pago')
+        .eq('usuario_id', userId)
+        .order('anio', { ascending: false })
+        .order('mes', { ascending: false });
+
+      if (error) {
+        console.error('Error cargando historial:', error);
+        return;
+      }
+
+      const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+      const history = (data || []).map(d => ({
+        anio: d.anio,
+        mes: mesesNombres[d.mes - 1] || d.mes.toString(),
+        monto: Number(d.monto_total) || 0,
+        estado: d.estado_pago === 'abonada' ? 'Abonado' : d.estado_pago === 'vencida' ? 'Vencido' : 'Pendiente'
+      }));
+
+      setUserHistory(history);
+    } catch (err) {
+      console.error('Error inesperado:', err);
+    }
+  };
+
+  // Efecto para cargar historial cuando se selecciona un usuario
+  useEffect(() => {
+    if (selectedUserForHistory && showHistoryModal) {
+      loadUserHistory(selectedUserForHistory);
+    }
+  }, [selectedUserForHistory, showHistoryModal]);
 
   // Si está cargando o no hay usuario, mostrar spinner
   if (isLoading || !user) {
@@ -585,11 +657,24 @@ export default function Admin() {
       <header className="bg-card border-b shadow-card w-full">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16 w-full">
-            {/* Logo centrado */}
-            <div className="flex-1 flex justify-center min-w-0">
-              <div className="w-32 h-12 flex-shrink-0">
-                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
-              </div>
+            {/* Navbar opciones (desktop) centrada */}
+            <div className="hidden md:flex flex-1 justify-center items-center gap-8">
+              <button onClick={() => handleTabChange('usuarios')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='usuarios' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+                Usuarios
+                {activeTab==='usuarios' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+              </button>
+              <button onClick={() => handleTabChange('balance')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='balance' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+                Balance
+                {activeTab==='balance' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+              </button>
+              <button onClick={() => handleTabChange('turnos')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='turnos' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+                Configuración
+                {activeTab==='turnos' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+              </button>
+              <button onClick={() => handleTabChange('calendario')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='calendario' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+                Agenda
+                {activeTab==='calendario' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+              </button>
             </div>
             
             {/* Menú de usuario */}
@@ -652,24 +737,7 @@ export default function Admin() {
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
           {/* Tabs Desktop - oculto en móvil */}
           <div className="hidden md:block w-full max-w-full overflow-x-auto mb-6">
-            <TabsList className="grid w-full grid-cols-4 min-w-0">
-              <TabsTrigger value="usuarios" className="flex items-center space-x-2 text-sm min-w-0">
-                <Users className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">Usuarios</span>
-              </TabsTrigger>
-              <TabsTrigger value="balance" className="flex items-center space-x-2 text-sm min-w-0">
-                <Wallet className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">Balance</span>
-              </TabsTrigger>
-              <TabsTrigger value="turnos" className="flex items-center space-x-2 text-sm min-w-0">
-                <Settings className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">Config</span>
-              </TabsTrigger>
-              <TabsTrigger value="calendario" className="flex items-center space-x-2 text-sm min-w-0">
-                <Calendar className="h-4 w-4 flex-shrink-0" />
-                <span className="truncate">Agenda</span>
-              </TabsTrigger>
-            </TabsList>
+              
           </div>
 
 
@@ -678,9 +746,8 @@ export default function Admin() {
           {/* Tab de Usuarios */}
           <TabsContent value="usuarios" className="mt-6 w-full max-w-full pb-20 md:pb-8">
 
-            {/* Search and Filters */}
-            <div className="mb-6">
               {/* Búsqueda */}
+            <div className="mb-6">
               <div className="relative w-full sm:w-80">
                 <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -705,8 +772,6 @@ export default function Admin() {
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium min-w-[180px]">Usuario</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Asistencia</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Estado de pago</th>
-                        <th className="text-left p-3 font-medium min-w-[120px]">Estado de cuenta</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
                       </tr>
                     </thead>
@@ -714,8 +779,6 @@ export default function Admin() {
                       {sortedUsers
                         .filter(u => !(u.email || '').toLowerCase().includes('test'))
                         .map((user) => {
-                        const estadoPago = getEstadoPago(user.id);
-                        const estadoCuenta = getEstadoCuenta(user.id);
                         const diasAsistencia = getDiasAsistencia(user.id);
                         
                         return (
@@ -728,32 +791,8 @@ export default function Admin() {
                             <td className="p-3">
                               <p className="text-sm text-muted-foreground">{diasAsistencia}</p>
                             </td>
-                            <td className="p-3">
-                              <Select value={estadoPago} onValueChange={(v) => { setEstadoPagoLocal(user.id, v as any); }}>
-                                <SelectTrigger className={`w-[130px] h-8 ${
-                                  estadoPago === 'debe' ? 'text-red-600' : 'text-green-600'
-                                }`}>
-                                  <SelectValue placeholder="Estado" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="debe">
-                                    <span className="text-red-600">Debe</span>
-                                  </SelectItem>
-                                  <SelectItem value="no_debe">
-                                    <span className="text-green-600">No debe</span>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </td>
-                            <td className="p-3">
-                              <span className={`text-sm ${
-                                estadoCuenta !== '—' 
-                                  ? 'text-red-600 font-medium' 
-                                  : 'text-muted-foreground'
-                              }`}>
-                                {estadoCuenta}
-                              </span>
-                            </td>
+                            
+                            
                             <td className="p-3">
                               <div className="flex items-center justify-start">
                                 <DropdownMenu>
@@ -774,7 +813,7 @@ export default function Admin() {
                                   </DropdownMenuItem>
                                   {/* Acciones de cambio de rol deshabilitadas por requerimiento */}
                                   
-                                  <DropdownMenuItem
+                                    <DropdownMenuItem
                                     onClick={() => requestDeleteUser(user.id, getDisplayFullName(user))}
                                     className="text-red-600"
                                   >
@@ -834,7 +873,7 @@ export default function Admin() {
                             <span className={`text-xs ${
                               estadoPago === 'debe'
                                 ? 'text-red-600 font-medium'
-                                : estadoPago === 'no debe'
+                                : estadoPago === 'no_debe'
                                 ? 'text-green-600 font-medium'
                                 : 'text-muted-foreground'
                             }`}>
@@ -870,15 +909,139 @@ export default function Admin() {
 
           {/* Tab de Balance */}
           <TabsContent value="balance" className="mt-6 w-full max-w-full pb-20 md:pb-8">
+            <div className="mb-6 flex items-center justify-end gap-2">
+              <Select value={String(selectedMonth)} onValueChange={(v)=>setSelectedMonth(parseInt(v))}>
+                <SelectTrigger className="w-[120px] h-8"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">Enero</SelectItem>
+                  <SelectItem value="2">Febrero</SelectItem>
+                  <SelectItem value="3">Marzo</SelectItem>
+                  <SelectItem value="4">Abril</SelectItem>
+                  <SelectItem value="5">Mayo</SelectItem>
+                  <SelectItem value="6">Junio</SelectItem>
+                  <SelectItem value="7">Julio</SelectItem>
+                  <SelectItem value="8">Agosto</SelectItem>
+                  <SelectItem value="9">Septiembre</SelectItem>
+                  <SelectItem value="10">Octubre</SelectItem>
+                  <SelectItem value="11">Noviembre</SelectItem>
+                  <SelectItem value="12">Diciembre</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={String(selectedYear)} onValueChange={(v)=>setSelectedYear(parseInt(v))}>
+                <SelectTrigger className="w-[100px] h-8"><SelectValue placeholder="Año" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={String(new Date().getFullYear()-1)}>{String(new Date().getFullYear()-1)}</SelectItem>
+                  <SelectItem value={String(new Date().getFullYear())}>{String(new Date().getFullYear())}</SelectItem>
+                  <SelectItem value={String(new Date().getFullYear()+1)}>{String(new Date().getFullYear()+1)}</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
             <Card>
-              <CardHeader>
-                <CardTitle>Balance de Pagos</CardTitle>
-                <CardDescription>Gestiona los pagos y balances de los usuarios</CardDescription>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">Monto total a recibir</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8">
-                  <Wallet className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">Sección de balance en construcción</p>
+                  <div className="text-2xl font-semibold">${(balanceTotals.totalAbonado + balanceTotals.totalPendiente).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">Monto recibido</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-semibold">${balanceTotals.totalAbonado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm text-muted-foreground">Pendiente de cobro</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-semibold">${balanceTotals.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Tabla detalle por usuario */}
+            <Card className="w-full max-w-full">
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[700px]">
+                    <thead>
+                      <tr className="border-b">
+                        <th className="text-left p-3 font-medium text-sm min-w-[180px]">Usuario</th>
+                        <th className="text-left p-3 font-medium text-sm min-w-[120px]">Cuota</th>
+                        <th className="text-left p-3 font-medium text-sm min-w-[140px]">Estado de pago</th>
+                        <th className="text-left p-3 font-medium text-sm min-w-[100px]">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {balanceRows.map(row => (
+                        <tr key={row.usuario_id} className="border-b hover:bg-muted/50">
+                          <td className="p-3">
+                            <p className="font-medium truncate">{row.nombre}</p>
+                          </td>
+                          <td className="p-3">
+                            <span className="text-sm font-medium">${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          </td>
+                          <td className="p-3">
+                            {/* Dropdown Debe / No debe (persistiendo en BD) */}
+                            <Select
+                              value={row.estado === 'abonada' ? 'no_debe' : 'debe'}
+                              onValueChange={async (v) => {
+                                const nuevoEstadoDb = (v === 'no_debe') ? 'abonada' : 'pendiente';
+                                const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
+                                if (res.success) {
+                                  const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+                                  const map: Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = {};
+                                  let totalAbonado = 0; let totalPendiente = 0;
+                                  for (const c of cuotas) {
+                                    const monto = Number(c.monto_total) || 0;
+                                    const estado = (c.estado_pago as any) || 'pendiente';
+                                    map[c.usuario_id] = { monto, estado };
+                                    if (estado === 'abonada') totalAbonado += monto; else totalPendiente += monto;
+                                  }
+                                  setCuotasMap(map);
+                                  setBalanceTotals({ totalAbonado, totalPendiente });
+                                  setBalanceRows(cuotas.map(c => ({
+                                    usuario_id: c.usuario_id,
+                                    nombre: (allUsers.find(u => u.id===c.usuario_id)?.first_name || allUsers.find(u => u.id===c.usuario_id)?.last_name) ? `${allUsers.find(u => u.id===c.usuario_id)?.first_name || ''} ${allUsers.find(u => u.id===c.usuario_id)?.last_name || ''}`.trim() : (allUsers.find(u => u.id===c.usuario_id)?.full_name || allUsers.find(u => u.id===c.usuario_id)?.email || c.usuario_id),
+                                    email: allUsers.find(u => u.id===c.usuario_id)?.email || '',
+                                    monto: Number(c.monto_total) || 0,
+                                    estado: (c.estado_pago as any) || 'pendiente'
+                                  })));
+                                }
+                              }}
+                            >
+                              <SelectTrigger className={`w-[130px] h-8 ${row.estado==='abonada' ? 'text-green-600' : 'text-red-600'}`}>
+                                <SelectValue placeholder="Estado" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="debe"><span className="text-red-600">Debe</span></SelectItem>
+                                <SelectItem value="no_debe"><span className="text-green-600">No debe</span></SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-3">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedUserForHistory(row.usuario_id);
+                                setShowHistoryModal(true);
+                              }}
+                              className="h-8 w-8 p-0"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </CardContent>
             </Card>
@@ -929,7 +1092,7 @@ export default function Admin() {
               <div>
                 <label className="text-sm font-medium">Teléfono</label>
                 <p className="text-sm text-muted-foreground">
-                  {(selectedUser.phone || selectedUser.user_metadata?.phone || '').toString().trim() || 'No especificado'}
+                  {(selectedUser.phone || '').toString().trim() || 'No especificado'}
                 </p>
               </div>
               
@@ -1037,8 +1200,8 @@ export default function Admin() {
                           <span key={d} className="px-2 py-1 rounded bg-muted text-sm">
                             {getDiaCorto(d)}
                           </span>
-                        ))}
-                      </div>
+                    ))}
+                  </div>
                     );
                   })()
                 )}
@@ -1066,6 +1229,58 @@ export default function Admin() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Historial de Usuario */}
+      {showHistoryModal && selectedUserForHistory && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <Card className="w-full max-w-2xl max-h-[80vh] overflow-hidden">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-lg">
+                Historial de Balance - {balanceRows.find(r => r.usuario_id === selectedUserForHistory)?.nombre || 'Usuario'}
+              </CardTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowHistoryModal(false);
+                  setSelectedUserForHistory(null);
+                  setUserHistory([]);
+                }}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </CardHeader>
+            <CardContent className="overflow-y-auto max-h-[60vh]">
+              {userHistory.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">No hay historial de pagos para este usuario.</p>
+              ) : (
+                <div className="space-y-3">
+                  {userHistory.map((item, idx) => (
+                    <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
+                      <div className="flex-1">
+                        <p className="font-medium">{item.mes} {item.anio}</p>
+                        <p className="text-sm text-muted-foreground">
+                          ${item.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </p>
+                      </div>
+                      <div>
+                        <span className={`text-sm font-medium ${
+                          item.estado === 'Abonado' ? 'text-green-600' : 
+                          item.estado === 'Vencido' ? 'text-red-600' : 
+                          'text-amber-600'
+                        }`}>
+                          {item.estado}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Navbar Mobile - fija en bottom, solo visible en móvil */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
