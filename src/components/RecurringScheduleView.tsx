@@ -313,9 +313,17 @@ export const RecurringScheduleView = () => {
 
   // Escuchar actualización desde el modal y recargar inmediatamente
   useEffect(() => {
-    const handler = () => {
-      cargarHorariosRecurrentes(true);
-      cargarClasesDelMes(true);
+    const handler = async () => {
+      console.log('🔄 Evento horariosRecurrentes:updated recibido');
+      
+      // Primero cargar los horarios recurrentes
+      await cargarHorariosRecurrentes(true);
+      
+      // Luego cargar las clases del mes con los nuevos horarios
+      // Forzamos una pequeña espera para asegurar que el estado se actualizó
+      setTimeout(() => {
+        cargarClasesDelMes(true);
+      }, 100);
     };
     window.addEventListener('horariosRecurrentes:updated', handler);
     return () => window.removeEventListener('horariosRecurrentes:updated', handler);
@@ -351,10 +359,24 @@ export const RecurringScheduleView = () => {
 
       const todasLasClases = [];
       
+      // Si es recarga forzada, obtener horarios recurrentes frescos de la base de datos
+      let horariosActuales = horariosRecurrentes;
+      if (forceReload) {
+        const { data: horariosDB } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .select('id, dia_semana, hora_inicio, hora_fin, activo')
+          .eq('usuario_id', user.id)
+          .eq('activo', true)
+          .order('dia_semana', { ascending: true })
+          .order('hora_inicio', { ascending: true });
+        
+        horariosActuales = horariosDB || [];
+      }
+      
       // Cargar horarios recurrentes si existen
-      if (horariosRecurrentes.length > 0) {
+      if (horariosActuales.length > 0) {
         for (const dia of diasDelMes) {
-          const clasesDelDia = await getClasesDelDia(dia);
+          const clasesDelDia = await getClasesDelDia(dia, horariosActuales);
           todasLasClases.push(...clasesDelDia);
         }
       }
@@ -417,9 +439,10 @@ export const RecurringScheduleView = () => {
   }, [currentMonth]);
 
   // Obtener clases del día
-  const getClasesDelDia = async (dia: Date) => {
+  const getClasesDelDia = async (dia: Date, horariosParaUsar?: HorarioRecurrente[]) => {
     const diaSemana = dia.getDay();
-    const horariosDelDia = horariosRecurrentes.filter(horario => horario.dia_semana === diaSemana);
+    const horariosAFiltrar = horariosParaUsar || horariosRecurrentes;
+    const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemana);
     
     if (horariosDelDia.length === 0) return [];
 
@@ -805,7 +828,7 @@ export const RecurringScheduleView = () => {
                           >
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <div className="text-xs sm:text-sm font-medium">
-                                {format(dia, 'dd/MM', { locale: es })}
+                                {format(dia, "dd 'de' MMMM", { locale: es })}
                               </div>
                               {clase.horario.cancelada && (
                                 <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
@@ -945,7 +968,11 @@ export const RecurringScheduleView = () => {
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mb-2">
-                      {turno.turno_fecha.split('-').reverse().join('/')}
+                      {(() => {
+                        const [year, month, day] = turno.turno_fecha.split('-');
+                        const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                        return format(fecha, "dd 'de' MMMM", { locale: es });
+                      })()}
                     </p>
                     <p className="text-sm text-muted-foreground mb-3">
                       {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
@@ -955,7 +982,7 @@ export const RecurringScheduleView = () => {
                       const d = createdAt ? new Date(createdAt) : null;
                       return d && !isNaN(d.valueOf()) && isAdmin ? (
                         <p className="text-xs text-muted-foreground mb-3">
-                          Cancelado el {format(d, 'dd/MM/yyyy HH:mm', { locale: es })}
+                          Cancelado el {format(d, "dd 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })}
                         </p>
                       ) : null;
                     })()}
@@ -992,7 +1019,7 @@ export const RecurringScheduleView = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Fecha</label>
-                  <p className="text-sm">{format(selectedClase.dia, 'dd/MM', { locale: es })}</p>
+                  <p className="text-sm">{format(selectedClase.dia, "dd 'de' MMMM", { locale: es })}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Día</label>

@@ -19,6 +19,8 @@ import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
 import { SupportModal } from "./components/SupportModal";
 import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
+import { ProtectedRoute } from "./components/ProtectedRoute";
+import NotFound from "./pages/NotFound";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -96,12 +98,12 @@ const Dashboard = () => {
     };
   }, [handleSignOut]);
 
-  // Si el usuario es admin y está en /user, redirigir a /admin
-  useEffect(() => {
-    if (!adminLoading && isAdmin) {
-      navigate('/admin', { replace: true });
-    }
-  }, [adminLoading, isAdmin, navigate]);
+  // Comentado: La redirección de admin se maneja en el login
+  // useEffect(() => {
+  //   if (!adminLoading && isAdmin) {
+  //     navigate('/admin', { replace: true });
+  //   }
+  // }, [adminLoading, isAdmin, navigate]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -232,8 +234,24 @@ const App = () => {
               <Route path="/" element={<Navigate to="/login" replace />} />
               <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
               <Route path="/reset-password" element={<ResetPasswordForm />} />
-              <Route path="/user" element={<Dashboard />} />
-              <Route path="/admin" element={<Admin />} />
+              <Route 
+                path="/user" 
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/admin" 
+                element={
+                  <ProtectedRoute>
+                    <Admin />
+                  </ProtectedRoute>
+                } 
+              />
+              {/* Ruta 404 - debe estar al final */}
+              <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>
