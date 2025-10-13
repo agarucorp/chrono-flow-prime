@@ -69,6 +69,7 @@ export const RecurringScheduleView = () => {
   const [turnoToReserve, setTurnoToReserve] = useState<any>(null);
   const [confirmingReserva, setConfirmingReserva] = useState(false);
   const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>('mis-clases');
   const [clasesDelMes, setClasesDelMes] = useState<any[]>(() => {
     // Recuperar clases del mes del localStorage
@@ -883,11 +884,7 @@ export const RecurringScheduleView = () => {
                 <Button
                   variant="destructive"
                   className="w-full text-xs sm:text-sm"
-                  onClick={() => {
-                    if (confirm('¿Estás seguro de que quieres cerrar sesión?')) {
-                      window.dispatchEvent(new CustomEvent('auth:signout'));
-                    }
-                  }}
+                  onClick={() => setShowLogoutConfirm(true)}
                 >
                   <X className="h-4 w-4 mr-2" />
                   Cerrar Sesión
@@ -1105,6 +1102,29 @@ export const RecurringScheduleView = () => {
         userId={user?.id || null}
         email={user?.email || null}
       />
+
+      {/* Dialog de confirmación de cerrar sesión */}
+      <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
+        <AlertDialogContent className="w-[85vw] sm:w-full max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogDescription className="text-center">
+              ¿Estás seguro de que quieres cerrar sesión?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+            <AlertDialogCancel className="text-xs sm:text-sm m-0 w-full sm:w-auto">Cancelar</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                setShowLogoutConfirm(false);
+                window.dispatchEvent(new CustomEvent('auth:signout'));
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:w-auto"
+            >
+              Cerrar sesión
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

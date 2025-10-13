@@ -108,42 +108,42 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           <div className="sm:hidden space-y-4">
             {/* Email - solo lectura */}
             <div className="space-y-2">
-              <Label htmlFor="email" className="text-sm">Email</Label>
+              <Label htmlFor="email" className="text-xs">Email</Label>
               <div className="p-3 bg-muted rounded-md">
-                <p className="text-sm text-muted-foreground">{email || 'No configurado'}</p>
+                <p className="text-xs text-muted-foreground">{email || 'No configurado'}</p>
               </div>
             </div>
 
             {/* Nombre y Apellido - editables */}
             <div className="space-y-2">
-              <Label htmlFor="firstName-mobile" className="text-sm">Nombre</Label>
-              <Input id="firstName-mobile" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} className="text-sm" />
+              <Label htmlFor="firstName-mobile" className="text-xs">Nombre</Label>
+              <Input id="firstName-mobile" value={firstName} onChange={(e) => setFirstName(e.target.value)} disabled={loading} className="text-xs h-9" />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="lastName-mobile" className="text-sm">Apellido</Label>
-              <Input id="lastName-mobile" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} className="text-sm" />
+              <Label htmlFor="lastName-mobile" className="text-xs">Apellido</Label>
+              <Input id="lastName-mobile" value={lastName} onChange={(e) => setLastName(e.target.value)} disabled={loading} className="text-xs h-9" />
             </div>
 
             {/* Teléfono - editable */}
             <div className="space-y-2">
-              <Label htmlFor="phone-mobile" className="text-sm">Teléfono</Label>
-              <Input id="phone-mobile" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-sm" placeholder="+54 9 11 1234-5678" />
+              <Label htmlFor="phone-mobile" className="text-xs">Teléfono</Label>
+              <Input id="phone-mobile" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-xs h-9" placeholder="+54 9 11 1234-5678" />
             </div>
 
             {/* CTA Cambiar Contraseña */}
             <Button
               type="button"
               onClick={() => setShowChangePassword(true)}
-              className="w-full text-sm h-10"
+              className="w-full text-xs h-9"
               disabled={loading}
             >
-              <Lock className="w-4 h-4 mr-2" />
+              <Lock className="w-3.5 h-3.5 mr-2" />
               Cambiar Contraseña
             </Button>
 
             {/* Botón Guardar */}
             <Button 
-              className="w-full text-sm h-10" 
+              className="w-full text-xs h-9" 
               onClick={handleSave} 
               disabled={saving}
             >
