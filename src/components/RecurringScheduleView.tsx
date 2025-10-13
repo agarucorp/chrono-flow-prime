@@ -494,7 +494,7 @@ export const RecurringScheduleView = () => {
 
   // Manejar click en clase
   const handleClaseClick = (clase: ClaseDelDia) => {
-    if (clase.horario.cancelada) return;
+    if (clase.horario.cancelada || isFechaPasada(clase.dia)) return;
     setSelectedClase(clase);
     setShowModal(true);
   };
@@ -838,12 +838,14 @@ export const RecurringScheduleView = () => {
                         return clasesDelDia.map((clase, claseIndex) => (
                           <tr 
                             key={`${dia.getTime()}-${claseIndex}`} 
-                            className={`border-b last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer ${
+                            className={`border-b last:border-b-0 transition-colors ${
                               clase.horario.cancelada 
                                 ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
                                 : clase.horario.esVariable
                                   ? 'bg-green-50 dark:bg-green-950/20'
-                                  : ''
+                                  : isFechaPasada(clase.dia)
+                                    ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50'
+                                    : 'hover:bg-muted/30 cursor-pointer'
                             }`}
                             onClick={() => handleClaseClick(clase)}
                           >
@@ -854,6 +856,11 @@ export const RecurringScheduleView = () => {
                               {clase.horario.cancelada && (
                                 <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
                                   CANCELADA
+                                </div>
+                              )}
+                              {!clase.horario.cancelada && isFechaPasada(clase.dia) && (
+                                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
+                                  REALIZADA
                                 </div>
                               )}
                             </td>
@@ -887,9 +894,9 @@ export const RecurringScheduleView = () => {
                                   handleClaseClick(clase);
                                 }}
                                 className="h-8 px-3 text-xs sm:text-sm"
-                                disabled={clase.horario.cancelada}
+                                disabled={clase.horario.cancelada || isFechaPasada(clase.dia)}
                               >
-                                {clase.horario.cancelada ? 'Cancelada' : 'Ver Detalles'}
+                                {clase.horario.cancelada ? 'Cancelada' : isFechaPasada(clase.dia) ? 'Realizada' : 'Ver Detalles'}
                               </Button>
                             </td>
                           </tr>
@@ -1074,12 +1081,14 @@ export const RecurringScheduleView = () => {
                     setShowModal(false);
                     setConfirmOpen(true);
                   }}
-                  disabled={selectedClase.horario.cancelada}
+                  disabled={selectedClase.horario.cancelada || isFechaPasada(selectedClase.dia)}
                   className="flex-1"
                 >
                   {selectedClase.horario.cancelada 
                     ? 'Ya Cancelada' 
-                    : 'Cancelar Clase'}
+                    : isFechaPasada(selectedClase.dia)
+                      ? 'Clase Realizada'
+                      : 'Cancelar Clase'}
                 </Button>
                 <Button
                   variant="outline"
