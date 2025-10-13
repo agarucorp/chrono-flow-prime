@@ -119,3 +119,4 @@ Abrir **F12 → Console** y buscar:
 - ✅ **Base de datos** en estado correcto
 
 **🎯 El sistema ahora debería funcionar correctamente. Si el problema persiste, es un tema de caché del navegador.**
+

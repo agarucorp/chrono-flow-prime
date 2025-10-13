@@ -45,3 +45,4 @@ npm run dev
 ```
 
 El modo desarrollo actualiza el código automáticamente sin necesidad de hacer deploy.
+

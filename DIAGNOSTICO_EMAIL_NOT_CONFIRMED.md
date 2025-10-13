@@ -144,3 +144,4 @@ WHERE au.confirmed_at IS NULL;
 - ✅ **Logs analizados:** Problemas identificados y solucionados
 
 **🎯 El sistema ahora debería funcionar correctamente para nuevos registros.**
+

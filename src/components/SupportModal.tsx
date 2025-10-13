@@ -15,7 +15,7 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
   const { showSuccess } = useNotifications();
 
   const contactEmail = 'agaru.corp@gmail.com';
-  const whatsappNumber = '+5491123456789'; // Número de WhatsApp (ajustar según necesidad)
+  const whatsappNumber = '5491130509316'; // Número de WhatsApp de soporte
   const whatsappMessage = encodeURIComponent('Hola! Necesito ayuda con la aplicación.');
 
   const handleCopyEmail = async () => {

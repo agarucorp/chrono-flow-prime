@@ -65,3 +65,4 @@ ORDER BY ordinal_position;
 -- Perfil: ✅ ROL client
 -- Horarios: 0 o los que se configuraron correctamente
 -- Columnas: NO debe existir 'horario_clase_id'
+

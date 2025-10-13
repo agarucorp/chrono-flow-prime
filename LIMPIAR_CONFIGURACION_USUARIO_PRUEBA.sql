@@ -40,3 +40,4 @@ WHERE routine_name = 'handle_new_user';
 -- - horarios_eliminados: 0
 -- - Usuario confirmado con perfil 'client'
 -- - Trigger y función existentes
+

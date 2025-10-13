@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { useToast } from '@/hooks/use-toast';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -39,6 +40,7 @@ interface ClaseDelDia {
 export const RecurringScheduleView = () => {
   const { user } = useAuthContext();
   const { isAdmin } = useAdmin();
+  const { toast } = useToast();
   const [profileData, setProfileData] = useState<any>(null);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>(() => {
     // Recuperar horarios del localStorage
@@ -67,11 +69,7 @@ export const RecurringScheduleView = () => {
   const [turnoToReserve, setTurnoToReserve] = useState<any>(null);
   const [confirmingReserva, setConfirmingReserva] = useState(false);
   const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
-  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>(() => {
-    // Recuperar la vista activa del localStorage
-    const savedView = localStorage.getItem('activeView');
-    return (savedView as 'mis-clases' | 'turnos-disponibles' | 'perfil') || 'mis-clases';
-  });
+  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>('mis-clases');
   const [clasesDelMes, setClasesDelMes] = useState<any[]>(() => {
     // Recuperar clases del mes del localStorage
     const saved = localStorage.getItem('clasesDelMes');
@@ -94,18 +92,17 @@ export const RecurringScheduleView = () => {
 
   const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 
-  // Función para cambiar la vista activa y guardarla en localStorage
+  // Función para cambiar la vista activa
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
     setActiveView(view);
-    localStorage.setItem('activeView', view);
   };
 
-  // Cargar turnos cancelados cuando se cambie a la vista de turnos disponibles
+  // Cargar turnos cancelados al inicio y cuando se cambie a la vista de turnos disponibles
   useEffect(() => {
-    if (activeView === 'turnos-disponibles' && turnosCancelados.length === 0) {
+    if (user?.id) {
       cargarTurnosCancelados();
     }
-  }, [activeView]);
+  }, [user?.id]);
 
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
@@ -209,9 +206,10 @@ export const RecurringScheduleView = () => {
     }
   };
 
-  // Suscripción en tiempo real a turnos_disponibles
+  // Suscripción en tiempo real a turnos_disponibles (siempre activa para actualizar contador)
   useEffect(() => {
-    if (activeView !== 'turnos-disponibles') return;
+    if (!user?.id) return;
+    
     const channel = supabase
       .channel('turnos_disponibles_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
@@ -219,13 +217,10 @@ export const RecurringScheduleView = () => {
       })
       .subscribe();
 
-    // Cargar inicialmente
-    cargarTurnosCancelados(true);
-
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [activeView]);
+  }, [user?.id]);
 
   // Cargar datos del perfil desde la base de datos
   const cargarDatosPerfil = async () => {
@@ -469,7 +464,11 @@ export const RecurringScheduleView = () => {
         .eq('turno_hora_fin', clase.horario.hora_fin);
 
       if (cancelacionExistente && cancelacionExistente.length > 0) {
-        alert('Ya has cancelado este turno anteriormente');
+        toast({
+          title: "Turno ya cancelado",
+          description: "Ya has cancelado este turno anteriormente",
+          variant: "destructive",
+        });
         return;
       }
 
@@ -486,7 +485,11 @@ export const RecurringScheduleView = () => {
 
       if (error) {
         console.error('Error al cancelar turno:', error);
-        alert(`Error al cancelar el turno: ${error.message}`);
+        toast({
+          title: "Error",
+          description: `Error al cancelar el turno: ${error.message}`,
+          variant: "destructive",
+        });
         return;
       }
 
@@ -495,10 +498,17 @@ export const RecurringScheduleView = () => {
 
       setShowModal(false);
       setConfirmOpen(false);
-      alert('Turno cancelado exitosamente');
+      toast({
+        title: "✅ Turno cancelado",
+        description: "El turno se canceló exitosamente",
+      });
     } catch (error) {
       console.error('Error al cancelar turno:', error);
-      alert('Error al cancelar el turno');
+      toast({
+        title: "Error",
+        description: "Error al cancelar el turno",
+        variant: "destructive",
+      });
     }
   };
 
@@ -535,7 +545,11 @@ export const RecurringScheduleView = () => {
 
       if (error) {
         console.error('Error al reservar turno:', error);
-        alert(`Error al reservar el turno: ${error.message}`);
+        toast({
+          title: "Error",
+          description: `Error al reservar el turno: ${error.message}`,
+          variant: "destructive",
+        });
         return;
       }
 
@@ -545,7 +559,10 @@ export const RecurringScheduleView = () => {
         .delete()
         .eq('id', turnoToReserve.id);
 
-      alert('Turno reservado exitosamente');
+      toast({
+        title: "✅ Turno reservado",
+        description: "El turno se reservó exitosamente",
+      });
       setShowReservaModal(false);
       setTurnoToReserve(null);
       
@@ -554,7 +571,11 @@ export const RecurringScheduleView = () => {
       await cargarClasesDelMes(true);
     } catch (error) {
       console.error('Error al reservar turno:', error);
-      alert('Error al reservar el turno');
+      toast({
+        title: "Error",
+        description: "Error al reservar el turno",
+        variant: "destructive",
+      });
     } finally {
       setConfirmingReserva(false);
     }
@@ -620,13 +641,18 @@ export const RecurringScheduleView = () => {
           </button>
           <button
             onClick={() => handleViewChange('turnos-disponibles')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
               activeView === 'turnos-disponibles'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             Vacantes
+            {turnosCancelados.length > 0 && (
+              <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
+                {turnosCancelados.length}
+              </Badge>
+            )}
           </button>
         </div>
         </div>
@@ -656,7 +682,14 @@ export const RecurringScheduleView = () => {
                   }`}
                   aria-current={activeView === 'turnos-disponibles'}
                 >
-                  <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  <div className="relative">
+                    <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                    {turnosCancelados.length > 0 && (
+                      <Badge variant="default" className="absolute -top-1 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[8px] font-bold">
+                        {turnosCancelados.length}
+                      </Badge>
+                    )}
+                  </div>
                   {activeView === 'turnos-disponibles' && <span className="leading-none">Vacantes</span>}
                   {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
                 </button>
@@ -867,33 +900,32 @@ export const RecurringScheduleView = () => {
 
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (
-        <div className="w-full md:w-[35%] mx-auto animate-view-swap pb-24 sm:pb-0">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-sm sm:text-xl">Turnos Cancelados Disponibles</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {loadingTurnosCancelados ? (
-              <div className="p-4 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Cargando turnos cancelados...</p>
-              </div>
-            ) : turnosCancelados.length === 0 ? (
-              <div className="p-4 text-center text-muted-foreground">
-                No hay turnos cancelados disponibles
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {turnosCancelados.map((turno) => (
-                  <div key={turno.id} className="border rounded-lg p-4 hover:bg-muted/50 transition-colors flex flex-col">
+        <div className="w-full animate-view-swap pb-24 sm:pb-0">
+          <div className="mb-4">
+            <h2 className="text-lg sm:text-2xl font-semibold">Turnos Cancelados Disponibles</h2>
+          </div>
+          {loadingTurnosCancelados ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Cargando turnos cancelados...</p>
+            </div>
+          ) : turnosCancelados.length === 0 ? (
+            <div className="p-8 text-center text-muted-foreground">
+              <p>No hay turnos cancelados disponibles</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {turnosCancelados.map((turno) => (
+                <Card key={turno.id} className="hover:bg-muted/50 transition-colors flex flex-col">
+                  <CardContent className="p-4 flex flex-col h-full">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-baseline gap-2">
                         <h3 className="font-semibold text-sm sm:text-base">Clase Disponible</h3>
-                        <span className="text-xs text-muted-foreground">
-                          {turno.turno_fecha.split('-').reverse().join('/')}
-                        </span>
                       </div>
                     </div>
+                    <p className="text-xs text-muted-foreground mb-2">
+                      {turno.turno_fecha.split('-').reverse().join('/')}
+                    </p>
                     <p className="text-sm text-muted-foreground mb-3">
                       {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
                     </p>
@@ -916,12 +948,11 @@ export const RecurringScheduleView = () => {
                     >
                       {turno.reservado ? 'Reservado' : 'Reservar Clase'}
                     </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

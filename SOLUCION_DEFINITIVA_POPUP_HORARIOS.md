@@ -223,3 +223,4 @@ POST | 400 | horarios_recurrentes_usuario?columns="horario_clase_id"...
 **Resultado:** Popup se cierra y usuario accede al dashboard
 
 **🚨 IMPORTANTE: El código fuente YA ESTÁ CORRECTO. Solo necesita forzar nuevo deploy y limpiar caché.**
+
