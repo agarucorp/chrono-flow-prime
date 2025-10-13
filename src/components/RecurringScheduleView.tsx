@@ -191,22 +191,38 @@ export const RecurringScheduleView = () => {
         return;
       }
 
-      // Obtener información de quién canceló cada turno
-      const turnosConCancelaciones = await Promise.all(
-        (data || []).map(async (turno) => {
-          const { data: cancelacion } = await supabase
-            .from('turnos_cancelados')
-            .select('cliente_id, tipo_cancelacion')
-            .eq('id', turno.creado_desde_cancelacion_id)
-            .single();
-          
-          return {
-            ...turno,
-            cliente_que_cancelo: cancelacion?.cliente_id,
-            tipo_cancelacion: cancelacion?.tipo_cancelacion
-          };
-        })
-      );
+      // Obtener información de quién canceló cada turno en una sola consulta
+      const idsCancelaciones = (data || []).map(t => t.creado_desde_cancelacion_id);
+      
+      let cancelaciones = [];
+      if (idsCancelaciones.length > 0) {
+        const { data: cancelacionesData, error: errorCancelaciones } = await supabase
+          .from('turnos_cancelados')
+          .select('id, cliente_id, tipo_cancelacion')
+          .in('id', idsCancelaciones);
+        
+        if (errorCancelaciones) {
+          console.error('Error al cargar cancelaciones:', errorCancelaciones);
+        } else {
+          cancelaciones = cancelacionesData || [];
+        }
+      }
+
+      // Crear un mapa para búsqueda rápida
+      const cancelacionesMap = new Map();
+      cancelaciones.forEach(c => {
+        cancelacionesMap.set(c.id, c);
+      });
+
+      // Combinar datos
+      const turnosConCancelaciones = (data || []).map((turno) => {
+        const cancelacion = cancelacionesMap.get(turno.creado_desde_cancelacion_id);
+        return {
+          ...turno,
+          cliente_que_cancelo: cancelacion?.cliente_id,
+          tipo_cancelacion: cancelacion?.tipo_cancelacion
+        };
+      });
 
       // Obtener turnos reservados por el usuario para marcar como reservados
       const { data: reservados, error: errorReservados } = await supabase
