@@ -800,14 +800,7 @@ export const RecurringScheduleView = () => {
           <div className="w-full md:w-[55%] mx-auto animate-view-swap">
           <Card>
             <CardContent className="p-0">
-              {loading || loadingMonth ? (
-                <div className="p-8 text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                  <p className="text-muted-foreground">
-                    {loading ? 'Cargando tus clases...' : 'Cargando mes actual...'}
-                  </p>
-                </div>
-              ) : horariosRecurrentes.length === 0 ? (
+              {horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No tienes clases configuradas</p>
@@ -824,6 +817,18 @@ export const RecurringScheduleView = () => {
                       </tr>
                     </thead>
                     <tbody>
+                      {loading || loadingMonth ? (
+                        <tr>
+                          <td colSpan={4} className="px-4 py-8 text-center">
+                            <div className="flex flex-col items-center">
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
+                              <p className="text-sm text-muted-foreground">
+                                {loading ? 'Cargando clases...' : 'Cargando mes...'}
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : (
                       {diasDelMes.map((dia, index) => {
                         // Mostrar todos los días, incluyendo los pasados
                         // if (isFechaPasada(dia)) return null;
@@ -890,6 +895,7 @@ export const RecurringScheduleView = () => {
                           </tr>
                         ));
                       })}
+                      )}
                     </tbody>
                   </table>
                 </div>
