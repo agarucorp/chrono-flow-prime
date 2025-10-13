@@ -900,7 +900,7 @@ export const RecurringScheduleView = () => {
                             </td>
                           </tr>
                         ));
-                      })
+                      })}
                     </tbody>
                   </table>
                 </div>
