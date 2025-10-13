@@ -175,15 +175,13 @@ export const RecurringScheduleView = () => {
   const cargarTurnosCancelados = async (forceReload = false) => {
     if (!user?.id) return;
 
-    setLoadingTurnosCancelados(true);
+      setLoadingTurnosCancelados(true);
     try {
+      console.log('🔍 Cargando turnos cancelados disponibles...');
       // Obtener todos los turnos cancelados disponibles con el cliente que canceló
       const { data, error } = await supabase
         .from('turnos_disponibles')
-        .select(`
-          *,
-          turnos_cancelados!creado_desde_cancelacion_id(cliente_id)
-        `)
+        .select('*')
         .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd'))
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
@@ -192,6 +190,23 @@ export const RecurringScheduleView = () => {
         console.error('Error al cargar turnos cancelados:', error);
         return;
       }
+
+      // Obtener información de quién canceló cada turno
+      const turnosConCancelaciones = await Promise.all(
+        (data || []).map(async (turno) => {
+          const { data: cancelacion } = await supabase
+            .from('turnos_cancelados')
+            .select('cliente_id, tipo_cancelacion')
+            .eq('id', turno.creado_desde_cancelacion_id)
+            .single();
+          
+          return {
+            ...turno,
+            cliente_que_cancelo: cancelacion?.cliente_id,
+            tipo_cancelacion: cancelacion?.tipo_cancelacion
+          };
+        })
+      );
 
       // Obtener turnos reservados por el usuario para marcar como reservados
       const { data: reservados, error: errorReservados } = await supabase
@@ -207,12 +222,13 @@ export const RecurringScheduleView = () => {
       const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
 
       // Marcar como reservados y verificar si el usuario actual fue quien canceló
-      const turnosMarcados = (data || []).map((turno) => ({
+      const turnosMarcados = turnosConCancelaciones.map((turno) => ({
         ...turno,
         reservado: idsReservados.has(turno.id),
-        canceladoPorUsuario: turno.turnos_cancelados?.cliente_id === user.id
+        canceladoPorUsuario: turno.cliente_que_cancelo === user.id
       }));
 
+      console.log('✅ Turnos cancelados cargados:', turnosMarcados.length, turnosMarcados);
       setTurnosCancelados(turnosMarcados);
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);
