@@ -828,8 +828,7 @@ export const RecurringScheduleView = () => {
                             </div>
                           </td>
                         </tr>
-                      ) : (
-                      {diasDelMes.map((dia, index) => {
+                      ) : diasDelMes.map((dia, index) => {
                         // Mostrar todos los días, incluyendo los pasados
                         // if (isFechaPasada(dia)) return null;
                         const clasesDelDia = clasesDelMes.filter(clase => 
@@ -901,8 +900,7 @@ export const RecurringScheduleView = () => {
                             </td>
                           </tr>
                         ));
-                      })}
-                      )}
+                      })
                     </tbody>
                   </table>
                 </div>
