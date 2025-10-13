@@ -706,9 +706,9 @@ export const RecurringScheduleView = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6 pt-3">
+    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2">
       {/* Subnavbar */}
-      <div className="space-y-3 sm:space-y-4 mt-2 sm:mt-6">
+      <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
         {/* Desktop navbar (centered pills) */}
         <div className="hidden sm:flex justify-center">
         <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
