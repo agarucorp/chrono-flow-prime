@@ -101,14 +101,17 @@ export default function Admin() {
   const escribirEstadoPagoMap = (mapa: Record<string, EstadoPago>) => {
     localStorage.setItem(STORAGE_PAGO, JSON.stringify(mapa));
   };
+  // Estado reactivo para forzar re-render al cambiar
+  const [estadoPagoMap, setEstadoPagoMap] = useState<Record<string, EstadoPago>>(() => leerEstadoPagoMap());
   const getEstadoPagoLocal = (userId: string): EstadoPago => {
-    const mapa = leerEstadoPagoMap();
-    return mapa[userId] || 'debe'; // por defecto Debe (rojo)
+    return estadoPagoMap[userId] || 'debe'; // por defecto Debe (rojo)
   };
   const setEstadoPagoLocal = (userId: string, estado: EstadoPago) => {
-    const mapa = leerEstadoPagoMap();
-    mapa[userId] = estado;
-    escribirEstadoPagoMap(mapa);
+    setEstadoPagoMap(prev => {
+      const next = { ...prev, [userId]: estado };
+      escribirEstadoPagoMap(next);
+      return next;
+    });
   };
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   
