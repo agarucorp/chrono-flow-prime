@@ -48,8 +48,9 @@ export const RecurringScheduleView = () => {
     return saved ? JSON.parse(saved) : [];
   });
   const [loading, setLoading] = useState(() => {
-    // Mostrar loading inicial hasta que se carguen los datos
-    return true;
+    // Solo mostrar loading si no hay datos guardados
+    const saved = localStorage.getItem('horariosRecurrentes');
+    return !saved;
   });
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedClase, setSelectedClase] = useState<ClaseDelDia | null>(null);
@@ -138,6 +139,7 @@ export const RecurringScheduleView = () => {
     const shouldReload = forceReload || (now - lastLoadTime) > fiveMinutes;
 
     if (!shouldReload && horariosRecurrentes.length > 0) {
+      setLoading(false); // Asegurar que loading se resetee
       return; // Usar datos del caché
     }
 
@@ -302,6 +304,14 @@ export const RecurringScheduleView = () => {
       // Cargar datos iniciales con loading visible
       cargarHorariosRecurrentes();
       cargarDatosPerfil();
+      
+      // Timeout de seguridad para evitar loading infinito
+      const timeoutId = setTimeout(() => {
+        console.warn('Timeout de seguridad: ocultando loading después de 10 segundos');
+        setLoading(false);
+      }, 10000);
+      
+      return () => clearTimeout(timeoutId);
     } else {
       // Si no hay usuario, ocultar loading
       setLoading(false);
