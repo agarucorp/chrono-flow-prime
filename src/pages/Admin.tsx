@@ -71,7 +71,7 @@ export default function Admin() {
     deleteUser,
     canBeAdmin,
     selectedYear, selectedMonth, setSelectedYear, setSelectedMonth,
-    fetchCuotasMensuales, updateCuotaEstadoPago
+    fetchCuotasMensuales, updateCuotaEstadoPago, updateCuotaDescuento
   } = useAdmin();
   
   const { showSuccess, showError, showWarning, showLoading, dismissToast } = useNotifications();
@@ -84,7 +84,7 @@ export default function Admin() {
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'debe_first' | 'no_debe_first'>('default');
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
-  const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>([]);
+  const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }>>([]);
   const [balanceTotals, setBalanceTotals] = useState<{ totalAbonado: number; totalPendiente: number }>({ totalAbonado: 0, totalPendiente: 0 });
   const [editingTarifa, setEditingTarifa] = useState(false);
   const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
@@ -533,17 +533,27 @@ export default function Admin() {
       setCuotasMap(map);
 
       // Construir filas para Balance
-      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = [];
+      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
       for (const c of cuotas) {
         const u = allUsers.find(u => u.id === c.usuario_id);
         const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
         const email = u?.email || '';
-        const monto = Number(c.monto_total) || 0;
+        const montoOriginal = Number(c.monto_total) || 0;
+        const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
+        const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
         const estado = (c.estado_pago as any) || 'pendiente';
-        rows.push({ usuario_id: c.usuario_id, nombre, email, monto, estado });
-        if (estado === 'abonada') totalAbonado += monto; else totalPendiente += monto;
+        rows.push({ 
+          usuario_id: c.usuario_id, 
+          nombre, 
+          email, 
+          monto: montoConDescuento, 
+          montoOriginal,
+          estado, 
+          descuento: descuentoPorcentaje 
+        });
+        if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
       }
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
@@ -969,12 +979,13 @@ export default function Admin() {
             <Card className="w-full max-w-full">
               <CardContent className="p-0">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[700px]">
+                  <table className="w-full min-w-[820px]">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium text-sm min-w-[180px]">Usuario</th>
                         <th className="text-left p-3 font-medium text-sm min-w-[120px]">Cuota</th>
                         <th className="text-left p-3 font-medium text-sm min-w-[140px]">Estado de pago</th>
+                        <th className="text-left p-3 font-medium text-sm min-w-[120px]">Descuento</th>
                         <th className="text-left p-3 font-medium text-sm min-w-[100px]">Acciones</th>
                       </tr>
                     </thead>
@@ -985,7 +996,18 @@ export default function Admin() {
                             <p className="font-medium truncate">{row.nombre}</p>
                           </td>
                           <td className="p-3">
-                            <span className="text-sm font-medium">${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            {row.descuento > 0 ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="text-sm text-muted-foreground line-through">
+                                  ${row.montoOriginal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                                <span className="text-sm font-medium text-green-600">
+                                  ${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-sm font-medium">${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                            )}
                           </td>
                           <td className="p-3">
                             {/* Dropdown Debe / No debe (persistiendo en BD) */}
@@ -995,24 +1017,32 @@ export default function Admin() {
                                 const nuevoEstadoDb = (v === 'no_debe') ? 'abonada' : 'pendiente';
                                 const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
                                 if (res.success) {
+                                  // Recargar cuotas para reflejar los cambios
                                   const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-                                  const map: Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = {};
-                                  let totalAbonado = 0; let totalPendiente = 0;
+                                  const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
+                                  let totalAbonado = 0;
+                                  let totalPendiente = 0;
                                   for (const c of cuotas) {
-                                    const monto = Number(c.monto_total) || 0;
+                                    const u = allUsers.find(u => u.id === c.usuario_id);
+                                    const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
+                                    const email = u?.email || '';
+                                    const montoOriginal = Number(c.monto_total) || 0;
+                                    const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
+                                    const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
                                     const estado = (c.estado_pago as any) || 'pendiente';
-                                    map[c.usuario_id] = { monto, estado };
-                                    if (estado === 'abonada') totalAbonado += monto; else totalPendiente += monto;
+                                    rows.push({ 
+                                      usuario_id: c.usuario_id, 
+                                      nombre, 
+                                      email, 
+                                      monto: montoConDescuento, 
+                                      montoOriginal,
+                                      estado, 
+                                      descuento: descuentoPorcentaje 
+                                    });
+                                    if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
                                   }
-                                  setCuotasMap(map);
+                                  setBalanceRows(rows);
                                   setBalanceTotals({ totalAbonado, totalPendiente });
-                                  setBalanceRows(cuotas.map(c => ({
-                                    usuario_id: c.usuario_id,
-                                    nombre: (allUsers.find(u => u.id===c.usuario_id)?.first_name || allUsers.find(u => u.id===c.usuario_id)?.last_name) ? `${allUsers.find(u => u.id===c.usuario_id)?.first_name || ''} ${allUsers.find(u => u.id===c.usuario_id)?.last_name || ''}`.trim() : (allUsers.find(u => u.id===c.usuario_id)?.full_name || allUsers.find(u => u.id===c.usuario_id)?.email || c.usuario_id),
-                                    email: allUsers.find(u => u.id===c.usuario_id)?.email || '',
-                                    monto: Number(c.monto_total) || 0,
-                                    estado: (c.estado_pago as any) || 'pendiente'
-                                  })));
                                 }
                               }}
                             >
@@ -1022,6 +1052,61 @@ export default function Admin() {
                               <SelectContent>
                                 <SelectItem value="debe"><span className="text-red-600">Debe</span></SelectItem>
                                 <SelectItem value="no_debe"><span className="text-green-600">No debe</span></SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </td>
+                          <td className="p-3">
+                            {/* Dropdown de Descuento */}
+                            <Select
+                              value={row.descuento.toString()}
+                              onValueChange={async (value) => {
+                                const descuentoNumero = parseInt(value);
+                                // Persistir en BD
+                                const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, descuentoNumero);
+                                if (res.success) {
+                                  // Recargar cuotas para reflejar los cambios
+                                  const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+                                  const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
+                                  let totalAbonado = 0;
+                                  let totalPendiente = 0;
+                                  for (const c of cuotas) {
+                                    const u = allUsers.find(u => u.id === c.usuario_id);
+                                    const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
+                                    const email = u?.email || '';
+                                    const montoOriginal = Number(c.monto_total) || 0;
+                                    const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
+                                    const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
+                                    const estado = (c.estado_pago as any) || 'pendiente';
+                                    rows.push({ 
+                                      usuario_id: c.usuario_id, 
+                                      nombre, 
+                                      email, 
+                                      monto: montoConDescuento, 
+                                      montoOriginal,
+                                      estado, 
+                                      descuento: descuentoPorcentaje 
+                                    });
+                                    if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
+                                  }
+                                  setBalanceRows(rows);
+                                  setBalanceTotals({ totalAbonado, totalPendiente });
+                                  showSuccess('Descuento aplicado', `Se aplicó un ${descuentoNumero}% de descuento`);
+                                } else {
+                                  showError('Error', 'No se pudo aplicar el descuento');
+                                }
+                              }}
+                            >
+                              <SelectTrigger className="w-[100px] h-8">
+                                <SelectValue placeholder="0%" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="0">0%</SelectItem>
+                                <SelectItem value="5">5%</SelectItem>
+                                <SelectItem value="10">10%</SelectItem>
+                                <SelectItem value="15">15%</SelectItem>
+                                <SelectItem value="20">20%</SelectItem>
+                                <SelectItem value="25">25%</SelectItem>
+                                <SelectItem value="30">30%</SelectItem>
                               </SelectContent>
                             </Select>
                           </td>

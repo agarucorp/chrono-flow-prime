@@ -65,7 +65,7 @@ export const useAdmin = () => {
 
         // Verificar primero la sesión de Supabase
         const { data: session, error: sessionError } = await supabase.auth.getSession();
-        console.log('📱 Sesión actual:', { session: session.data?.session?.user?.email, error: sessionError });
+        console.log('📱 Sesión actual:', { session: session?.session?.user?.email, error: sessionError });
 
         // Intentar consulta por ID
         const { data, error } = await supabase
@@ -216,7 +216,7 @@ export const useAdmin = () => {
     try {
       const { data, error } = await supabase
         .from('cuotas_mensuales')
-        .select('usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, estado_pago')
+        .select('usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, estado_pago, descuento_porcentaje, monto_con_descuento')
         .eq('anio', anio)
         .eq('mes', mes);
       if (error) {
@@ -246,6 +246,49 @@ export const useAdmin = () => {
       return { success: true };
     } catch (err) {
       console.error('Error inesperado actualizando estado_pago:', err);
+      return { success: false, error: 'Error inesperado' };
+    }
+  }, []);
+
+  // Actualizar descuento de una cuota mensual
+  const updateCuotaDescuento = useCallback(async (usuarioId: string, anio: number, mes: number, descuentoPorcentaje: number) => {
+    try {
+      // Primero obtenemos el monto_total actual
+      const { data: cuotaActual, error: fetchError } = await supabase
+        .from('cuotas_mensuales')
+        .select('monto_total')
+        .eq('usuario_id', usuarioId)
+        .eq('anio', anio)
+        .eq('mes', mes)
+        .single();
+
+      if (fetchError) {
+        console.error('Error obteniendo cuota actual:', fetchError);
+        return { success: false, error: fetchError.message };
+      }
+
+      const montoTotal = Number(cuotaActual.monto_total) || 0;
+      const montoConDescuento = montoTotal * (1 - descuentoPorcentaje / 100);
+
+      // Actualizamos el descuento y el monto con descuento
+      const { error } = await supabase
+        .from('cuotas_mensuales')
+        .update({ 
+          descuento_porcentaje: descuentoPorcentaje,
+          monto_con_descuento: montoConDescuento
+        })
+        .eq('usuario_id', usuarioId)
+        .eq('anio', anio)
+        .eq('mes', mes);
+
+      if (error) {
+        console.error('Error actualizando descuento:', error);
+        return { success: false, error: error.message };
+      }
+
+      return { success: true };
+    } catch (err) {
+      console.error('Error inesperado actualizando descuento:', err);
       return { success: false, error: 'Error inesperado' };
     }
   }, []);
@@ -344,6 +387,7 @@ export const useAdmin = () => {
     deleteUser,
     fetchCuotasMensuales,
     updateCuotaEstadoPago,
+    updateCuotaDescuento,
     canBeAdmin,
   };
 };
