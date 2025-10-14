@@ -24,6 +24,15 @@ interface RecurringScheduleModalProps {
 
 // ⚡ VERSION: 2025-01-12T16:00:00Z - CRITICAL FIX
 // Fixed: Removed horario_clase_id and created_at from insert
+// Paquetes de precios hardcodeados (mockup)
+const PAQUETES_PRECIOS = [
+  { dias: 1, precio: 15000, descripcion: '1 día por semana - Entrada al mundo del fitness' },
+  { dias: 2, precio: 25000, descripcion: '2 días por semana - Mantente activo' },
+  { dias: 3, precio: 35000, descripcion: '3 días por semana - Construcción de hábitos' },
+  { dias: 4, precio: 45000, descripcion: '4 días por semana - Entrenamiento avanzado' },
+  { dias: 5, precio: 50000, descripcion: '5 días por semana - Máximo rendimiento' }
+];
+
 export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   isOpen,
   onClose,
@@ -41,6 +50,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const [saving, setSaving] = useState(false);
   const [openDay, setOpenDay] = useState<number | null>(null);
   const [isReview, setIsReview] = useState(false);
+  const [paqueteSeleccionado, setPaqueteSeleccionado] = useState<number | null>(null);
+  const [step, setStep] = useState<'paquete' | 'horarios' | 'review'>('paquete');
 
   // Días de la semana
   const diasSemana = [
@@ -51,14 +62,24 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     { numero: 5, nombre: 'Viernes', nombreCorto: 'Vie' }
   ];
 
-  // Cargar horarios de clase disponibles
+  // Resetear el estado cuando se abre el modal
   useEffect(() => {
     if (isOpen) {
+      setStep('paquete');
+      setPaqueteSeleccionado(null);
+      setHorariosSeleccionados(new Set());
+      setIsReview(false);
+    }
+  }, [isOpen]);
+
+  // Cargar horarios de clase disponibles solo cuando se llega al step de horarios
+  useEffect(() => {
+    if (isOpen && step === 'horarios') {
       console.log(`🔥 RecurringScheduleModal VERSION: ${BUILD_VERSION}`);
       console.log('📌 This version DOES NOT include horario_clase_id or created_at in inserts');
       fetchHorariosClase();
     }
-  }, [isOpen]);
+  }, [isOpen, step]);
 
   const fetchHorariosClase = async () => {
     try {
@@ -107,6 +128,11 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       if (newSelection.has(horarioId)) {
         newSelection.delete(horarioId);
       } else {
+        // Verificar que no se exceda el límite del paquete
+        if (newSelection.size >= (paqueteSeleccionado || 0)) {
+          showError('Límite alcanzado', `Tu plan permite seleccionar hasta ${paqueteSeleccionado} día${(paqueteSeleccionado || 0) > 1 ? 's' : ''}`);
+          return prev;
+        }
         newSelection.add(horarioId);
       }
       
@@ -114,13 +140,32 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     });
   };
 
+  const handleSeleccionarPaquete = (dias: number) => {
+    setPaqueteSeleccionado(dias);
+    setStep('horarios');
+  };
+
   const handleSave = () => {
     if (horariosSeleccionados.size === 0) {
       showError('Selección requerida', 'Debes seleccionar al menos un horario para tu cuota mensual');
       return;
     }
-    // Avanzar a etapa de revisión (no cierra ni inserta todavía)
+    if (horariosSeleccionados.size !== paqueteSeleccionado) {
+      showError('Selección incorrecta', `Debes seleccionar exactamente ${paqueteSeleccionado} día(s) según tu paquete`);
+      return;
+    }
+    // Avanzar a etapa de revisión
+    setStep('review');
     setIsReview(true);
+  };
+
+  const formatPrecio = (precio: number): string => {
+    return new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(precio);
   };
 
   const handleConfirm = async () => {
@@ -267,28 +312,81 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         <DialogHeader>
           <DialogTitle className="flex items-center space-x-2 text-base sm:text-lg">
             <Calendar className="h-5 w-5" />
-            <span>Seteo de horario recurrente</span>
+            <span>
+              {step === 'paquete' && 'Elegí tu plan de entrenamiento'}
+              {step === 'horarios' && 'Seleccioná tus horarios'}
+              {step === 'review' && 'Confirmá tu selección'}
+            </span>
           </DialogTitle>
         </DialogHeader>
 
         <div className="space-y-6 flex-1 overflow-y-auto">
-          {!isReview && (
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <div className="flex items-start space-x-2">
-                <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                <div className="text-sm text-blue-800">
-                  <p className="font-medium">Sistema de cuota mensual</p>
-                  <p className="text-xs mt-1">
-                    Los horarios que selecciones se reservarán automáticamente cada mes. 
-                    Solo puedes elegir 1 clase por día para mantener la disponibilidad para otros usuarios.
-                  </p>
+          {/* Paso 1: Selección de paquete */}
+          {step === 'paquete' && (
+            <div className="space-y-4">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium">Sistema de cuota mensual</p>
+                    <p className="text-xs mt-1">
+                      Seleccioná la cantidad de días por semana que querés entrenar. 
+                      Los horarios se reservarán automáticamente cada mes.
+                    </p>
+                  </div>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {PAQUETES_PRECIOS.map((paquete) => (
+                  <Card 
+                    key={paquete.dias}
+                    className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary ${
+                      paqueteSeleccionado === paquete.dias ? 'border-primary ring-2 ring-primary' : ''
+                    }`}
+                    onClick={() => handleSeleccionarPaquete(paquete.dias)}
+                  >
+                    <CardHeader className="pb-3">
+                      <CardTitle className="text-lg flex items-center justify-between">
+                        <span>{paquete.dias} día{paquete.dias > 1 ? 's' : ''}</span>
+                        <Check className={`h-5 w-5 ${paqueteSeleccionado === paquete.dias ? 'text-primary' : 'text-transparent'}`} />
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      <div className="text-3xl font-bold text-primary">
+                        {formatPrecio(paquete.precio)}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {paquete.descripcion}
+                      </p>
+                      <div className="text-xs text-muted-foreground pt-2 border-t">
+                        por mes
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Selección de horarios (solo en etapa 1) */}
-          {!isReview && (
+          {/* Paso 2: Selección de horarios */}
+          {step === 'horarios' && !isReview && (
+            <>
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start space-x-2">
+                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
+                  <div className="text-sm text-blue-800">
+                    <p className="font-medium">
+                      Plan seleccionado: {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
+                    </p>
+                    <p className="text-xs mt-1">
+                      Seleccioná exactamente {paqueteSeleccionado} horario{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} (uno por día).
+                      Seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
           <div className="block sm:hidden">
             <div className="divide-y divide-border rounded-md border">
               {diasSemana.map(dia => {
@@ -330,9 +428,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
               })}
             </div>
           </div>
-          )}
 
-          {!isReview && (
           <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-4">
             {diasSemana.map(dia => {
               const horariosDelDia = getHorariosPorDia(dia.numero);
@@ -366,21 +462,49 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
               )
             })}
           </div>
+            </>
           )}
 
-          {/* Etapa de revisión final */}
-          {isReview && (
-            <div className="p-4 bg-muted/50 rounded-lg space-y-3 max-w-md mx-auto">
-              <h4 className="font-medium text-sm">Resumen de clases elegidas</h4>
-              <ul className="text-sm text-muted-foreground space-y-1">
-                {Array.from(horariosSeleccionados).map(id => {
-                  const h = horariosClase.find(x => x.id === id);
-                  const dia = diasSemana.find(d => d.numero === h?.dia_semana)?.nombre;
-                  return (
-                    <li key={id}>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</li>
-                  );
-                })}
-              </ul>
+          {/* Paso 3: Etapa de revisión final */}
+          {step === 'review' && isReview && (
+            <div className="space-y-4 max-w-md mx-auto">
+              {/* Resumen del paquete */}
+              <div className="p-4 bg-primary/10 border border-primary rounded-lg">
+                <h4 className="font-medium text-sm mb-2">Plan seleccionado</h4>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-lg font-bold">
+                      {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.descripcion}
+                    </p>
+                  </div>
+                  <div className="text-2xl font-bold text-primary">
+                    {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precio || 0)}
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">por mes</p>
+              </div>
+
+              {/* Resumen de horarios */}
+              <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                <h4 className="font-medium text-sm">Horarios elegidos</h4>
+                <ul className="text-sm text-muted-foreground space-y-1">
+                  {Array.from(horariosSeleccionados).map(id => {
+                    const h = horariosClase.find(x => x.id === id);
+                    const dia = diasSemana.find(d => d.numero === h?.dia_semana)?.nombre;
+                    return (
+                      <li key={id} className="flex items-center space-x-2">
+                        <Check className="h-4 w-4 text-primary" />
+                        <span>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+
+              {/* Información importante */}
               <div className="text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-md p-3">
                 <strong>Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
               </div>
@@ -388,14 +512,44 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
           )}
         </div>
 
-        <DialogFooter className={isReview ? 'flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-2' : undefined}>
-          {!isReview ? (
-            <Button onClick={handleSave} disabled={saving || horariosSeleccionados.size === 0}>
-              Guardar y continuar
-            </Button>
-          ) : (
+        <DialogFooter className={step === 'review' ? 'flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-2' : undefined}>
+          {step === 'paquete' && (
+            <div className="text-center text-sm text-muted-foreground">
+              Seleccioná un plan para continuar
+            </div>
+          )}
+          
+          {step === 'horarios' && (
             <>
-              <Button variant="outline" onClick={() => setIsReview(false)} disabled={saving}>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setStep('paquete');
+                  setHorariosSeleccionados(new Set());
+                }} 
+                disabled={saving}
+              >
+                Volver
+              </Button>
+              <Button 
+                onClick={handleSave} 
+                disabled={saving || horariosSeleccionados.size === 0 || horariosSeleccionados.size !== paqueteSeleccionado}
+              >
+                Continuar
+              </Button>
+            </>
+          )}
+          
+          {step === 'review' && (
+            <>
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setStep('horarios');
+                  setIsReview(false);
+                }} 
+                disabled={saving}
+              >
                 Volver al paso anterior
               </Button>
               <Button onClick={handleConfirm} disabled={saving}>
