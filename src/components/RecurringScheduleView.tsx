@@ -25,10 +25,12 @@ import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 interface HorarioRecurrente {
   id: string;
   dia_semana: number;
+  clase_numero?: number;
   hora_inicio: string;
   hora_fin: string;
   activo: boolean;
   cancelada?: boolean;
+  nombre_clase?: string;
 }
 
 interface ClaseDelDia {
@@ -145,13 +147,13 @@ export const RecurringScheduleView = () => {
 
     setLoading(true);
     try {
+      // Usar vista que combina horarios de usuarios con horas actualizadas
       const { data, error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .select('id, dia_semana, hora_inicio, hora_fin, activo')
+        .from('vista_horarios_usuarios')
+        .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, activo, usuario_id')
         .eq('usuario_id', user.id)
-        .eq('activo', true)
         .order('dia_semana', { ascending: true })
-        .order('hora_inicio', { ascending: true });
+        .order('clase_numero', { ascending: true });
 
       if (error) {
         console.error('Error al cargar horarios recurrentes:', error);
@@ -412,12 +414,11 @@ export const RecurringScheduleView = () => {
       let horariosActuales = horariosRecurrentes;
       if (forceReload) {
         const { data: horariosDB } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .select('id, dia_semana, hora_inicio, hora_fin, activo')
+          .from('vista_horarios_usuarios')
+          .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, activo, usuario_id')
           .eq('usuario_id', user.id)
-          .eq('activo', true)
           .order('dia_semana', { ascending: true })
-          .order('hora_inicio', { ascending: true });
+          .order('clase_numero', { ascending: true });
         
         horariosActuales = horariosDB || [];
       }
@@ -852,16 +853,17 @@ export const RecurringScheduleView = () => {
                   <table className="w-full table-fixed">
                     <thead>
                       <tr className="border-b bg-muted/50">
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-1/4 sm:w-1/3">Fecha</th>
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-1/4 sm:w-1/3">Día</th>
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground w-2/5 sm:w-1/3">Horario</th>
-                        <th className="px-4 py-3 text-center font-medium text-xs sm:text-sm text-muted-foreground hidden md:table-cell w-[140px]">Acciones</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Fecha</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Día</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">Clase</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Horario</th>
+                        <th className="px-4 py-3 text-center font-medium text-xs sm:text-sm text-muted-foreground hidden md:table-cell">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {loading || loadingMonth ? (
                         <tr>
-                          <td colSpan={4} className="px-4 py-8 text-center">
+                          <td colSpan={5} className="px-4 py-8 text-center">
                             <div className="flex flex-col items-center">
                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
                               <p className="text-sm text-muted-foreground">
@@ -899,15 +901,15 @@ export const RecurringScheduleView = () => {
                                   CANCELADA
                                 </div>
                               )}
-                              {!clase.horario.cancelada && isFechaPasada(clase.dia) && (
-                                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-gray-400 font-medium">
-                                  REALIZADA
-                                </div>
-                              )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <div className="text-xs sm:text-sm text-muted-foreground">
                                 {format(dia, 'EEEE', { locale: es })}
+                              </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left hidden sm:table-cell">
+                              <div className="text-xs sm:text-sm font-medium">
+                                {clase.horario.nombre_clase || (clase.horario.clase_numero ? `Clase ${clase.horario.clase_numero}` : '-')}
                               </div>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
@@ -937,7 +939,7 @@ export const RecurringScheduleView = () => {
                                 className="h-8 px-3 text-xs sm:text-sm"
                                 disabled={clase.horario.cancelada || isFechaPasada(clase.dia)}
                               >
-                                {clase.horario.cancelada ? 'Cancelada' : isFechaPasada(clase.dia) ? 'Realizada' : 'Ver Detalles'}
+                                {clase.horario.cancelada ? 'Cancelada' : isFechaPasada(clase.dia) ? 'No disponible' : 'Ver Detalles'}
                               </Button>
                             </td>
                           </tr>
@@ -1096,6 +1098,13 @@ export const RecurringScheduleView = () => {
                 </div>
               </div>
               
+              {selectedClase.horario.nombre_clase && (
+                <div>
+                  <label className="text-sm font-medium text-muted-foreground">Clase</label>
+                  <p className="text-sm font-semibold">{selectedClase.horario.nombre_clase}</p>
+                </div>
+              )}
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Hora de Inicio</label>
@@ -1127,7 +1136,7 @@ export const RecurringScheduleView = () => {
                   {selectedClase.horario.cancelada 
                     ? 'Ya Cancelada' 
                     : isFechaPasada(selectedClase.dia)
-                      ? 'Clase Realizada'
+                      ? 'No disponible'
                       : 'Cancelar Clase'}
                 </Button>
                 <Button

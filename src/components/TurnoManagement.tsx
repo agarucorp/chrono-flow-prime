@@ -48,15 +48,23 @@ export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
   const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('20');
+  
+  // Tarifas escalonadas (valores se cargan desde BD)
+  const [combo1Tarifa, setCombo1Tarifa] = useState('15000');
+  const [combo2Tarifa, setCombo2Tarifa] = useState('14000');
+  const [combo3Tarifa, setCombo3Tarifa] = useState('12000');
+  const [combo4Tarifa, setCombo4Tarifa] = useState('11000');
+  const [combo5Tarifa, setCombo5Tarifa] = useState('10000');
   const [horariosFijos, setHorariosFijos] = useState<HorarioClase[]>([
-    { id: 1, nombre: 'Clase 1', horaInicio: '08:00', horaFin: '09:00' },
-    { id: 2, nombre: 'Clase 2', horaInicio: '09:00', horaFin: '10:00' },
-    { id: 3, nombre: 'Clase 3', horaInicio: '10:00', horaFin: '11:00' },
-    { id: 4, nombre: 'Clase 4', horaInicio: '11:00', horaFin: '12:00' },
-    { id: 5, nombre: 'Clase 5', horaInicio: '15:00', horaFin: '16:00' },
-    { id: 6, nombre: 'Clase 6', horaInicio: '16:00', horaFin: '17:00' },
+    { id: 1, nombre: 'Clase 1', horaInicio: '07:00', horaFin: '08:00' },
+    { id: 2, nombre: 'Clase 2', horaInicio: '08:00', horaFin: '09:00' },
+    { id: 3, nombre: 'Clase 3', horaInicio: '09:00', horaFin: '10:00' },
+    { id: 4, nombre: 'Clase 4', horaInicio: '15:00', horaFin: '16:00' },
+    { id: 5, nombre: 'Clase 5', horaInicio: '16:00', horaFin: '17:00' },
+    { id: 6, nombre: 'Clase 6', horaInicio: '17:00', horaFin: '18:00' },
     { id: 7, nombre: 'Clase 7', horaInicio: '18:00', horaFin: '19:00' },
-    { id: 8, nombre: 'Clase 8', horaInicio: '19:00', horaFin: '20:00' }
+    { id: 8, nombre: 'Clase 8', horaInicio: '19:00', horaFin: '20:00' },
+    { id: 9, nombre: 'Clase 9', horaInicio: '20:00', horaFin: '21:00' }
   ]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
@@ -66,8 +74,73 @@ export const TurnoManagement = () => {
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [isTarifaDialogOpen, setIsTarifaDialogOpen] = useState(false);
   const [tarifaValor, setTarifaValor] = useState<string>('');
-  const { actualizarConfiguracionCapacidad, obtenerCapacidadActual, cargarConfiguraciones, actualizarConfiguracionTarifas, obtenerTarifaActual } = useSystemConfig();
+  const { 
+    actualizarConfiguracionCapacidad, 
+    obtenerCapacidadActual, 
+    cargarConfiguraciones, 
+    actualizarConfiguracionTarifas, 
+    obtenerTarifaActual,
+    tarifasEscalonadas,
+    actualizarTarifasEscalonadas,
+    configuracionCapacidad
+  } = useSystemConfig();
   const { toast } = useToast();
+
+  // Cargar tarifas escalonadas al montar
+  useEffect(() => {
+    if (tarifasEscalonadas) {
+      setCombo1Tarifa(tarifasEscalonadas.combo_1_tarifa.toString());
+      setCombo2Tarifa(tarifasEscalonadas.combo_2_tarifa.toString());
+      setCombo3Tarifa(tarifasEscalonadas.combo_3_tarifa.toString());
+      setCombo4Tarifa(tarifasEscalonadas.combo_4_tarifa.toString());
+      setCombo5Tarifa(tarifasEscalonadas.combo_5_tarifa.toString());
+    }
+  }, [tarifasEscalonadas]);
+
+  // Cargar capacidad real al montar
+  useEffect(() => {
+    if (configuracionCapacidad && configuracionCapacidad.length > 0) {
+      const capacidadActual = configuracionCapacidad[0].max_alumnos_por_clase;
+      setCapacidadMaximaGlobal(capacidadActual.toString());
+    }
+  }, [configuracionCapacidad]);
+
+  // Cargar horarios desde BD cuando se abre el dialog
+  const cargarHorariosDesdeDB = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('clase_numero, hora_inicio, hora_fin')
+        .eq('dia_semana', 1) // Cargar del lunes (todos los días tienen los mismos horarios)
+        .eq('activo', true)
+        .order('clase_numero');
+
+      if (error) {
+        console.error('Error cargando horarios desde BD:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const horariosDB = data.map((h: any) => ({
+          id: h.clase_numero,
+          nombre: `Clase ${h.clase_numero}`,
+          horaInicio: h.hora_inicio.substring(0, 5),
+          horaFin: h.hora_fin.substring(0, 5)
+        }));
+        setHorariosFijos(horariosDB);
+        console.log('✅ Horarios cargados desde BD:', horariosDB.length, 'clases');
+      }
+    } catch (error) {
+      console.error('Error inesperado cargando horarios:', error);
+    }
+  };
+
+  // Cargar horarios al abrir el dialog
+  useEffect(() => {
+    if (isDialogOpen) {
+      cargarHorariosDesdeDB();
+    }
+  }, [isDialogOpen]);
 
   // Cargar horarios semanales
   const cargarHorariosSemanales = async () => {
@@ -238,9 +311,26 @@ export const TurnoManagement = () => {
         updated_at: new Date().toISOString()
       };
 
-      // Agregar tarifa si fue modificada
+      // Agregar tarifa si fue modificada (retrocompatibilidad)
       if (tarifaClase && parseFloat(tarifaClase) >= 0) {
         updateData.tarifa_horaria = parseFloat(tarifaClase);
+      }
+
+      // Agregar tarifas escalonadas
+      if (combo1Tarifa && parseFloat(combo1Tarifa) >= 0) {
+        updateData.combo_1_tarifa = parseFloat(combo1Tarifa);
+      }
+      if (combo2Tarifa && parseFloat(combo2Tarifa) >= 0) {
+        updateData.combo_2_tarifa = parseFloat(combo2Tarifa);
+      }
+      if (combo3Tarifa && parseFloat(combo3Tarifa) >= 0) {
+        updateData.combo_3_tarifa = parseFloat(combo3Tarifa);
+      }
+      if (combo4Tarifa && parseFloat(combo4Tarifa) >= 0) {
+        updateData.combo_4_tarifa = parseFloat(combo4Tarifa);
+      }
+      if (combo5Tarifa && parseFloat(combo5Tarifa) >= 0) {
+        updateData.combo_5_tarifa = parseFloat(combo5Tarifa);
       }
 
       // Actualizar configuración en la tabla configuracion_admin existente
@@ -264,42 +354,71 @@ export const TurnoManagement = () => {
         return;
       }
 
-      // Sincronización NO destructiva con horarios_semanales (no elimina existentes)
-      console.log('Sincronizando horarios_semanales (actualización/alta, sin borrados)...');
-      const diasLaborales = [1,2,3,4,5];
+      // Sincronización con horarios_semanales usando clase_numero
+      console.log('🔄 Sincronizando horarios_semanales usando sistema de clase_numero...');
+      const diasLaborales = [1, 2, 3, 4, 5];
       const nowIso = new Date().toISOString();
 
       for (const ds of diasLaborales) {
-        // Traer existentes del día
+        // Traer existentes del día con clase_numero
         const { data: existentes, error: errorExistentes } = await supabase
           .from('horarios_semanales')
-          .select('id, hora_inicio, hora_fin')
-          .eq('dia_semana', ds);
+          .select('id, clase_numero, hora_inicio, hora_fin, capacidad')
+          .eq('dia_semana', ds)
+          .order('clase_numero');
+        
         if (errorExistentes) {
           console.error('Error leyendo horarios existentes:', errorExistentes);
           continue;
         }
-        const existenteSet = new Set((existentes || []).map((r: any) => `${(r.hora_inicio||'').substring(0,5)}-${(r.hora_fin||'').substring(0,5)}`));
 
-        for (const h of horariosFijos) {
-          const hi = (h.horaInicio || '00:00').substring(0,5) + ':00';
-          const hf = (h.horaFin || '00:00').substring(0,5) + ':00';
-          const key = `${hi.substring(0,5)}-${hf.substring(0,5)}`;
-          if (existenteSet.has(key)) {
-            // Actualizar capacidad/activo del slot existente
+        // Procesar cada clase del popup
+        for (let i = 0; i < horariosFijos.length; i++) {
+          const h = horariosFijos[i];
+          const claseNumero = i + 1; // Clase 1, 2, 3, etc.
+          const hi = (h.horaInicio || '00:00').substring(0, 5) + ':00';
+          const hf = (h.horaFin || '00:00').substring(0, 5) + ':00';
+
+          // Buscar si ya existe esta clase_numero para este día
+          const existente = existentes?.find((e: any) => e.clase_numero === claseNumero);
+
+          if (existente) {
+            // Actualizar el horario existente (las horas pueden cambiar, pero clase_numero es fijo)
             const { error: errorUpd } = await supabase
               .from('horarios_semanales')
-              .update({ capacidad: nuevaCapacidad, activo: true, updated_at: nowIso })
-              .eq('dia_semana', ds)
-              .eq('hora_inicio', hi)
-              .eq('hora_fin', hf);
-            if (errorUpd) console.error('Error actualizando horario:', { ds, hi, hf, errorUpd });
+              .update({ 
+                hora_inicio: hi, 
+                hora_fin: hf, 
+                capacidad: nuevaCapacidad, 
+                activo: true, 
+                updated_at: nowIso 
+              })
+              .eq('id', existente.id);
+            
+            if (errorUpd) {
+              console.error('❌ Error actualizando clase:', { dia: ds, clase: claseNumero, errorUpd });
+            } else {
+              console.log('✅ Actualizada:', { dia: ds, clase: claseNumero, hora: hi });
+            }
           } else {
-            // Insertar nuevo slot
+            // Insertar nuevo slot con clase_numero
             const { error: errorIns } = await supabase
               .from('horarios_semanales')
-              .insert({ dia_semana: ds, hora_inicio: hi, hora_fin: hf, capacidad: nuevaCapacidad, activo: true, updated_at: nowIso });
-            if (errorIns) console.error('Error insertando horario:', { ds, hi, hf, errorIns });
+              .insert({ 
+                dia_semana: ds, 
+                clase_numero: claseNumero,
+                hora_inicio: hi, 
+                hora_fin: hf, 
+                capacidad: nuevaCapacidad, 
+                activo: true, 
+                updated_at: nowIso 
+              });
+            
+            if (errorIns) {
+              console.error('❌ Error insertando clase:', { dia: ds, clase: claseNumero, errorIns });
+            } else {
+              console.log('✅ Insertada:', { dia: ds, clase: claseNumero, hora: hi });
+            }
           }
         }
       }
@@ -455,34 +574,111 @@ export const TurnoManagement = () => {
                     <div className="p-3 border border-orange-500 rounded-lg bg-muted/50">
                       <div className="flex items-center justify-center gap-4">
                         <Label htmlFor="capacidad-maxima" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Capacidad por clase</Label>
-                        <Input
-                          id="capacidad-maxima"
-                          type="number"
-                          min="1"
-                          max="100"
+                        <Select
                           value={capacidadMaximaGlobal}
-                          onChange={(e) => setCapacidadMaximaGlobal(e.target.value)}
-                          className="w-20 text-center"
-                          style={{ fontSize: '12px' }}
-                        />
+                          onValueChange={(value) => setCapacidadMaximaGlobal(value)}
+                        >
+                          <SelectTrigger className="w-20 text-center" style={{ fontSize: '12px' }}>
+                            <SelectValue placeholder="Elegir" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                              <SelectItem key={num} value={num.toString()} style={{ fontSize: '12px' }}>
+                                {num}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
                     </div>
 
-                    {/* Card para tarifa por clase */}
-                    <div className="p-3 border border-blue-500 rounded-lg bg-muted/50">
-                      <div className="flex items-center justify-center gap-4">
-                        <Label htmlFor="tarifa-clase" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Tarifa por clase</Label>
-                        <Input
-                          id="tarifa-clase"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={tarifaClase}
-                          onChange={(e) => setTarifaClase(e.target.value)}
-                          className="w-20 text-center"
-                          style={{ fontSize: '12px' }}
-                          placeholder="0.00"
-                        />
+                    {/* Card para tarifas escalonadas */}
+                    <div className="p-4 border border-blue-500 rounded-lg bg-muted/50">
+                      <div className="text-center mb-3">
+                        <Label className="font-semibold" style={{ fontSize: '13px' }}>Tarifas por clase según asistencia</Label>
+                        <p className="text-xs text-muted-foreground mt-1">Precio unitario por clase</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
+                        {/* Combo 1 */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Label htmlFor="combo-1" className="text-xs font-medium text-center">Combo 1</Label>
+                          <Input
+                            id="combo-1"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={combo1Tarifa}
+                            onChange={(e) => setCombo1Tarifa(e.target.value)}
+                            className="w-full h-8 text-xs text-center"
+                            placeholder="15000"
+                          />
+                          <span className="text-[10px] text-muted-foreground">ARS</span>
+                        </div>
+
+                        {/* Combo 2 */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Label htmlFor="combo-2" className="text-xs font-medium text-center">Combo 2</Label>
+                          <Input
+                            id="combo-2"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={combo2Tarifa}
+                            onChange={(e) => setCombo2Tarifa(e.target.value)}
+                            className="w-full h-8 text-xs text-center"
+                            placeholder="14000"
+                          />
+                          <span className="text-[10px] text-muted-foreground">ARS</span>
+                        </div>
+
+                        {/* Combo 3 */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Label htmlFor="combo-3" className="text-xs font-medium text-center">Combo 3</Label>
+                          <Input
+                            id="combo-3"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={combo3Tarifa}
+                            onChange={(e) => setCombo3Tarifa(e.target.value)}
+                            className="w-full h-8 text-xs text-center"
+                            placeholder="12000"
+                          />
+                          <span className="text-[10px] text-muted-foreground">ARS</span>
+                        </div>
+
+                        {/* Combo 4 */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Label htmlFor="combo-4" className="text-xs font-medium text-center">Combo 4</Label>
+                          <Input
+                            id="combo-4"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={combo4Tarifa}
+                            onChange={(e) => setCombo4Tarifa(e.target.value)}
+                            className="w-full h-8 text-xs text-center"
+                            placeholder="11000"
+                          />
+                          <span className="text-[10px] text-muted-foreground">ARS</span>
+                        </div>
+
+                        {/* Combo 5 */}
+                        <div className="flex flex-col items-center gap-1.5">
+                          <Label htmlFor="combo-5" className="text-xs font-medium text-center">Combo 5</Label>
+                          <Input
+                            id="combo-5"
+                            type="number"
+                            min="0"
+                            step="100"
+                            value={combo5Tarifa}
+                            onChange={(e) => setCombo5Tarifa(e.target.value)}
+                            className="w-full h-8 text-xs text-center"
+                            placeholder="10000"
+                          />
+                          <span className="text-[10px] text-muted-foreground">ARS</span>
+                        </div>
                       </div>
                     </div>
 

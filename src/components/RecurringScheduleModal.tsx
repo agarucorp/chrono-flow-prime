@@ -10,6 +10,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 interface HorarioClase {
   id: string;
   dia_semana: number;
+  clase_numero: number;
   hora_inicio: string;
   hora_fin: string;
   capacidad_maxima: number;
@@ -24,13 +25,13 @@ interface RecurringScheduleModalProps {
 
 // ⚡ VERSION: 2025-01-12T16:00:00Z - CRITICAL FIX
 // Fixed: Removed horario_clase_id and created_at from insert
-// Paquetes de precios hardcodeados (mockup)
+// Paquetes de precios - valor por clase según cantidad de días
 const PAQUETES_PRECIOS = [
-  { dias: 1, precio: 15000, descripcion: '1 día por semana - Entrada al mundo del fitness' },
-  { dias: 2, precio: 25000, descripcion: '2 días por semana - Mantente activo' },
-  { dias: 3, precio: 35000, descripcion: '3 días por semana - Construcción de hábitos' },
-  { dias: 4, precio: 45000, descripcion: '4 días por semana - Entrenamiento avanzado' },
-  { dias: 5, precio: 50000, descripcion: '5 días por semana - Máximo rendimiento' }
+  { dias: 1, precioPorClase: 15000 },
+  { dias: 2, precioPorClase: 14000 },
+  { dias: 3, precioPorClase: 12000 },
+  { dias: 4, precioPorClase: 11000 },
+  { dias: 5, precioPorClase: 10000 }
 ];
 
 export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
@@ -86,10 +87,10 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       setLoading(true);
       const { data, error } = await supabase
         .from('horarios_semanales')
-        .select('*')
+        .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, capacidad, activo')
         .eq('activo', true)
         .order('dia_semana', { ascending: true })
-        .order('hora_inicio', { ascending: true });
+        .order('clase_numero', { ascending: true });
 
       if (error) {
         console.error('Error cargando horarios:', error);
@@ -213,34 +214,54 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         console.log('✅ Perfil existe:', profile?.id);
       }
 
+      // Obtener la tarifa del paquete seleccionado
+      const paquete = PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado);
+      const tarifaPorClase = paquete?.precioPorClase || 0;
+
       const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
         const horario = horariosClase.find(h => h.id === horarioId);
         return {
           usuario_id: user?.id,
           dia_semana: horario?.dia_semana,
+          clase_numero: horario?.clase_numero, // ⭐ Ahora guardamos clase_numero
           hora_inicio: horario?.hora_inicio,
           hora_fin: horario?.hora_fin,
           activo: true,
-          fecha_inicio: new Date().toISOString().split('T')[0]
+          fecha_inicio: new Date().toISOString().split('T')[0],
+          combo_aplicado: paqueteSeleccionado,
+          tarifa_personalizada: tarifaPorClase
         };
       });
 
       console.log('💾 Datos a insertar:', horariosRecurrentes);
+      console.log('💰 Combo aplicado:', paqueteSeleccionado, '| Tarifa por clase:', tarifaPorClase);
 
       const { error } = await supabase
         .from('horarios_recurrentes_usuario')
         .insert(horariosRecurrentes);
 
-      dismissToast(loadingToast);
-
       if (error) {
+        dismissToast(loadingToast);
         console.error('❌ Error guardando horarios recurrentes:', error);
         showError('Error', `No se pudieron guardar tus horarios recurrentes: ${error.message}`);
         return;
       }
 
-      console.log('✅ Horarios recurrentes guardados exitosamente');
-      showSuccess('¡Horarios confirmados!', 'Tus horarios recurrentes fueron guardados');
+      // Actualizar combo asignado en el perfil del usuario
+      const { error: profileUpdateError } = await supabase
+        .from('profiles')
+        .update({ combo_asignado: paqueteSeleccionado })
+        .eq('id', user?.id);
+
+      if (profileUpdateError) {
+        console.warn('⚠️ No se pudo actualizar el combo en el perfil:', profileUpdateError);
+        // No es crítico, continuamos
+      }
+
+      dismissToast(loadingToast);
+
+      console.log('✅ Horarios recurrentes guardados exitosamente con Combo', paqueteSeleccionado);
+      showSuccess('¡Horarios confirmados!', `Tus horarios fueron guardados con Plan ${paqueteSeleccionado} - ${formatPrecio(tarifaPorClase)} por clase`);
       
       // Generar cuota mensual automáticamente para el mes actual
       const ahora = new Date();
@@ -310,9 +331,9 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         onInteractOutside={(e) => e.preventDefault()}
       >
         <DialogHeader>
-          <DialogTitle className="flex items-center space-x-2 text-base sm:text-lg">
-            <Calendar className="h-5 w-5" />
-            <span>
+          <DialogTitle className="flex items-center gap-2 text-sm sm:text-base lg:text-lg">
+            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+            <span className="truncate">
               {step === 'paquete' && 'Elegí tu plan de entrenamiento'}
               {step === 'horarios' && 'Seleccioná tus horarios'}
               {step === 'review' && 'Confirmá tu selección'}
@@ -320,24 +341,12 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="space-y-6 flex-1 overflow-y-auto">
+        <div className="space-y-4 sm:space-y-6 flex-1 overflow-y-auto px-1 sm:px-0">
           {/* Paso 1: Selección de paquete */}
           {step === 'paquete' && (
-            <div className="space-y-4">
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium">Sistema de cuota mensual</p>
-                    <p className="text-xs mt-1">
-                      Seleccioná la cantidad de días por semana que querés entrenar. 
-                      Los horarios se reservarán automáticamente cada mes.
-                    </p>
-                  </div>
-                </div>
-              </div>
+            <div className="space-y-3 sm:space-y-4">
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
                 {PAQUETES_PRECIOS.map((paquete) => (
                   <Card 
                     key={paquete.dias}
@@ -346,21 +355,18 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                     }`}
                     onClick={() => handleSeleccionarPaquete(paquete.dias)}
                   >
-                    <CardHeader className="pb-3">
-                      <CardTitle className="text-lg flex items-center justify-between">
-                        <span>{paquete.dias} día{paquete.dias > 1 ? 's' : ''}</span>
-                        <Check className={`h-5 w-5 ${paqueteSeleccionado === paquete.dias ? 'text-primary' : 'text-transparent'}`} />
+                    <CardHeader className="pb-2 px-3 pt-3">
+                      <CardTitle className="text-sm sm:text-base flex items-center justify-between gap-1">
+                        <span className="truncate">{paquete.dias} día{paquete.dias > 1 ? 's' : ''}</span>
+                        <Check className={`h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 ${paqueteSeleccionado === paquete.dias ? 'text-primary' : 'text-transparent'}`} />
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3">
-                      <div className="text-3xl font-bold text-primary">
-                        {formatPrecio(paquete.precio)}
+                    <CardContent className="space-y-1 px-3 pb-3">
+                      <div className="text-lg sm:text-2xl font-bold text-primary break-words">
+                        {formatPrecio(paquete.precioPorClase)}
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {paquete.descripcion}
-                      </p>
-                      <div className="text-xs text-muted-foreground pt-2 border-t">
-                        por mes
+                      <div className="text-[10px] sm:text-xs text-muted-foreground pt-1 border-t leading-tight">
+                        valor por clase
                       </div>
                     </CardContent>
                   </Card>
@@ -372,17 +378,20 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
           {/* Paso 2: Selección de horarios */}
           {step === 'horarios' && !isReview && (
             <>
-              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start space-x-2">
-                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5" />
-                  <div className="text-sm text-blue-800">
-                    <p className="font-medium">
-                      Plan seleccionado: {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
-                    </p>
-                    <p className="text-xs mt-1">
+              <div className="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                  <div className="text-xs sm:text-sm text-blue-800 flex-1 min-w-0">
+                    <p className="font-medium">Sistema de cuota por clase</p>
+                    <p className="text-[11px] sm:text-xs mt-1 leading-relaxed">
+                      <span className="font-semibold">Plan: {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''}/semana</span>
+                      <br />
                       Seleccioná exactamente {paqueteSeleccionado} horario{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} (uno por día).
-                      Seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado}
+                      Los horarios se reservarán cada mes.
                     </p>
+                    <div className="text-xs sm:text-sm mt-2 font-semibold bg-white/50 px-2 py-1 rounded inline-block">
+                      Seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -467,24 +476,21 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 
           {/* Paso 3: Etapa de revisión final */}
           {step === 'review' && isReview && (
-            <div className="space-y-4 max-w-md mx-auto">
+            <div className="space-y-4 max-w-md mx-auto px-2">
               {/* Resumen del paquete */}
-              <div className="p-4 bg-primary/10 border border-primary rounded-lg">
+              <div className="p-3 sm:p-4 bg-primary/10 border border-primary rounded-lg">
                 <h4 className="font-medium text-sm mb-2">Plan seleccionado</h4>
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-lg font-bold">
+                <div className="flex items-start sm:items-center justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-base sm:text-lg font-bold break-words">
                       {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
                     </p>
-                    <p className="text-xs text-muted-foreground">
-                      {PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.descripcion}
-                    </p>
                   </div>
-                  <div className="text-2xl font-bold text-primary">
-                    {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precio || 0)}
+                  <div className="text-xl sm:text-2xl font-bold text-primary flex-shrink-0 break-words">
+                    {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
                   </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">por mes</p>
+                <p className="text-xs text-muted-foreground mt-2">valor por clase</p>
               </div>
 
               {/* Resumen de horarios */}
