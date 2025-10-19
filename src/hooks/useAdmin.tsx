@@ -372,6 +372,96 @@ export const useAdmin = () => {
     return email === 'agaru.corp@gmail.com';
   };
 
+  // ==================== FUNCIONES DE AUSENCIAS ====================
+
+  // Obtener todas las ausencias activas
+  const fetchAusencias = useCallback(async () => {
+    if (!isAdmin) {
+      console.log('❌ No se puede obtener ausencias: no eres admin');
+      return [];
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .select('*')
+        .eq('activo', true)
+        .order('fecha_inicio', { ascending: false });
+
+      if (error) {
+        console.error('❌ Error obteniendo ausencias:', error);
+        return [];
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error('❌ Error inesperado obteniendo ausencias:', err);
+      return [];
+    }
+  }, [isAdmin]);
+
+  // Crear ausencia única
+  const createAusenciaUnica = useCallback(async (
+    fechaInicio: string,
+    clasesCanceladas: number[],
+    motivo: string | null = null
+  ) => {
+    if (!isAdmin) {
+      return { success: false, error: 'No tienes permisos de administrador' };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .insert({
+          tipo_ausencia: 'unica',
+          fecha_inicio: fechaInicio,
+          fecha_fin: null,
+          clases_canceladas: clasesCanceladas,
+          motivo: motivo,
+          activo: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creando ausencia única:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Ausencia única creada exitosamente:', data);
+      return { success: true, data };
+    } catch (err) {
+      console.error('❌ Error inesperado creando ausencia única:', err);
+      return { success: false, error: 'Error inesperado' };
+    }
+  }, [isAdmin]);
+
+  // Eliminar ausencia
+  const deleteAusencia = useCallback(async (ausenciaId: string) => {
+    if (!isAdmin) {
+      return { success: false, error: 'No tienes permisos de administrador' };
+    }
+
+    try {
+      const { error } = await supabase
+        .from('ausencias_admin')
+        .update({ activo: false })
+        .eq('id', ausenciaId);
+
+      if (error) {
+        console.error('❌ Error eliminando ausencia:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Ausencia eliminada exitosamente');
+      return { success: true };
+    } catch (err) {
+      console.error('❌ Error inesperado eliminando ausencia:', err);
+      return { success: false, error: 'Error inesperado' };
+    }
+  }, [isAdmin]);
+
   return {
     isAdmin,
     isLoading,
@@ -389,5 +479,9 @@ export const useAdmin = () => {
     updateCuotaEstadoPago,
     updateCuotaDescuento,
     canBeAdmin,
+    // Funciones de ausencias
+    fetchAusencias,
+    createAusenciaUnica,
+    deleteAusencia,
   };
 };

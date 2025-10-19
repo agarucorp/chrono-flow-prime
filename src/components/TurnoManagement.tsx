@@ -10,6 +10,7 @@ import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { useToast } from '@/hooks/use-toast';
 import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useAdmin } from '@/hooks/useAdmin';
 
 interface HorarioClase {
   id: number;
@@ -80,22 +81,34 @@ export const TurnoManagement = () => {
     cargarConfiguraciones, 
     actualizarConfiguracionTarifas, 
     obtenerTarifaActual,
-    tarifasEscalonadas,
-    actualizarTarifasEscalonadas,
     configuracionCapacidad
   } = useSystemConfig();
+  const { createAusenciaUnica, fetchAusencias, deleteAusencia } = useAdmin();
   const { toast } = useToast();
 
   // Cargar tarifas escalonadas al montar
   useEffect(() => {
-    if (tarifasEscalonadas) {
-      setCombo1Tarifa(tarifasEscalonadas.combo_1_tarifa.toString());
-      setCombo2Tarifa(tarifasEscalonadas.combo_2_tarifa.toString());
-      setCombo3Tarifa(tarifasEscalonadas.combo_3_tarifa.toString());
-      setCombo4Tarifa(tarifasEscalonadas.combo_4_tarifa.toString());
-      setCombo5Tarifa(tarifasEscalonadas.combo_5_tarifa.toString());
-    }
-  }, [tarifasEscalonadas]);
+    const cargarTarifas = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('configuracion_admin')
+          .select('combo_1_tarifa, combo_2_tarifa, combo_3_tarifa, combo_4_tarifa, combo_5_tarifa')
+          .single();
+
+        if (!error && data) {
+          setCombo1Tarifa(data.combo_1_tarifa?.toString() || '15000');
+          setCombo2Tarifa(data.combo_2_tarifa?.toString() || '14000');
+          setCombo3Tarifa(data.combo_3_tarifa?.toString() || '12000');
+          setCombo4Tarifa(data.combo_4_tarifa?.toString() || '11000');
+          setCombo5Tarifa(data.combo_5_tarifa?.toString() || '10000');
+        }
+      } catch (error) {
+        console.error('Error cargando tarifas:', error);
+      }
+    };
+
+    cargarTarifas();
+  }, []);
 
   // Cargar capacidad real al montar
   useEffect(() => {
@@ -229,6 +242,42 @@ export const TurnoManagement = () => {
   
   // Estado para mostrar resumen de ausencia
   const [mostrarResumenAusencia, setMostrarResumenAusencia] = useState(false);
+
+  // Cargar ausencias al abrir el dialog de ausencias
+  useEffect(() => {
+    const cargarAusencias = async () => {
+      if (isDialogAusenciasOpen) {
+        const ausencias = await fetchAusencias();
+        
+        // Separar ausencias únicas y por período
+        const unicas = ausencias
+          .filter((a: any) => a.tipo_ausencia === 'unica')
+          .map((a: any) => {
+            const fecha = new Date(a.fecha_inicio);
+            return {
+              id: a.id,
+              dia: fecha.getDate().toString().padStart(2, '0'),
+              mes: (fecha.getMonth() + 1).toString().padStart(2, '0'),
+              año: fecha.getFullYear().toString(),
+              clasesCanceladas: a.clases_canceladas || []
+            };
+          });
+
+        const periodos = ausencias
+          .filter((a: any) => a.tipo_ausencia === 'periodo')
+          .map((a: any) => ({
+            id: a.id,
+            fechaDesde: a.fecha_inicio,
+            fechaHasta: a.fecha_fin
+          }));
+
+        setAusenciasUnicas(unicas);
+        setAusenciasPeriodo(periodos);
+      }
+    };
+
+    cargarAusencias();
+  }, [isDialogAusenciasOpen, fetchAusencias]);
 
   const handleHorarioChange = (id: number, field: 'horaInicio' | 'horaFin', value: string) => {
     setHorariosFijos(prev => 
@@ -492,15 +541,53 @@ export const TurnoManagement = () => {
     }));
   };
 
-  const handleAgregarAusenciaUnica = () => {
-    if (nuevaAusenciaUnica.dia && nuevaAusenciaUnica.mes && nuevaAusenciaUnica.año && nuevaAusenciaUnica.clasesCanceladas.length > 0) {
-      const nuevaAusencia: AusenciaUnica = {
-        id: Date.now().toString(),
-        ...nuevaAusenciaUnica
-      };
-      setAusenciasUnicas(prev => [...prev, nuevaAusencia]);
-      setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
-      setTipoAusencia(null);
+  const handleAgregarAusenciaUnica = async () => {
+    if (nuevaAusenciaUnica.fechaCompleta && nuevaAusenciaUnica.clasesCanceladas.length > 0) {
+      try {
+        // Guardar en la base de datos
+        const result = await createAusenciaUnica(
+          nuevaAusenciaUnica.fechaCompleta, // fecha en formato ISO
+          nuevaAusenciaUnica.clasesCanceladas,
+          null // motivo opcional
+        );
+
+        if (result.success) {
+          toast({
+            title: 'Ausencia creada',
+            description: `Se bloquearon ${nuevaAusenciaUnica.clasesCanceladas.length} clase(s) para el ${nuevaAusenciaUnica.fechaCompleta}`,
+          });
+
+          // Guardar también en el estado local para mostrar en la interfaz
+          const nuevaAusencia: AusenciaUnica = {
+            id: result.data.id,
+            dia: nuevaAusenciaUnica.dia,
+            mes: nuevaAusenciaUnica.mes,
+            año: nuevaAusenciaUnica.año,
+            clasesCanceladas: nuevaAusenciaUnica.clasesCanceladas
+          };
+          setAusenciasUnicas(prev => [...prev, nuevaAusencia]);
+
+          // Disparar evento para que los usuarios recarguen sus calendarios
+          window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+
+          // Limpiar formulario
+          setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
+          setTipoAusencia(null);
+        } else {
+          toast({
+            title: 'Error',
+            description: result.error || 'No se pudo crear la ausencia',
+            variant: 'destructive',
+          });
+        }
+      } catch (error) {
+        console.error('Error guardando ausencia:', error);
+        toast({
+          title: 'Error',
+          description: 'Error inesperado al guardar la ausencia',
+          variant: 'destructive',
+        });
+      }
     }
   };
 
@@ -522,11 +609,38 @@ export const TurnoManagement = () => {
     setMostrarResumenAusencia(false);
   };
 
-  const handleEliminarAusencia = (id: string, tipo: 'unica' | 'periodo') => {
-    if (tipo === 'unica') {
-      setAusenciasUnicas(prev => prev.filter(ausencia => ausencia.id !== id));
-    } else {
-      setAusenciasPeriodo(prev => prev.filter(ausencia => ausencia.id !== id));
+  const handleEliminarAusencia = async (id: string, tipo: 'unica' | 'periodo') => {
+    try {
+      const result = await deleteAusencia(id);
+      
+      if (result.success) {
+        if (tipo === 'unica') {
+          setAusenciasUnicas(prev => prev.filter(ausencia => ausencia.id !== id));
+        } else {
+          setAusenciasPeriodo(prev => prev.filter(ausencia => ausencia.id !== id));
+        }
+        
+        // Disparar evento para que los usuarios recarguen sus calendarios
+        window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+        
+        toast({
+          title: 'Ausencia eliminada',
+          description: 'La ausencia se eliminó correctamente',
+        });
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'No se pudo eliminar la ausencia',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error eliminando ausencia:', error);
+      toast({
+        title: 'Error',
+        description: 'Error inesperado al eliminar la ausencia',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -944,6 +1058,68 @@ export const TurnoManagement = () => {
                     </div>
                   )}
 
+                  {/* Sección de ausencias creadas */}
+                  {(ausenciasUnicas.length > 0 || ausenciasPeriodo.length > 0) && (
+                    <div className="mt-6 space-y-4">
+                      <div className="border-t pt-4">
+                        <h3 className="text-sm font-medium mb-4">Ausencias creadas</h3>
+                        
+                        {/* Ausencias únicas */}
+                        {ausenciasUnicas.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">Ausencias únicas</h4>
+                            {ausenciasUnicas.map((ausencia) => (
+                              <div key={ausencia.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {ausencia.dia}/{ausencia.mes}/{ausencia.año}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Clases: {ausencia.clasesCanceladas.join(', ')}
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleEliminarAusencia(ausencia.id, 'unica')}
+                                  className="h-8 px-3 text-xs"
+                                >
+                                  Eliminar
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Ausencias por período */}
+                        {ausenciasPeriodo.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-medium text-muted-foreground">Ausencias por período</h4>
+                            {ausenciasPeriodo.map((ausencia) => (
+                              <div key={ausencia.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
+                                <div className="flex-1">
+                                  <div className="text-sm font-medium">
+                                    {ausencia.fechaDesde} - {ausencia.fechaHasta}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Todas las clases del período
+                                  </div>
+                                </div>
+                                <Button
+                                  variant="destructive"
+                                  size="sm"
+                                  onClick={() => handleEliminarAusencia(ausencia.id, 'periodo')}
+                                  className="h-8 px-3 text-xs"
+                                >
+                                  Eliminar
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 </DialogContent>
               </Dialog>

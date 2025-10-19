@@ -30,6 +30,7 @@ interface HorarioRecurrente {
   hora_fin: string;
   activo: boolean;
   cancelada?: boolean;
+  bloqueada?: boolean;
   nombre_clase?: string;
 }
 
@@ -88,6 +89,9 @@ export const RecurringScheduleView = () => {
   // Estado para modal de edición de perfil
   const [showProfileSettings, setShowProfileSettings] = useState(false);
 
+  // Estado para ausencias del admin
+  const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+
   // Función para formatear horas sin segundos
   const formatTime = (timeString: string) => {
     if (!timeString) return '';
@@ -130,6 +134,66 @@ export const RecurringScheduleView = () => {
     { numero: 5, nombre: 'Viernes', nombreCorto: 'Vie' },
     { numero: 6, nombre: 'Sábado', nombreCorto: 'Sáb' }
   ], []);
+
+  // Cargar ausencias del admin
+  const cargarAusenciasAdmin = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .select('*')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('❌ Error al cargar ausencias del admin:', error);
+        return;
+      }
+
+      setAusenciasAdmin(data || []);
+    } catch (error) {
+      console.error('❌ Error inesperado al cargar ausencias:', error);
+    }
+  };
+
+  // Función helper para verificar si una fecha+clase está bloqueada por ausencia
+  const estaClaseBloqueada = (fecha: Date, claseNumero?: number): boolean => {
+    const fechaStr = format(fecha, 'yyyy-MM-dd');
+    
+    
+    const bloqueada = ausenciasAdmin.some(ausencia => {
+      // Verificar ausencia única
+      if (ausencia.tipo_ausencia === 'unica') {
+        const fechaAusencia = format(new Date(ausencia.fecha_inicio), 'yyyy-MM-dd');
+        
+        
+        // Si la fecha coincide
+        if (fechaAusencia === fechaStr) {
+          // Si no hay clases_canceladas específicas, se bloquean todas
+          if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
+            return true;
+          }
+          // Si hay clases específicas, verificar si esta clase está en la lista
+          if (claseNumero && ausencia.clases_canceladas.includes(claseNumero)) {
+            return true;
+          }
+        }
+      }
+      
+      // Verificar ausencia por período
+      if (ausencia.tipo_ausencia === 'periodo') {
+        const fechaInicio = format(new Date(ausencia.fecha_inicio), 'yyyy-MM-dd');
+        const fechaFin = ausencia.fecha_fin ? format(new Date(ausencia.fecha_fin), 'yyyy-MM-dd') : fechaInicio;
+        
+        // Si la fecha está dentro del período
+        if (fechaStr >= fechaInicio && fechaStr <= fechaFin) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+
+    return bloqueada;
+  };
 
   // Cargar horarios recurrentes del usuario
   const cargarHorariosRecurrentes = async (forceReload = false) => {
@@ -338,6 +402,7 @@ export const RecurringScheduleView = () => {
       // Cargar datos iniciales con loading visible
       cargarHorariosRecurrentes();
       cargarDatosPerfil();
+      cargarAusenciasAdmin(); // Cargar ausencias del admin
       
       // Timeout de seguridad para evitar loading infinito
       const timeoutId = setTimeout(() => {
@@ -377,6 +442,20 @@ export const RecurringScheduleView = () => {
     return () => window.removeEventListener('horariosRecurrentes:updated', handler);
   }, []);
 
+  // Escuchar cambios en ausencias del admin
+  useEffect(() => {
+    const handler = async () => {
+      console.log('🔄 Evento ausenciasAdmin:updated recibido');
+      await cargarAusenciasAdmin();
+      // Recargar clases del mes para aplicar los cambios
+      setTimeout(() => {
+        cargarClasesDelMes(true);
+      }, 100);
+    };
+    window.addEventListener('ausenciasAdmin:updated', handler);
+    return () => window.removeEventListener('ausenciasAdmin:updated', handler);
+  }, []);
+
   // Cargar clases del mes (horarios recurrentes + turnos variables)
   const cargarClasesDelMes = async (forceReload = false) => {
     if (!user?.id) return;
@@ -385,17 +464,22 @@ export const RecurringScheduleView = () => {
     const cachedKey = `clasesDelMes_${monthKey}`;
     const lastLoadKey = `lastClasesLoadTime_${monthKey}`;
     
-    // Verificar si necesitamos recargar (cada 3 minutos o si es forzado)
-    const now = Date.now();
-    const threeMinutes = 3 * 60 * 1000;
-    const lastClasesLoadTime = parseInt(localStorage.getItem(lastLoadKey) || '0');
-    const shouldReload = forceReload || (now - lastClasesLoadTime) > threeMinutes;
-
-    if (!shouldReload) {
-      const cached = localStorage.getItem(cachedKey);
-      if (cached) {
-        setClasesDelMes(JSON.parse(cached));
-        return; // Usar datos del caché
+    // Siempre recargar si hay ausencias del admin (para aplicar bloqueos)
+    const hasAusenciasAdmin = ausenciasAdmin.length > 0;
+    
+    if (!hasAusenciasAdmin) {
+      // Solo usar caché si no hay ausencias del admin
+      const now = Date.now();
+      const threeMinutes = 3 * 60 * 1000;
+      const lastClasesLoadTime = parseInt(localStorage.getItem(lastLoadKey) || '0');
+      const shouldReload = forceReload || (now - lastClasesLoadTime) > threeMinutes;
+      
+      if (!shouldReload) {
+        const cached = localStorage.getItem(cachedKey);
+        if (cached) {
+          setClasesDelMes(JSON.parse(cached));
+          return; // Usar datos del caché
+        }
       }
     }
 
@@ -407,6 +491,7 @@ export const RecurringScheduleView = () => {
         start: startOfMonth(currentMonth), 
         end: endOfMonth(currentMonth) 
       });
+
 
       const todasLasClases = [];
       
@@ -423,13 +508,13 @@ export const RecurringScheduleView = () => {
         horariosActuales = horariosDB || [];
       }
       
-      // Cargar horarios recurrentes si existen
-      if (horariosActuales.length > 0) {
-        for (const dia of diasDelMes) {
-          const clasesDelDia = await getClasesDelDia(dia, horariosActuales);
-          todasLasClases.push(...clasesDelDia);
-        }
+    // Cargar horarios recurrentes si existen
+    if (horariosActuales.length > 0) {
+      for (const dia of diasDelMes) {
+        const clasesDelDia = await getClasesDelDia(dia, horariosActuales);
+        todasLasClases.push(...clasesDelDia);
       }
+    }
 
       // Cargar turnos variables del mes
       const { data: turnosVariables, error } = await supabase
@@ -470,7 +555,7 @@ export const RecurringScheduleView = () => {
       
       // Guardar en localStorage
       localStorage.setItem(cachedKey, JSON.stringify(todasLasClases));
-      localStorage.setItem(lastLoadKey, now.toString());
+      localStorage.setItem(lastLoadKey, Date.now().toString());
     } catch (error) {
       console.error('Error al cargar clases del mes:', error);
     } finally {
@@ -478,10 +563,15 @@ export const RecurringScheduleView = () => {
     }
   };
 
-  // Cargar clases del mes cuando cambien los horarios o el mes
+  // Cargar clases del mes cuando cambien los horarios, el mes o las ausencias del admin
   useEffect(() => {
     cargarClasesDelMes();
-  }, [horariosRecurrentes, currentMonth]);
+  }, [horariosRecurrentes, currentMonth, ausenciasAdmin]);
+
+  // Recargar ausencias cuando cambie el mes
+  useEffect(() => {
+    cargarAusenciasAdmin();
+  }, [currentMonth]);
 
   // Generar días del mes actual
   const diasDelMes = useMemo(() => {
@@ -495,6 +585,16 @@ export const RecurringScheduleView = () => {
     const diaSemana = dia.getDay();
     const horariosAFiltrar = horariosParaUsar || horariosRecurrentes;
     const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemana);
+    
+    // Debug temporal para ver qué días se están procesando
+    if (format(dia, 'yyyy-MM-dd') === '2025-10-22' || format(dia, 'yyyy-MM-dd') === '2025-10-23') {
+      console.log('🔍 GETCLASESDELDIA:', {
+        dia: format(dia, 'yyyy-MM-dd'),
+        diaSemana,
+        horariosDelDia: horariosDelDia.length,
+        horarios: horariosDelDia
+      });
+    }
     
     if (horariosDelDia.length === 0) return [];
 
@@ -510,18 +610,24 @@ export const RecurringScheduleView = () => {
       cancelaciones?.map(c => `${c.turno_hora_inicio}-${c.turno_hora_fin}`) || []
     );
 
-    // Mapear horarios con su estado de cancelación
-    const clasesConCancelaciones = horariosDelDia.map((horario) => {
-      const claveCancelacion = `${horario.hora_inicio}-${horario.hora_fin}`;
-      return {
-        id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
-        dia,
-        horario: {
-          ...horario,
-          cancelada: cancelacionesSet.has(claveCancelacion)
-        }
-      };
-    });
+    // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
+    const clasesConCancelaciones = horariosDelDia
+      .map((horario) => {
+        const claveCancelacion = `${horario.hora_inicio}-${horario.hora_fin}`;
+        const estaBloqueada = estaClaseBloqueada(dia, horario.clase_numero);
+        
+        
+        
+        return {
+          id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+          dia,
+          horario: {
+            ...horario,
+            cancelada: cancelacionesSet.has(claveCancelacion),
+            bloqueada: estaBloqueada
+          }
+        };
+      });
 
     return clasesConCancelaciones;
   };
@@ -537,7 +643,7 @@ export const RecurringScheduleView = () => {
 
   // Manejar click en clase
   const handleClaseClick = (clase: ClaseDelDia) => {
-    if (clase.horario.cancelada || isFechaPasada(clase.dia)) return;
+    if (clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia)) return;
     setSelectedClase(clase);
     setShowModal(true);
   };
@@ -884,11 +990,13 @@ export const RecurringScheduleView = () => {
                             className={`border-b last:border-b-0 transition-colors ${
                               clase.horario.cancelada 
                                 ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
-                                : clase.horario.esVariable
-                                  ? 'bg-green-50 dark:bg-green-950/20'
-                                  : isFechaPasada(clase.dia)
-                                    ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50'
-                                    : 'hover:bg-muted/30 cursor-pointer'
+                                : clase.horario.bloqueada
+                                  ? 'bg-yellow-50 dark:bg-yellow-950/20 opacity-70'
+                                  : clase.horario.esVariable
+                                    ? 'bg-green-50 dark:bg-green-950/20'
+                                    : isFechaPasada(clase.dia)
+                                      ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50'
+                                      : 'hover:bg-muted/30 cursor-pointer'
                             }`}
                             onClick={() => handleClaseClick(clase)}
                           >
@@ -899,6 +1007,11 @@ export const RecurringScheduleView = () => {
                               {clase.horario.cancelada && (
                                 <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
                                   CANCELADA
+                                </div>
+                              )}
+                              {clase.horario.bloqueada && (
+                                <div className="text-[10px] sm:text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                                  CLASE BLOQUEADA
                                 </div>
                               )}
                             </td>
@@ -916,9 +1029,11 @@ export const RecurringScheduleView = () => {
                               <span className={`text-xs sm:text-sm font-medium ${
                                 clase.horario.cancelada 
                                   ? 'text-red-600 dark:text-red-400 line-through' 
-                                  : clase.horario.esVariable
-                                    ? 'text-green-600 dark:text-green-400'
-                                    : ''
+                                  : clase.horario.bloqueada
+                                    ? 'text-yellow-600 dark:text-yellow-400'
+                                    : clase.horario.esVariable
+                                      ? 'text-green-600 dark:text-green-400'
+                                      : ''
                               }`}>
                                 {formatTime(clase.horario.hora_inicio)} - {formatTime(clase.horario.hora_fin)}
                               </span>
@@ -937,9 +1052,9 @@ export const RecurringScheduleView = () => {
                                   handleClaseClick(clase);
                                 }}
                                 className="h-8 px-3 text-xs sm:text-sm"
-                                disabled={clase.horario.cancelada || isFechaPasada(clase.dia)}
+                                disabled={clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia)}
                               >
-                                {clase.horario.cancelada ? 'Cancelada' : isFechaPasada(clase.dia) ? 'No disponible' : 'Ver Detalles'}
+                                {clase.horario.cancelada ? 'Cancelada' : clase.horario.bloqueada ? 'Bloqueada' : isFechaPasada(clase.dia) ? 'No disponible' : 'Ver Detalles'}
                               </Button>
                             </td>
                           </tr>
