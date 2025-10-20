@@ -45,7 +45,7 @@ export const AuthForm: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-[20px] text-center">
+          <CardTitle className="text-lg text-center">
             {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </CardTitle>
           <CardDescription className="text-xs text-center">
@@ -58,14 +58,14 @@ export const AuthForm: React.FC = () => {
         <CardContent>
           <Tabs value={isLogin ? 'login' : 'register'} onValueChange={(value) => setIsLogin(value === 'login')}>
             <TabsList className="grid w-full grid-cols-2 bg-muted">
-              <TabsTrigger value="login" className="text-muted-foreground data-[state=active]:text-foreground">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="register" className="text-muted-foreground data-[state=active]:text-foreground">¿No tenés cuenta?</TabsTrigger>
+              <TabsTrigger value="login" className="text-gray-500 data-[state=active]:text-gray-700">Iniciar Sesión</TabsTrigger>
+              <TabsTrigger value="register" className="text-gray-500 data-[state=active]:text-gray-700">¿No tenés cuenta?</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login" className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-[10px]">Email</Label>
+                  <Label htmlFor="email" className="text-xs">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -74,14 +74,14 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 text-xs"
+                      className="pl-10 text-sm"
                       required
                     />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="password" className="text-[10px]">Contraseña</Label>
+                  <Label htmlFor="password" className="text-xs">Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -89,7 +89,7 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 text-xs"
+                      className="pl-10 text-sm"
                       required
                     />
                   </div>
@@ -101,21 +101,21 @@ export const AuthForm: React.FC = () => {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full bg-[#2E2E2E] hover:bg-[#3A3A3A] text-white" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-red-500 hover:bg-red-600 text-white" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Iniciando sesión...
+                      CAMBIO VISIBLE...
                     </>
                   ) : (
-                    'Iniciar Sesión'
+                    'BOTON ROJO'
                   )}
                 </Button>
 
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full text-muted-foreground hover:text-foreground"
+                  className="w-full text-gray-500 hover:text-gray-700"
                   onClick={handlePasswordReset}
                   disabled={!email || isLoading}
                 >
@@ -127,7 +127,7 @@ export const AuthForm: React.FC = () => {
             <TabsContent value="register" className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="register-email" className="text-[10px]">Email</Label>
+                  <Label htmlFor="register-email" className="text-xs">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -136,14 +136,14 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 text-xs"
+                      className="pl-10 text-sm"
                       required
                     />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="register-password" className="text-[10px]">Contraseña</Label>
+                  <Label htmlFor="register-password" className="text-xs">Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -151,14 +151,14 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 text-xs"
+                      className="pl-10 text-sm"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password" className="text-[10px]">Confirmar Contraseña</Label>
+                  <Label htmlFor="confirm-password" className="text-xs">Confirmar Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -166,7 +166,7 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10 text-xs"
+                      className="pl-10 text-sm"
                       required
                     />
                   </div>
@@ -178,7 +178,7 @@ export const AuthForm: React.FC = () => {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full bg-[#2E2E2E] hover:bg-[#3A3A3A] text-white" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-red-500 hover:bg-red-600 text-white" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />

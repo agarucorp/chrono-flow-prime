@@ -194,20 +194,15 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo */}
-        <div className="text-center animate-fade-in">
-          <div className="mx-auto w-32 h-32 mb-6">
-            <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
-          </div>
-        </div>
+        {/* Logo - Removed for mobile */}
 
         {/* Login/Register Card */}
         <Card className="shadow-elegant animate-slide-up">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
+            <CardTitle className="text-lg md:text-xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
-            <CardDescription className="text-center">
+            <CardDescription className="text-xs md:text-sm text-center">
               {isRegisterMode 
                 ? currentStep === 1 
                   ? "Complete su información personal" 
@@ -236,7 +231,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                 // Login Form
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email" className="text-xs">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -245,14 +240,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         placeholder="Ingrese su email"
                         value={credentials.email}
                         onChange={(e) => setCredentials(prev => ({ ...prev, email: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        className="pl-10 text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
                     </div>
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="password">Contraseña</Label>
+                    <Label htmlFor="password" className="text-xs">Contraseña</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -261,7 +256,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         placeholder="Ingrese su contraseña"
                         value={credentials.password}
                         onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        className="pl-10 text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
                       <button
@@ -414,7 +409,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-primary hover:shadow-md transition-all duration-300 h-11"
+                className="w-full bg-gray-800 hover:bg-gray-700 text-white transition-all duration-300 h-11"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -443,7 +438,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             </form>
 
             <div className="mt-6 text-center space-y-3">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs text-muted-foreground">
                 {isRegisterMode ? (
                   <>
                     ¿Ya tienes cuenta?{" "}
@@ -460,14 +455,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   </>
                 ) : (
                   <>
-                    ¿No tienes cuenta?{" "}
+                    ¿No tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-primary hover:underline font-medium"
+                      className="text-gray-500 hover:text-gray-700 font-medium"
                     >
                       Crear cuenta
                     </button>
@@ -476,11 +471,11 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               </p>
               
               {!isRegisterMode && (
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs text-muted-foreground">
                   ¿Olvidaste tu contraseña?{" "}
                   <button 
                     onClick={handleRecoverMode}
-                    className="text-primary hover:underline font-medium"
+                    className="text-gray-500 hover:text-gray-700 font-medium"
                   >
                     Recuperar acceso
                   </button>
@@ -492,7 +487,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
         {/* Footer */}
         <div className="text-center mt-8">
-          <p className="text-sm text-muted-foreground">© Powered by AgaruCorp</p>
+          <p className="text-xs text-muted-foreground">© Powered by AgaruCorp</p>
         </div>
 
       </div>

@@ -8,6 +8,13 @@ export default {
 		"./app/**/*.{ts,tsx}",
 		"./src/**/*.{ts,tsx}",
 	],
+	safelist: [
+		'text-[20px]',
+		'text-[10px]',
+		'text-xs',
+		'bg-[#2E2E2E]',
+		'hover:bg-[#3A3A3A]'
+	],
 	prefix: "",
 	theme: {
 		container: {

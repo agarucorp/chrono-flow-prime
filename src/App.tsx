@@ -108,26 +108,22 @@ const Dashboard = () => {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="bg-card border-b shadow-card">
+      <header className="bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Logo centrado */}
-            <div className="flex-1 flex justify-center">
-              <div className="w-32 h-12">
-                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
-              </div>
-            </div>
+            {/* Spacer para empujar botones a la derecha */}
+            <div className="flex-1"></div>
             
-            {/* Menú de usuario */}
+            {/* Menú de usuario - ubicado a la derecha */}
             <div className="flex items-center gap-3">
               {/* Botón de soporte - visible solo en desktop */}
               <button
                 type="button"
                 aria-label="Soporte"
-                className="hidden sm:inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-all duration-200 hover:scale-105 group"
+                className="hidden sm:inline-flex items-center justify-center h-10 w-10 transition-all duration-200 hover:scale-105 group"
                 onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
               >
-                <HelpCircle className="h-5 w-5 text-primary group-hover:text-primary transition-colors" />
+                <HelpCircle className="h-5 w-5 text-gray-300 group-hover:text-white transition-colors" />
               </button>
               
               {/* Avatar - visible solo en desktop */}
@@ -163,14 +159,14 @@ const Dashboard = () => {
                 </DropdownMenu>
               </div>
               
-              {/* Botón de soporte - visible solo en mobile */}
+              {/* Botón de soporte - visible solo en mobile, ubicado a la derecha */}
               <button
                 type="button"
                 aria-label="Soporte"
-                className="sm:hidden inline-flex items-center justify-center h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 active:scale-95 transition-all duration-200 group"
+                className="sm:hidden inline-flex items-center justify-center h-10 w-10 active:scale-95 transition-all duration-200 group"
                 onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
               >
-                <HelpCircle className="h-5 w-5 text-primary transition-colors" />
+                <HelpCircle className="h-5 w-5 text-gray-300 group-hover:text-white transition-colors" />
               </button>
             </div>
           </div>

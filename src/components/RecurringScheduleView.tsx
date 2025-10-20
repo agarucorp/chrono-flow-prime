@@ -872,11 +872,11 @@ export const RecurringScheduleView = () => {
                 <button
                   onClick={() => handleViewChange('mis-clases')}
                   className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'mis-clases' ? 'text-primary' : 'text-muted-foreground'
+                    activeView === 'mis-clases' ? 'text-white' : 'text-muted-foreground'
                   }`}
                   aria-current={activeView === 'mis-clases'}
                 >
-                  <Dumbbell className={`h-5 w-5 ${activeView === 'mis-clases' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  <Dumbbell className={`h-5 w-5 ${activeView === 'mis-clases' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
                   {activeView === 'mis-clases' && <span className="leading-none">Mis Clases</span>}
                   {activeView === 'mis-clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                 </button>
@@ -884,12 +884,12 @@ export const RecurringScheduleView = () => {
                 <button
                   onClick={() => handleViewChange('turnos-disponibles')}
                   className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'turnos-disponibles' ? 'text-primary' : 'text-muted-foreground'
+                    activeView === 'turnos-disponibles' ? 'text-white' : 'text-muted-foreground'
                   }`}
                   aria-current={activeView === 'turnos-disponibles'}
                 >
                   <div className="relative">
-                    <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                    <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
                     {turnosCancelados.length > 0 && (
                       <Badge variant="default" className="absolute -top-1 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[8px] font-bold">
                         {turnosCancelados.length}
@@ -903,11 +903,11 @@ export const RecurringScheduleView = () => {
                 <button
                   onClick={() => handleViewChange('perfil')}
                   className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'perfil' ? 'text-primary' : 'text-muted-foreground'
+                    activeView === 'perfil' ? 'text-white' : 'text-muted-foreground'
                   }`}
                   aria-current={activeView === 'perfil'}
                 >
-                  <UserIcon className={`h-5 w-5 ${activeView === 'perfil' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
+                  <UserIcon className={`h-5 w-5 ${activeView === 'perfil' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
                   {activeView === 'perfil' && <span className="leading-none">Perfil</span>}
                   {activeView === 'perfil' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                 </button>
@@ -955,7 +955,7 @@ export const RecurringScheduleView = () => {
                   <p className="text-muted-foreground">No tienes clases configuradas</p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <div>
                   <table className="w-full table-fixed">
                     <thead>
                       <tr className="border-b bg-muted/50">
@@ -1144,7 +1144,7 @@ export const RecurringScheduleView = () => {
               <p>No hay turnos cancelados disponibles</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-x-hidden">
               {turnosCancelados.map((turno) => (
                 <Card key={turno.id} className="hover:bg-muted/50 transition-colors flex flex-col">
                   <CardContent className="p-4 flex flex-col h-full">
@@ -1178,7 +1178,7 @@ export const RecurringScheduleView = () => {
                       size="sm"
                       onClick={() => handleReservarClick(turno)}
                       disabled={turno.reservado}
-                      className="w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm"
+                      className="w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm bg-gray-600 hover:bg-gray-700 text-white"
                     >
                       {turno.reservado ? 'Reservado' : 'Reservar Clase'}
                     </Button>
