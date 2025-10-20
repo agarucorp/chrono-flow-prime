@@ -366,6 +366,16 @@ export const useSystemConfig = () => {
     cargarConfiguraciones();
   }, []);
 
+  // Escuchar cambios en ausencias del admin
+  useEffect(() => {
+    const handler = async () => {
+      console.log('🔄 useSystemConfig: Recargando ausencias por cambio del admin');
+      await cargarConfiguraciones();
+    };
+    window.addEventListener('ausenciasAdmin:updated', handler);
+    return () => window.removeEventListener('ausenciasAdmin:updated', handler);
+  }, []);
+
   return {
     // Estados
     horariosFijos,

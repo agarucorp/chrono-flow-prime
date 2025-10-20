@@ -83,7 +83,7 @@ export const TurnoManagement = () => {
     obtenerTarifaActual,
     configuracionCapacidad
   } = useSystemConfig();
-  const { createAusenciaUnica, fetchAusencias, deleteAusencia } = useAdmin();
+  const { createAusenciaUnica, createAusenciaPeriodo, fetchAusencias, deleteAusencia } = useAdmin();
   const { toast } = useToast();
 
   // Cargar tarifas escalonadas al montar
@@ -253,12 +253,14 @@ export const TurnoManagement = () => {
         const unicas = ausencias
           .filter((a: any) => a.tipo_ausencia === 'unica')
           .map((a: any) => {
-            const fecha = new Date(a.fecha_inicio);
+            // Extraer fecha directamente del string para evitar problemas de zona horaria
+            const fechaStr = a.fecha_inicio.split('T')[0]; // Obtener solo la parte de fecha YYYY-MM-DD
+            const [año, mes, dia] = fechaStr.split('-');
             return {
               id: a.id,
-              dia: fecha.getDate().toString().padStart(2, '0'),
-              mes: (fecha.getMonth() + 1).toString().padStart(2, '0'),
-              año: fecha.getFullYear().toString(),
+              dia: dia,
+              mes: mes,
+              año: año,
               clasesCanceladas: a.clases_canceladas || []
             };
           });
@@ -267,8 +269,8 @@ export const TurnoManagement = () => {
           .filter((a: any) => a.tipo_ausencia === 'periodo')
           .map((a: any) => ({
             id: a.id,
-            fechaDesde: a.fecha_inicio,
-            fechaHasta: a.fecha_fin
+            fechaDesde: a.fecha_inicio.split('T')[0], // Solo la fecha YYYY-MM-DD
+            fechaHasta: a.fecha_fin.split('T')[0] // Solo la fecha YYYY-MM-DD
           }));
 
         setAusenciasUnicas(unicas);
@@ -545,8 +547,10 @@ export const TurnoManagement = () => {
     if (nuevaAusenciaUnica.fechaCompleta && nuevaAusenciaUnica.clasesCanceladas.length > 0) {
       try {
         // Guardar en la base de datos
+        // Agregar hora del mediodía para evitar problemas de zona horaria
+        const fechaConHora = `${nuevaAusenciaUnica.fechaCompleta}T12:00:00`;
         const result = await createAusenciaUnica(
-          nuevaAusenciaUnica.fechaCompleta, // fecha en formato ISO
+          fechaConHora, // fecha en formato ISO con hora
           nuevaAusenciaUnica.clasesCanceladas,
           null // motivo opcional
         );
@@ -598,15 +602,54 @@ export const TurnoManagement = () => {
     }
   };
 
-  const confirmarAusenciaPeriodo = () => {
-    const nuevaAusencia: AusenciaPeriodo = {
-      id: Date.now().toString(),
-      ...nuevaAusenciaPeriodo
-    };
-    setAusenciasPeriodo(prev => [...prev, nuevaAusencia]);
-    setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
-    setTipoAusencia(null);
-    setMostrarResumenAusencia(false);
+  const confirmarAusenciaPeriodo = async () => {
+    try {
+      // Guardar en la base de datos
+      // Agregar hora del mediodía para evitar problemas de zona horaria
+      const fechaDesdeConHora = `${nuevaAusenciaPeriodo.fechaDesde}T12:00:00`;
+      const fechaHastaConHora = `${nuevaAusenciaPeriodo.fechaHasta}T12:00:00`;
+      const result = await createAusenciaPeriodo(
+        fechaDesdeConHora,
+        fechaHastaConHora,
+        null // motivo opcional
+      );
+
+      if (result.success) {
+        toast({
+          title: 'Ausencia por período creada',
+          description: `Se bloquearon todas las clases desde ${nuevaAusenciaPeriodo.fechaDesde} hasta ${nuevaAusenciaPeriodo.fechaHasta}`,
+        });
+
+        // Guardar también en el estado local para mostrar en la interfaz
+        const nuevaAusencia: AusenciaPeriodo = {
+          id: result.data.id,
+          fechaDesde: nuevaAusenciaPeriodo.fechaDesde,
+          fechaHasta: nuevaAusenciaPeriodo.fechaHasta
+        };
+        setAusenciasPeriodo(prev => [...prev, nuevaAusencia]);
+
+        // Disparar evento para que los usuarios recarguen sus calendarios
+        window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+
+        // Limpiar formulario
+        setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
+        setTipoAusencia(null);
+        setMostrarResumenAusencia(false);
+      } else {
+        toast({
+          title: 'Error',
+          description: result.error || 'No se pudo crear la ausencia por período',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      console.error('Error guardando ausencia por período:', error);
+      toast({
+        title: 'Error',
+        description: 'Error inesperado al guardar la ausencia por período',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEliminarAusencia = async (id: string, tipo: 'unica' | 'periodo') => {
