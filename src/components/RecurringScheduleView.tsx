@@ -878,7 +878,7 @@ export const RecurringScheduleView = () => {
                 >
                   <Dumbbell className={`h-5 w-5 ${activeView === 'mis-clases' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
                   {activeView === 'mis-clases' && <span className="leading-none">Mis Clases</span>}
-                  {activeView === 'mis-clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
+                  {activeView === 'mis-clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                 </button>
                 {/* Vacantes */}
                 <button
@@ -897,7 +897,7 @@ export const RecurringScheduleView = () => {
                     )}
                   </div>
                   {activeView === 'turnos-disponibles' && <span className="leading-none">Vacantes</span>}
-                  {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
+                  {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                 </button>
                 {/* Perfil */}
                 <button
@@ -909,7 +909,7 @@ export const RecurringScheduleView = () => {
                 >
                   <UserIcon className={`h-5 w-5 ${activeView === 'perfil' ? 'text-primary mb-1' : 'text-muted-foreground'}`} />
                   {activeView === 'perfil' && <span className="leading-none">Perfil</span>}
-                  {activeView === 'perfil' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-orange-500" />}
+                  {activeView === 'perfil' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                 </button>
               </div>
             </div>
@@ -1232,8 +1232,8 @@ export const RecurringScheduleView = () => {
               </div>
 
               {/* Aviso de política de cancelación */}
-              <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <p className="text-sm text-amber-800 dark:text-amber-200">
+              <div className="bg-muted/40 border border-border rounded-lg p-3">
+                <p className="text-sm text-muted-foreground">
                   <strong>Importante:</strong> si no cancelás la clase antes de las 24hs del comienzo de la misma, se te cobrará el 100% del valor.
                 </p>
               </div>

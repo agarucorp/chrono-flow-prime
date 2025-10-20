@@ -82,7 +82,7 @@ export default function Admin() {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
-  const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'debe_first' | 'no_debe_first'>('default');
+  const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'pendiente_first' | 'pagado_first'>('default');
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
   const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }>>([]);
   const [balanceTotals, setBalanceTotals] = useState<{ totalAbonado: number; totalPendiente: number }>({ totalAbonado: 0, totalPendiente: 0 });
@@ -94,7 +94,7 @@ export default function Admin() {
   const [selectedUserForHistory, setSelectedUserForHistory] = useState<string | null>(null);
   const [userHistory, setUserHistory] = useState<Array<{ anio: number; mes: string; monto: number; estado: string }>>([]);
   // Estado de pago por usuario (persistido localmente)
-  type EstadoPago = 'debe' | 'no_debe';
+  type EstadoPago = 'pendiente' | 'pagado';
   const STORAGE_PAGO = 'adminPaymentStatus';
   const leerEstadoPagoMap = (): Record<string, EstadoPago> => {
     try {
@@ -112,7 +112,7 @@ export default function Admin() {
   // Estado reactivo para forzar re-render al cambiar
   const [estadoPagoMap, setEstadoPagoMap] = useState<Record<string, EstadoPago>>(() => leerEstadoPagoMap());
   const getEstadoPagoLocal = (userId: string): EstadoPago => {
-    return estadoPagoMap[userId] || 'debe'; // por defecto Debe (rojo)
+    return estadoPagoMap[userId] || 'pendiente'; // por defecto Pendiente (rojo)
   };
   const setEstadoPagoLocal = (userId: string, estado: EstadoPago) => {
     setEstadoPagoMap(prev => {
@@ -450,21 +450,21 @@ export default function Admin() {
     }
     
     const getPaymentStatus = (userId: string) => {
-      return parseInt(userId.slice(-1), 16) % 2 === 0 ? 'debe' : 'no_debe';
+      return parseInt(userId.slice(-1), 16) % 2 === 0 ? 'pendiente' : 'pagado';
     };
     
     const statusA = getPaymentStatus(a.id);
     const statusB = getPaymentStatus(b.id);
     
-    if (paymentSortOrder === 'debe_first') {
-      // Los que deben primero
-      if (statusA === 'debe' && statusB === 'no_debe') return -1;
-      if (statusA === 'no_debe' && statusB === 'debe') return 1;
+    if (paymentSortOrder === 'pendiente_first') {
+      // Los pendientes primero
+      if (statusA === 'pendiente' && statusB === 'pagado') return -1;
+      if (statusA === 'pagado' && statusB === 'pendiente') return 1;
       return 0;
-    } else if (paymentSortOrder === 'no_debe_first') {
-      // Los que no deben primero
-      if (statusA === 'no_debe' && statusB === 'debe') return -1;
-      if (statusA === 'debe' && statusB === 'no_debe') return 1;
+    } else if (paymentSortOrder === 'pagado_first') {
+      // Los pagados primero
+      if (statusA === 'pagado' && statusB === 'pendiente') return -1;
+      if (statusA === 'pendiente' && statusB === 'pagado') return 1;
       return 0;
     }
     
@@ -488,9 +488,9 @@ export default function Admin() {
   // Función para alternar ordenamiento por pago
   const togglePaymentSort = () => {
     if (paymentSortOrder === 'default') {
-      setPaymentSortOrder('debe_first');
-    } else if (paymentSortOrder === 'debe_first') {
-      setPaymentSortOrder('no_debe_first');
+      setPaymentSortOrder('pendiente_first');
+    } else if (paymentSortOrder === 'pendiente_first') {
+      setPaymentSortOrder('pagado_first');
     } else {
       setPaymentSortOrder('default');
     }
@@ -666,54 +666,39 @@ export default function Admin() {
       {/* Header */}
       <header className="bg-card border-b shadow-card w-full">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16 w-full">
+          <div className="flex justify-between items-center h-12 md:h-16 w-full">
             {/* Navbar opciones (desktop) centrada */}
             <div className="hidden md:flex flex-1 justify-center items-center gap-8">
-              <button onClick={() => handleTabChange('usuarios')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='usuarios' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('usuarios')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='usuarios' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Usuarios
-                {activeTab==='usuarios' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+                {activeTab==='usuarios' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('balance')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='balance' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('balance')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='balance' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Balance
-                {activeTab==='balance' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+                {activeTab==='balance' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('turnos')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='turnos' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('turnos')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='turnos' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Configuración
-                {activeTab==='turnos' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+                {activeTab==='turnos' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('calendario')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='calendario' ? 'text-primary font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('calendario')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='calendario' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Agenda
-                {activeTab==='calendario' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-primary rounded-full"></span>}
+                {activeTab==='calendario' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
               </button>
             </div>
             
-            {/* Menú de usuario */}
+            {/* Espacio vacío en mobile para empujar el botón a la derecha */}
+            <div className="md:hidden flex-1"></div>
+            
+            {/* Botón de cerrar sesión - visible en desktop y mobile */}
             <div className="flex items-center flex-shrink-0">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    className="relative h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 transition-colors flex-shrink-0"
-                  >
-                    <span className="text-sm font-medium text-primary">
-                      {getInitials(user?.email || '')}
-                    </span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56" align="end" forceMount>
-                  <div className="flex flex-col space-y-1 p-2">
-                    <p className="text-sm font-medium leading-none">{getUserName(user?.email || '')}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user?.email}
-                    </p>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setShowLogoutConfirm(true)} className="text-red-600">
-                    <LogOut className="mr-2 h-4 w-4" />
-                    <span>Cerrar Sesión</span>
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <Button
+                variant="ghost"
+                className="relative h-10 w-10 p-0 hover:bg-muted transition-colors flex-shrink-0"
+                onClick={() => setShowLogoutConfirm(true)}
+              >
+                <LogOut className="h-6 w-6 text-accent-foreground" />
+              </Button>
             </div>
           </div>
         </div>
@@ -849,12 +834,7 @@ export default function Admin() {
                       <p className="text-xs font-medium text-muted-foreground uppercase">Nombre</p>
                     </div>
                     <div className="w-24 text-center">
-                      <button 
-                        onClick={togglePaymentSort}
-                        className="text-xs font-medium text-muted-foreground uppercase hover:text-foreground transition-colors cursor-pointer"
-                      >
-                        Pago
-                      </button>
+                      <p className="text-xs font-medium text-muted-foreground uppercase">Asistencia</p>
                     </div>
                   </div>
                   
@@ -863,7 +843,7 @@ export default function Admin() {
                     {sortedUsers
                       .filter(u => !(u.email || '').toLowerCase().includes('test'))
                       .map((user) => {
-                      const estadoPago = getEstadoPago(user.id);
+                      const diasAsistencia = getDiasAsistencia(user.id);
                       
                       return (
                         <div 
@@ -880,15 +860,7 @@ export default function Admin() {
                             <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
                           </div>
                           <div className="w-24 text-center flex-shrink-0">
-                            <span className={`text-xs ${
-                              estadoPago === 'debe'
-                                ? 'text-red-600 font-medium'
-                                : estadoPago === 'no_debe'
-                                ? 'text-green-600 font-medium'
-                                : 'text-muted-foreground'
-                            }`}>
-                              {estadoPago}
-                            </span>
+                            <p className="text-[10px] text-muted-foreground">{diasAsistencia}</p>
                           </div>
                         </div>
                       );
@@ -921,7 +893,7 @@ export default function Admin() {
           <TabsContent value="balance" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <div className="mb-6 flex items-center justify-end gap-2">
               <Select value={String(selectedMonth)} onValueChange={(v)=>setSelectedMonth(parseInt(v))}>
-                <SelectTrigger className="w-[120px] h-8"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectTrigger className="w-[120px] h-6 md:h-8 text-xs md:text-sm"><SelectValue placeholder="Mes" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="1">Enero</SelectItem>
                   <SelectItem value="2">Febrero</SelectItem>
@@ -938,7 +910,7 @@ export default function Admin() {
                 </SelectContent>
               </Select>
               <Select value={String(selectedYear)} onValueChange={(v)=>setSelectedYear(parseInt(v))}>
-                <SelectTrigger className="w-[100px] h-8"><SelectValue placeholder="Año" /></SelectTrigger>
+                <SelectTrigger className="w-[100px] h-6 md:h-8 text-xs md:text-sm"><SelectValue placeholder="Año" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value={String(new Date().getFullYear()-1)}>{String(new Date().getFullYear()-1)}</SelectItem>
                   <SelectItem value={String(new Date().getFullYear())}>{String(new Date().getFullYear())}</SelectItem>
@@ -947,8 +919,26 @@ export default function Admin() {
               </Select>
             </div>
 
-            {/* KPIs */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            {/* KPIs - Mobile: una sola card con divisores */}
+            <div className="sm:hidden mb-6">
+              <Card className="p-3">
+                <div className="flex items-center justify-between pb-3 border-b">
+                  <div className="text-xs text-muted-foreground">Total a recibir</div>
+                  <div className="text-sm font-semibold">${(balanceTotals.totalAbonado + balanceTotals.totalPendiente).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                </div>
+                <div className="flex items-center justify-between py-3 border-b">
+                  <div className="text-xs text-muted-foreground">Recibido</div>
+                  <div className="text-sm font-semibold">${balanceTotals.totalAbonado.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                </div>
+                <div className="flex items-center justify-between pt-3">
+                  <div className="text-xs text-muted-foreground">Pendiente</div>
+                  <div className="text-sm font-semibold">${balanceTotals.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
+                </div>
+              </Card>
+            </div>
+
+            {/* KPIs - Desktop: 3 cards separadas */}
+            <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-muted-foreground">Monto total a recibir</CardTitle>
@@ -982,39 +972,39 @@ export default function Admin() {
                   <table className="w-full min-w-[820px]">
                     <thead>
                       <tr className="border-b">
-                        <th className="text-left p-3 font-medium text-sm min-w-[180px]">Usuario</th>
-                        <th className="text-left p-3 font-medium text-sm min-w-[120px]">Cuota</th>
-                        <th className="text-left p-3 font-medium text-sm min-w-[140px]">Estado de pago</th>
-                        <th className="text-left p-3 font-medium text-sm min-w-[120px]">Descuento</th>
-                        <th className="text-left p-3 font-medium text-sm min-w-[100px]">Acciones</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[180px]">Usuario</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[120px]">Cuota</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[140px]">Estado de pago</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[120px]">Descuento</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[100px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
                       {balanceRows.map(row => (
                         <tr key={row.usuario_id} className="border-b hover:bg-muted/50">
                           <td className="p-3">
-                            <p className="font-medium truncate">{row.nombre}</p>
+                            <p className="font-light md:font-medium truncate text-xs md:text-base">{row.nombre}</p>
                           </td>
                           <td className="p-3">
                             {row.descuento > 0 ? (
                               <div className="flex flex-col gap-1">
-                                <span className="text-sm text-muted-foreground line-through">
+                                <span className="text-xs md:text-sm text-muted-foreground line-through font-light md:font-normal">
                                   ${row.montoOriginal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
-                                <span className="text-sm font-medium text-green-600">
+                                <span className="text-sm md:text-sm font-light md:font-medium text-green-600">
                                   ${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </span>
                               </div>
                             ) : (
-                              <span className="text-sm font-medium">${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                              <span className="text-sm md:text-sm font-light md:font-medium">${row.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                             )}
                           </td>
                           <td className="p-3">
                             {/* Dropdown Debe / No debe (persistiendo en BD) */}
                             <Select
-                              value={row.estado === 'abonada' ? 'no_debe' : 'debe'}
+                              value={row.estado === 'abonada' ? 'pagado' : 'pendiente'}
                               onValueChange={async (v) => {
-                                const nuevoEstadoDb = (v === 'no_debe') ? 'abonada' : 'pendiente';
+                                const nuevoEstadoDb = (v === 'pagado') ? 'abonada' : 'pendiente';
                                 const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
                                 if (res.success) {
                                   // Recargar cuotas para reflejar los cambios
@@ -1050,8 +1040,8 @@ export default function Admin() {
                                 <SelectValue placeholder="Estado" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="debe"><span className="text-red-600">Debe</span></SelectItem>
-                                <SelectItem value="no_debe"><span className="text-green-600">No debe</span></SelectItem>
+                                <SelectItem value="pendiente"><span className="text-red-600">Pendiente</span></SelectItem>
+                                <SelectItem value="pagado"><span className="text-green-600">Pagado</span></SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
@@ -1353,7 +1343,7 @@ export default function Admin() {
                         <span className={`text-sm font-medium ${
                           item.estado === 'Abonado' ? 'text-green-600' : 
                           item.estado === 'Vencido' ? 'text-red-600' : 
-                          'text-amber-600'
+                          'text-muted-foreground'
                         }`}>
                           {item.estado}
                         </span>
@@ -1373,7 +1363,7 @@ export default function Admin() {
           <button
             onClick={() => handleTabChange('usuarios')}
             className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'usuarios' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'usuarios' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Users className="h-5 w-5" />
@@ -1383,7 +1373,7 @@ export default function Admin() {
           <button
             onClick={() => handleTabChange('balance')}
             className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'balance' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'balance' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Wallet className="h-5 w-5" />
@@ -1393,7 +1383,7 @@ export default function Admin() {
           <button
             onClick={() => handleTabChange('turnos')}
             className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'turnos' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'turnos' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Settings className="h-5 w-5" />
@@ -1403,7 +1393,7 @@ export default function Admin() {
           <button
             onClick={() => handleTabChange('calendario')}
             className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'calendario' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+              activeTab === 'calendario' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Calendar className="h-5 w-5" />

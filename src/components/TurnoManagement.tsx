@@ -675,7 +675,7 @@ export const TurnoManagement = () => {
               {/* CTA 1: Capacidad, tarifa y horarios */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Capacidad, tarifa y horarios
                   </div>
                 </DialogTrigger>
@@ -685,7 +685,7 @@ export const TurnoManagement = () => {
                   
                   <div className="space-y-4">
                     {/* Card para capacidad por clase */}
-                    <div className="p-3 border border-orange-500 rounded-lg bg-muted/50">
+                    <div className="p-3 border border-border rounded-lg bg-muted/50">
                       <div className="flex items-center justify-center gap-4">
                         <Label htmlFor="capacidad-maxima" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Capacidad por clase</Label>
                         <Select
@@ -863,7 +863,7 @@ export const TurnoManagement = () => {
                     <div className="w-full">
                       <div
                         onClick={handleAgregarHorario}
-                        className="h-10 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
+                        className="h-10 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
                         style={{ padding: '8px 16px', fontSize: '12px' }}
                       >
                         <Plus className="h-4 w-4" />
@@ -890,7 +890,7 @@ export const TurnoManagement = () => {
               {/* CTA 2: Editar ausencias */}
               <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-orange-500 text-muted-foreground hover:bg-orange-500 hover:text-white transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
+                  <div className="h-12 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Editar ausencias
                   </div>
                 </DialogTrigger>
@@ -921,7 +921,7 @@ export const TurnoManagement = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <Button
                           onClick={() => setTipoAusencia('unica')}
-                          className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
+                          className="h-24 flex flex-col items-center justify-center space-y-2 border-border"
                           variant="outline"
                           style={{ fontSize: '14px' }}
                         >
@@ -933,7 +933,7 @@ export const TurnoManagement = () => {
                         
             <Button
               onClick={() => setTipoAusencia('periodo')}
-              className="h-24 flex flex-col items-center justify-center space-y-2 border-orange-500"
+              className="h-24 flex flex-col items-center justify-center space-y-2 border-border"
               variant="outline"
               style={{ fontSize: '14px' }}
             >

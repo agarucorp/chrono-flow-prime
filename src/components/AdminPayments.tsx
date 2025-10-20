@@ -237,9 +237,9 @@ export const AdminPayments = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Pendientes</p>
-                <p className="text-2xl font-bold text-orange-600">{stats.pendientes}</p>
+                <p className="text-2xl font-bold text-foreground">{stats.pendientes}</p>
               </div>
-              <Clock className="h-8 w-8 text-orange-500" />
+              <Clock className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -294,7 +294,7 @@ export const AdminPayments = () => {
                 variant={filterStatus === 'pendiente' ? 'default' : 'outline'}
                 onClick={() => setFilterStatus('pendiente')}
                 size="sm"
-                className="text-orange-600"
+                className="text-muted-foreground"
               >
                 <Clock className="w-4 h-4 mr-2" />
                 Pendientes
@@ -360,7 +360,7 @@ export const AdminPayments = () => {
                     <td className="p-3">
                       <Badge 
                         variant={payment.estado === 'pagado' ? 'default' : 'secondary'}
-                        className={payment.estado === 'pagado' ? 'bg-green-500 hover:bg-green-600' : 'bg-orange-500 hover:bg-orange-600'}
+                        className={payment.estado === 'pagado' ? 'bg-green-500 hover:bg-green-600' : 'bg-accent hover:bg-accent/80'}
                       >
                         {payment.estado === 'pagado' ? (
                           <>
@@ -457,7 +457,7 @@ export const AdminPayments = () => {
                 <label className="text-sm font-medium">Estado</label>
                 <Badge 
                   variant={selectedPayment.estado === 'pagado' ? 'default' : 'secondary'}
-                  className={selectedPayment.estado === 'pagado' ? 'bg-green-500 hover:bg-green-600' : 'bg-orange-500 hover:bg-orange-600'}
+                  className={selectedPayment.estado === 'pagado' ? 'bg-green-500 hover:bg-green-600' : 'bg-accent hover:bg-accent/80'}
                 >
                   {selectedPayment.estado === 'pagado' ? 'Procesado' : 'Pendiente'}
                 </Badge>

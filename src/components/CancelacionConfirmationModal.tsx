@@ -82,10 +82,10 @@ export const CancelacionConfirmationModal: React.FC<CancelacionConfirmationModal
           </div>
           
           {/* Advertencia */}
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+          <div className="p-3 bg-muted/40 border border-border rounded-lg">
             <div className="flex items-start space-x-2">
-              <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5" />
-              <div className="text-sm text-amber-800">
+              <AlertTriangle className="h-4 w-4 text-foreground mt-0.5" />
+              <div className="text-sm text-muted-foreground">
                 <p className="font-medium">Esta acción no se puede deshacer</p>
                 <p className="text-xs mt-1">
                   Una vez cancelado, el turno volverá a estar disponible para otros usuarios

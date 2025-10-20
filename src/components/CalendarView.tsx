@@ -664,7 +664,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     if (!isSelected) return null;
     
     return (
-      <div className="absolute inset-0 bg-orange-300/30 rounded-lg pointer-events-none" />
+      <div className="absolute inset-0 bg-accent-foreground/15 rounded-lg pointer-events-none" />
     );
   };
 

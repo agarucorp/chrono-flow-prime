@@ -136,11 +136,9 @@ const Dashboard = () => {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="h-9 w-9 p-0 hover:bg-muted rounded-full"
+                      className="h-9 w-9 p-0 hover:bg-muted"
                     >
-                      <div className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-sm font-medium">
-                        {getInitials(user?.email || '')}
-                      </div>
+                      <User className="h-6 w-6 text-accent-foreground" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
