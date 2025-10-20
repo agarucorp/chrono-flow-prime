@@ -6,7 +6,7 @@ import { Label } from './ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs'
 import { Alert, AlertDescription } from './ui/alert'
-import { Loader2, Mail, Lock, User } from 'lucide-react'
+import { Loader2, Mail, Lock } from 'lucide-react'
 
 export const AuthForm: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true)
@@ -45,10 +45,10 @@ export const AuthForm: React.FC = () => {
     <div className="flex items-center justify-center min-h-screen bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl text-center">
+          <CardTitle className="text-[20px] text-center">
             {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
           </CardTitle>
-          <CardDescription className="text-center">
+          <CardDescription className="text-xs text-center">
             {isLogin 
               ? 'Ingresa tus credenciales para acceder' 
               : 'Completa el formulario para registrarte'
@@ -57,15 +57,15 @@ export const AuthForm: React.FC = () => {
         </CardHeader>
         <CardContent>
           <Tabs value={isLogin ? 'login' : 'register'} onValueChange={(value) => setIsLogin(value === 'login')}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="register">Registrarse</TabsTrigger>
+            <TabsList className="grid w-full grid-cols-2 bg-muted">
+              <TabsTrigger value="login" className="text-muted-foreground data-[state=active]:text-foreground">Iniciar Sesión</TabsTrigger>
+              <TabsTrigger value="register" className="text-muted-foreground data-[state=active]:text-foreground">¿No tenés cuenta?</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login" className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
+                  <Label htmlFor="email" className="text-[10px]">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -74,14 +74,14 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 text-xs"
                       required
                     />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Contraseña</Label>
+                  <Label htmlFor="password" className="text-[10px]">Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -89,7 +89,7 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 text-xs"
                       required
                     />
                   </div>
@@ -101,7 +101,7 @@ export const AuthForm: React.FC = () => {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-[#2E2E2E] hover:bg-[#3A3A3A] text-white" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -114,8 +114,8 @@ export const AuthForm: React.FC = () => {
 
                 <Button
                   type="button"
-                  variant="outline"
-                  className="w-full"
+                  variant="ghost"
+                  className="w-full text-muted-foreground hover:text-foreground"
                   onClick={handlePasswordReset}
                   disabled={!email || isLoading}
                 >
@@ -127,7 +127,7 @@ export const AuthForm: React.FC = () => {
             <TabsContent value="register" className="space-y-4">
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="register-email">Email</Label>
+                  <Label htmlFor="register-email" className="text-[10px]">Email</Label>
                   <div className="relative">
                     <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -136,14 +136,14 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 text-xs"
                       required
                     />
                   </div>
                 </div>
                 
                 <div className="space-y-2">
-                  <Label htmlFor="register-password">Contraseña</Label>
+                  <Label htmlFor="register-password" className="text-[10px]">Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -151,14 +151,14 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 text-xs"
                       required
                     />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirmar Contraseña</Label>
+                  <Label htmlFor="confirm-password" className="text-[10px]">Confirmar Contraseña</Label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                     <Input
@@ -166,7 +166,7 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10"
+                      className="pl-10 text-xs"
                       required
                     />
                   </div>
@@ -178,7 +178,7 @@ export const AuthForm: React.FC = () => {
                   </Alert>
                 )}
 
-                <Button type="submit" className="w-full" disabled={isLoading}>
+                <Button type="submit" className="w-full bg-[#2E2E2E] hover:bg-[#3A3A3A] text-white" disabled={isLoading}>
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
