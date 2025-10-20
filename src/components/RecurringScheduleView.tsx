@@ -158,39 +158,54 @@ export const RecurringScheduleView = () => {
   const estaClaseBloqueada = (fecha: Date, claseNumero?: number): boolean => {
     const fechaStr = format(fecha, 'yyyy-MM-dd');
     
-    
     const bloqueada = ausenciasAdmin.some(ausencia => {
       // Verificar ausencia única
       if (ausencia.tipo_ausencia === 'unica') {
-        const fechaAusencia = format(new Date(ausencia.fecha_inicio), 'yyyy-MM-dd');
+        // Extraer solo la parte de fecha (YYYY-MM-DD) del string de fecha ISO
+        const fechaAusenciaISO = ausencia.fecha_inicio.split('T')[0];
         
+        console.log('🔍 Verificando ausencia única:', {
+          fechaStr,
+          fechaAusenciaISO,
+          claseNumero,
+          clases_canceladas: ausencia.clases_canceladas,
+          coincideFecha: fechaAusenciaISO === fechaStr
+        });
         
         // Si la fecha coincide
-        if (fechaAusencia === fechaStr) {
+        if (fechaAusenciaISO === fechaStr) {
           // Si no hay clases_canceladas específicas, se bloquean todas
           if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
+            console.log('✅ Bloqueando TODAS las clases (sin clases_canceladas específicas)');
             return true;
           }
           // Si hay clases específicas, verificar si esta clase está en la lista
           if (claseNumero && ausencia.clases_canceladas.includes(claseNumero)) {
+            console.log('✅ Bloqueando clase específica:', claseNumero);
             return true;
           }
+          console.log('❌ No bloquear: clase', claseNumero, 'no está en la lista');
         }
       }
       
       // Verificar ausencia por período
       if (ausencia.tipo_ausencia === 'periodo') {
-        const fechaInicio = format(new Date(ausencia.fecha_inicio), 'yyyy-MM-dd');
-        const fechaFin = ausencia.fecha_fin ? format(new Date(ausencia.fecha_fin), 'yyyy-MM-dd') : fechaInicio;
+        const fechaInicio = ausencia.fecha_inicio.split('T')[0];
+        const fechaFin = ausencia.fecha_fin ? ausencia.fecha_fin.split('T')[0] : fechaInicio;
         
         // Si la fecha está dentro del período
         if (fechaStr >= fechaInicio && fechaStr <= fechaFin) {
+          console.log('✅ Bloqueando por período:', { fechaStr, fechaInicio, fechaFin });
           return true;
         }
       }
       
       return false;
     });
+
+    if (bloqueada) {
+      console.log('🚫 Clase BLOQUEADA:', { fecha: fechaStr, claseNumero });
+    }
 
     return bloqueada;
   };
