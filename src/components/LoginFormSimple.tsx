@@ -409,12 +409,12 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
               <Button
                 type="submit"
-                className="w-full bg-gray-800 hover:bg-gray-700 text-white transition-all duration-300 h-11"
+                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 transition-all duration-300 h-11"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800"></div>
                     <span>
                       {!isRegisterMode 
                         ? "Accediendo..." 
