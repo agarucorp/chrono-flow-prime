@@ -437,6 +437,43 @@ export const useAdmin = () => {
     }
   }, [isAdmin]);
 
+  // Crear ausencia por período
+  const createAusenciaPeriodo = useCallback(async (
+    fechaDesde: string,
+    fechaHasta: string,
+    motivo: string | null = null
+  ) => {
+    if (!isAdmin) {
+      return { success: false, error: 'No tienes permisos de administrador' };
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .insert({
+          tipo_ausencia: 'periodo',
+          fecha_inicio: fechaDesde,
+          fecha_fin: fechaHasta,
+          clases_canceladas: null,
+          motivo: motivo,
+          activo: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Error creando ausencia por período:', error);
+        return { success: false, error: error.message };
+      }
+
+      console.log('✅ Ausencia por período creada exitosamente:', data);
+      return { success: true, data };
+    } catch (err) {
+      console.error('❌ Error inesperado creando ausencia por período:', err);
+      return { success: false, error: 'Error inesperado' };
+    }
+  }, [isAdmin]);
+
   // Eliminar ausencia
   const deleteAusencia = useCallback(async (ausenciaId: string) => {
     if (!isAdmin) {
@@ -482,6 +519,7 @@ export const useAdmin = () => {
     // Funciones de ausencias
     fetchAusencias,
     createAusenciaUnica,
+    createAusenciaPeriodo,
     deleteAusencia,
   };
 };
