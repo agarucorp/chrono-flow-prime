@@ -85,6 +85,7 @@ export default function Admin() {
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
   const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }>>([]);
   const [balanceTotals, setBalanceTotals] = useState<{ totalAbonado: number; totalPendiente: number }>({ totalAbonado: 0, totalPendiente: 0 });
+  const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
   const [editingTarifa, setEditingTarifa] = useState(false);
   const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
   const [tarifaActual, setTarifaActual] = useState<number | null>(null);
@@ -145,6 +146,58 @@ export default function Admin() {
       ).join(' ');
     }
     return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  // Función para cargar ausencias del admin
+  const cargarAusenciasAdmin = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .select('*')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('Error cargando ausencias del admin:', error);
+        return;
+      }
+
+      setAusenciasAdmin(data || []);
+      console.log('✅ Ausencias del admin cargadas:', data?.length || 0);
+    } catch (error) {
+      console.error('Error inesperado cargando ausencias del admin:', error);
+    }
+  };
+
+  // Función para verificar si una clase está bloqueada por ausencia del admin
+  const estaClaseBloqueada = (fecha: string, claseNumero: number) => {
+    if (!ausenciasAdmin || ausenciasAdmin.length === 0) return false;
+
+    const fechaObj = new Date(fecha);
+    const dia = fechaObj.getDate();
+    const mes = fechaObj.getMonth() + 1;
+    const año = fechaObj.getFullYear();
+
+    return ausenciasAdmin.some(ausencia => {
+      // Verificar ausencia única
+      if (ausencia.tipo === 'unica') {
+        return ausencia.dia === dia && 
+               ausencia.mes === mes && 
+               ausencia.año === año &&
+               ausencia.clase_numero === claseNumero;
+      }
+      
+      // Verificar ausencia por período
+      if (ausencia.tipo === 'periodo') {
+        const fechaDesde = new Date(ausencia.fecha_desde);
+        const fechaHasta = new Date(ausencia.fecha_hasta);
+        
+        return fechaObj >= fechaDesde && 
+               fechaObj <= fechaHasta &&
+               ausencia.clase_numero === claseNumero;
+      }
+      
+      return false;
+    });
   };
 
   // Función para cargar tarifa del usuario
@@ -378,6 +431,22 @@ export default function Admin() {
     }
   }, [isAdmin, fetchAllUsers, fetchAdminUsers]);
 
+  // Listener para actualizar cuotas cuando cambien las ausencias del admin
+  useEffect(() => {
+    const handleAusenciasUpdate = () => {
+      console.log('🔄 Ausencias del admin actualizadas, recargando cuotas...');
+      // Recargar cuotas del período actual
+      (async () => {
+        await cargarAusenciasAdmin();
+        const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+        // ... resto de la lógica de recálculo
+      })();
+    };
+
+    window.addEventListener('ausenciasAdmin:updated', handleAusenciasUpdate);
+    return () => window.removeEventListener('ausenciasAdmin:updated', handleAusenciasUpdate);
+  }, [selectedYear, selectedMonth, fetchCuotasMensuales]);
+
   // Función para cargar todos los horarios recurrentes de todos los usuarios
   const cargarTodosLosHorariosRecurrentes = async () => {
     try {
@@ -524,40 +593,123 @@ export default function Admin() {
   // Cargar cuotas del periodo seleccionado y mapear por usuario
   useEffect(() => {
     (async () => {
-      const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-      const map: Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }> = {};
-      for (const c of cuotas) {
-        map[c.usuario_id] = { monto: Number(c.monto_total) || 0, estado: (c.estado_pago as any) || 'pendiente' };
-      }
-      setCuotasMap(map);
-
-      // Construir filas para Balance
+      // Cargar ausencias del admin primero
+      await cargarAusenciasAdmin();
+      
+      console.log('🔍 Calculando cuotas para:', selectedYear, selectedMonth);
+      console.log('🔍 Usuarios disponibles:', allUsers.length);
+      
+      // Construir filas para Balance calculando directamente desde turnos
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
-      for (const c of cuotas) {
-        const u = allUsers.find(u => u.id === c.usuario_id);
-        const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
-        const email = u?.email || '';
-        const montoOriginal = Number(c.monto_total) || 0;
-        const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
-        const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
-        const estado = (c.estado_pago as any) || 'pendiente';
-        rows.push({ 
-          usuario_id: c.usuario_id, 
-          nombre, 
-          email, 
-          monto: montoConDescuento, 
-          montoOriginal,
-          estado, 
-          descuento: descuentoPorcentaje 
-        });
-        if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
+      
+      // Procesar cada usuario
+      for (const usuario of allUsers) {
+        // Solo procesar usuarios que no sean admin
+        if (usuario.role === 'admin') continue;
+        
+        const nombre = usuario.first_name || usuario.last_name ? 
+          `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim() : 
+          (usuario.full_name || usuario.email);
+        const email = usuario.email || '';
+        
+        // Obtener clases del usuario para el mes seleccionado
+        try {
+          // Primero verificar si el usuario tiene horarios recurrentes configurados
+          const { data: horariosRecurrentes, error: errorHorarios } = await supabase
+            .from('horarios_recurrentes_usuario')
+            .select('*')
+            .eq('usuario_id', usuario.id)
+            .eq('activo', true);
+
+          console.log(`🔍 Usuario ${nombre}: ${horariosRecurrentes?.length || 0} horarios recurrentes configurados`);
+
+          if (!errorHorarios && horariosRecurrentes && horariosRecurrentes.length > 0) {
+            // Calcular cuota basada en horarios recurrentes (simulación)
+            const diasPorSemana = horariosRecurrentes.length;
+            const semanasEnMes = 4; // Aproximación
+            const clasesEstimadas = diasPorSemana * semanasEnMes;
+            
+            // Obtener tarifa del usuario
+            const { data: tarifaData, error: tarifaError } = await supabase
+              .rpc('obtener_tarifa_usuario', { p_usuario_id: usuario.id });
+            
+            let montoCorregido = 0;
+            if (!tarifaError && tarifaData && tarifaData.length > 0) {
+              const tarifaIndividual = Number(tarifaData[0].tarifa_efectiva) || 0;
+              montoCorregido = clasesEstimadas * tarifaIndividual;
+              
+              console.log(`🔍 Usuario ${nombre}: ${clasesEstimadas} clases estimadas, tarifa $${tarifaIndividual} = $${montoCorregido}`);
+            } else {
+              // Usar tarifa por defecto del sistema
+              const { data: configAdmin } = await supabase
+                .from('configuracion_admin')
+                .select('precio_clase')
+                .eq('sistema_activo', true)
+                .limit(1)
+                .single();
+              
+              const tarifaDefault = Number(configAdmin?.precio_clase) || 5000;
+              montoCorregido = clasesEstimadas * tarifaDefault;
+              
+              console.log(`🔍 Usuario ${nombre}: Usando tarifa default $${tarifaDefault}, ${clasesEstimadas} clases = $${montoCorregido}`);
+            }
+            
+            // Estado por defecto (pendiente)
+            const estado = 'pendiente' as 'pendiente'|'abonada'|'vencida';
+            const descuento = 0;
+            
+            rows.push({ 
+              usuario_id: usuario.id, 
+              nombre, 
+              email, 
+              monto: montoCorregido, 
+              montoOriginal: montoCorregido,
+              estado, 
+              descuento
+            });
+            
+            if (estado === 'abonada') totalAbonado += montoCorregido; 
+            else totalPendiente += montoCorregido;
+          } else {
+            console.log(`🔍 Usuario ${nombre}: Sin horarios recurrentes configurados`);
+            
+            // Agregar usuario con cuota 0
+            rows.push({ 
+              usuario_id: usuario.id, 
+              nombre, 
+              email, 
+              monto: 0, 
+              montoOriginal: 0,
+              estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
+              descuento: 0
+            });
+          }
+        } catch (error) {
+          console.error(`Error calculando clases para ${nombre}:`, error);
+          
+          // Agregar usuario con cuota 0 en caso de error
+          rows.push({ 
+            usuario_id: usuario.id, 
+            nombre, 
+            email, 
+            monto: 0, 
+            montoOriginal: 0,
+            estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
+            descuento: 0
+          });
+        }
       }
+      
+      console.log('🔍 Total filas generadas:', rows.length);
+      console.log('🔍 Total abonado:', totalAbonado);
+      console.log('🔍 Total pendiente:', totalPendiente);
+      
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
     })();
-  }, [selectedYear, selectedMonth, fetchCuotasMensuales, allUsers]);
+  }, [selectedYear, selectedMonth, allUsers, ausenciasAdmin]);
 
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
