@@ -50,7 +50,7 @@ export const AuthForm: React.FC = () => {
           </CardTitle>
           <CardDescription className="text-xs text-center">
             {isLogin 
-              ? 'Ingresa tus credenciales para acceder' 
+              ? 'Ingresá a la plataforma para visualizar y gestionar tus clases.' 
               : 'Completa el formulario para registrarte'
             }
           </CardDescription>
@@ -74,7 +74,8 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 text-sm"
+                      className="pl-10 text-sm font-sans"
+                      style={{ fontFamily: 'inherit' }}
                       required
                     />
                   </div>
@@ -89,7 +90,8 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 text-sm"
+                      className="pl-10 text-sm font-sans"
+                      style={{ fontFamily: 'inherit' }}
                       required
                     />
                   </div>
@@ -105,10 +107,10 @@ export const AuthForm: React.FC = () => {
                   {isLoading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      CAMBIO VISIBLE...
+                      Iniciando sesión...
                     </>
                   ) : (
-                    'BOTON ROJO'
+                    'Iniciar Sesión'
                   )}
                 </Button>
 
@@ -136,7 +138,8 @@ export const AuthForm: React.FC = () => {
                       placeholder="tu@email.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10 text-sm"
+                      className="pl-10 text-sm font-sans"
+                      style={{ fontFamily: 'inherit' }}
                       required
                     />
                   </div>
@@ -151,7 +154,8 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pl-10 text-sm"
+                      className="pl-10 text-sm font-sans"
+                      style={{ fontFamily: 'inherit' }}
                       required
                     />
                   </div>
@@ -166,7 +170,8 @@ export const AuthForm: React.FC = () => {
                       type="password"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      className="pl-10 text-sm"
+                      className="pl-10 text-sm font-sans"
+                      style={{ fontFamily: 'inherit' }}
                       required
                     />
                   </div>

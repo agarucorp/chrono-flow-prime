@@ -45,6 +45,15 @@ interface HorarioSemanal {
 
 const DIAS_SEMANA = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 
+// Función para formatear fechas en formato dd/mm/aaaa
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  const day = String(date.getDate()).padStart(2, '0');
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const year = date.getFullYear();
+  return `${day}/${month}/${year}`;
+};
+
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
@@ -1041,7 +1050,7 @@ export const TurnoManagement = () => {
                           <div className="text-center space-y-2">
                             <h3 className="font-medium" style={{ fontSize: '16px' }}>Resumen de Ausencia</h3>
                             <p className="text-muted-foreground" style={{ fontSize: '14px' }}>
-                              Se cancelarán todas las clases desde el <strong>{nuevaAusenciaPeriodo.fechaDesde}</strong> hasta el <strong>{nuevaAusenciaPeriodo.fechaHasta}</strong>
+                              Se cancelarán todas las clases desde el <strong>{formatDate(nuevaAusenciaPeriodo.fechaDesde)}</strong> hasta el <strong>{formatDate(nuevaAusenciaPeriodo.fechaHasta)}</strong>
                             </p>
                           </div>
 
@@ -1099,7 +1108,7 @@ export const TurnoManagement = () => {
                               <div key={ausencia.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg border">
                                 <div className="flex-1">
                                   <div className="text-sm font-medium">
-                                    {ausencia.fechaDesde} - {ausencia.fechaHasta}
+                                    {formatDate(ausencia.fechaDesde)} - {formatDate(ausencia.fechaHasta)}
                                   </div>
                                   <div className="text-xs text-muted-foreground">
                                     Todas las clases del período

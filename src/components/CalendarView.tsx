@@ -988,7 +988,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   
-                  <h3 className="text-lg font-bold text-foreground bg-gradient-to-r from-primary to-primary/80 bg-clip-text text-transparent truncate px-2">
+                  <h3 className="text-lg font-bold text-muted-foreground truncate px-2">
                     {currentDate.toLocaleDateString('es-ES', { 
                       month: 'long'
                     }).replace(/^\w/, c => c.toUpperCase())}
