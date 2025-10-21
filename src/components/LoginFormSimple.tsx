@@ -441,28 +441,28 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               <p className="text-xs text-muted-foreground">
                 {isRegisterMode ? (
                   <>
-                    ¿Ya tienes cuenta?{" "}
+                    ¿Ya tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(false);
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-primary hover:underline font-medium"
+                      className="text-gray-300 hover:underline font-medium"
                     >
                       Iniciar sesión
                     </button>
                   </>
                 ) : (
                   <>
-                    ¿No tenés cuenta?{" "}
+                    ¿Ya tenés cuenta? Iniciar sesión{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-gray-500 hover:text-gray-700 font-medium"
+                      className="text-gray-300 hover:text-gray-700 font-medium"
                     >
                       Crear cuenta
                     </button>

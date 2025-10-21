@@ -41,6 +41,8 @@ export const useAuth = () => {
     // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
+        console.log('Auth event:', event, session?.user?.email_confirmed_at)
+        
         if (event === 'TOKEN_REFRESHED') {
           setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
           return
@@ -55,6 +57,10 @@ export const useAuth = () => {
         }
         if (event === 'USER_UPDATED') {
           setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+          return
+        }
+        if (event === 'SIGNED_IN' || event === 'SIGNED_UP') {
+          setAuthState({ user: session?.user || null, loading: false, error: null })
           return
         }
         // Fallback para otros eventos
@@ -74,7 +80,19 @@ export const useAuth = () => {
         password
       })
       
-      if (error) throw error
+      if (error) {
+        // Si el error es "Email not confirmed", permitir el login pero mostrar mensaje
+        if (error.message.includes('Email not confirmed')) {
+          console.log('Email no confirmado, pero permitiendo login')
+          setAuthState({
+            user: data.user,
+            loading: false,
+            error: null
+          })
+          return { success: true, user: data.user, needsConfirmation: true }
+        }
+        throw error
+      }
       
       setAuthState({
         user: data.user,
@@ -94,13 +112,11 @@ export const useAuth = () => {
     try {
       setAuthState(prev => ({ ...prev, loading: true, error: null }))
       
-      const siteUrl = import.meta.env.VITE_SITE_URL as string | undefined
       const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
         email,
         password,
         options: {
-          data: metadata,
-          ...(siteUrl ? { emailRedirectTo: `${siteUrl}/login` } : {})
+          data: metadata
         }
       }
       const { data, error } = await supabase.auth.signUp({

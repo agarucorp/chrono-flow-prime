@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Confirma tu cuenta - MaldaGym</title>
+    <title>Confirmá tu cuenta - MaldaGym</title>
     <style>
         /* Reseteo de estilos */
         body, table, td, a {
@@ -23,29 +23,29 @@
             margin: 0;
             padding: 0;
             width: 100% !important;
-            font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-            background-color: #f5f5f5;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background-color: #1a1a1a;
         }
         
         /* Contenedor principal */
         .email-container {
             max-width: 600px;
             margin: 0 auto;
-            background-color: #ffffff;
+            background-color: #2a2a2a;
         }
         
-        /* Header con color primario */
+        /* Header */
         .email-header {
-            background: linear-gradient(135deg, #FB8500 0%, #FFB347 100%);
+            background-color: #1a1a1a;
             padding: 40px 30px;
             text-align: center;
+            border-bottom: 1px solid #3a3a3a;
         }
         
         .email-header h1 {
             color: #ffffff;
-            font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             font-size: 28px;
-            font-weight: 700;
+            font-weight: 600;
             margin: 0;
             padding: 0;
         }
@@ -53,29 +53,21 @@
         /* Contenido */
         .email-content {
             padding: 40px 30px;
-            color: #2d3748;
+            color: #e0e0e0;
         }
         
         .email-content p {
             font-size: 16px;
             line-height: 1.6;
             margin: 0 0 20px 0;
-            color: #2d3748;
-        }
-        
-        .email-content h2 {
-            font-family: 'Open Sans', -apple-system, sans-serif;
-            font-size: 22px;
-            font-weight: 600;
-            color: #1a202c;
-            margin: 0 0 20px 0;
+            color: #d0d0d0;
         }
         
         /* Botón de confirmación */
         .confirm-button {
             display: inline-block;
-            background: linear-gradient(135deg, #FB8500 0%, #FFB347 100%);
-            color: #ffffff !important;
+            background-color: #ffffff;
+            color: #1a1a1a !important;
             text-decoration: none;
             padding: 16px 40px;
             border-radius: 8px;
@@ -83,47 +75,17 @@
             font-size: 16px;
             text-align: center;
             margin: 30px 0;
-            box-shadow: 0 4px 20px -4px rgba(251, 133, 0, 0.3);
-            transition: all 0.3s ease;
         }
         
-        .confirm-button:hover {
-            box-shadow: 0 6px 30px -4px rgba(251, 133, 0, 0.5);
-            transform: translateY(-2px);
-        }
-        
-        /* Caja de información */
-        .info-box {
-            background-color: #fff7ed;
-            border-left: 4px solid #FB8500;
-            padding: 20px;
-            margin: 30px 0;
+        /* Enlace alternativo */
+        .link-text {
+            word-break: break-all;
+            font-size: 13px;
+            color: #a0a0a0;
+            background-color: #1a1a1a;
+            padding: 10px;
             border-radius: 4px;
-        }
-        
-        .info-box p {
-            margin: 0;
-            font-size: 14px;
-            color: #92400e;
-        }
-        
-        /* Footer */
-        .email-footer {
-            background-color: #f7fafc;
-            padding: 30px;
-            text-align: center;
-            border-top: 1px solid #e2e8f0;
-        }
-        
-        .email-footer p {
-            margin: 5px 0;
-            font-size: 14px;
-            color: #718096;
-        }
-        
-        .email-footer a {
-            color: #FB8500;
-            text-decoration: none;
+            border: 1px solid #3a3a3a;
         }
         
         /* Responsive */
@@ -142,10 +104,6 @@
             
             .email-content {
                 padding: 30px 20px;
-            }
-            
-            .email-content h2 {
-                font-size: 20px;
             }
             
             .email-content p {
@@ -168,51 +126,26 @@
                     <!-- Header -->
                     <tr>
                         <td class="email-header">
-                            <h1>¡Bienvenido! 🎉</h1>
+                            <h1>Confirmá tu cuenta</h1>
                         </td>
                     </tr>
                     
                     <!-- Content -->
                     <tr>
                         <td class="email-content">
-                            <h2>Confirma tu cuenta</h2>
-                            
-                            <p>Hola,</p>
-                            
-                            <p>Gracias por registrarte en <strong>MaldaGym</strong>. Para completar tu registro y acceder a todas las funcionalidades, necesitamos que confirmes tu dirección de correo electrónico.</p>
+                            <p>Por favor, verificá tu correo electrónico para completar tu registro y poder ingresar a la plataforma de MaldaGym. Hacé click en el siguiente botón y listo!</p>
                             
                             <div style="text-align: center;">
                                 <a href="{{ .ConfirmationURL }}" class="confirm-button">
-                                    Confirmar mi cuenta
+                                    Confirmar email
                                 </a>
                             </div>
                             
-                            <div class="info-box">
-                                <p><strong>⏰ Importante:</strong> Este enlace expirará en 24 horas por razones de seguridad.</p>
-                            </div>
-                            
-                            <p>Si no creaste esta cuenta, puedes ignorar este correo de forma segura.</p>
-                            
                             <p style="margin-top: 30px;">
-                                <strong>¿Problemas con el botón?</strong><br>
-                                Copia y pega este enlace en tu navegador:
+                                Si no funciona el botón podés copiar y pegar el siguiente enlace en tu navegador:
                             </p>
-                            <p style="word-break: break-all; font-size: 13px; color: #718096; background-color: #f7fafc; padding: 10px; border-radius: 4px;">
+                            <p class="link-text">
                                 {{ .ConfirmationURL }}
-                            </p>
-                        </td>
-                    </tr>
-                    
-                    <!-- Footer -->
-                    <tr>
-                        <td class="email-footer">
-                            <p style="font-weight: 600; color: #2d3748; margin-bottom: 10px;">MaldaGym</p>
-                            <p>Sistema de gestión de clases y horarios</p>
-                            <p style="margin-top: 15px;">
-                                <a href="{{ .SiteURL }}">Visitar sitio web</a>
-                            </p>
-                            <p style="margin-top: 20px; font-size: 12px;">
-                                © 2025 MaldaGym. Todos los derechos reservados.
                             </p>
                         </td>
                     </tr>

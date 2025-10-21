@@ -218,7 +218,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                  ? currentStep === 1 
                    ? "Complete su información personal" 
                    : "Configure su acceso al sistema"
-                 : "Ingresá a la plataforma para visualizar el calendario con los turnos disponibles y gestionar tus reservas."
+                 : "Ingresá a la plataforma para visualizar y gestionar tus clases."
                }
              </CardDescription>
             {isRegisterMode && (
@@ -489,21 +489,21 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               <p className="text-sm text-muted-foreground">
                 {isRegisterMode ? (
                   <>
-                    ¿Ya tienes cuenta?{" "}
+                    ¿Ya tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(false);
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-primary hover:underline font-medium"
+                      className="text-gray-300 hover:underline font-medium"
                     >
                       Iniciar sesión
                     </button>
                   </>
                 ) : (
                   <>
-                    ¿No tienes cuenta?{" "}
+                    ¿No tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(true);

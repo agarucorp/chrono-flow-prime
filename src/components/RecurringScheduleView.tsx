@@ -844,7 +844,7 @@ export const RecurringScheduleView = () => {
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2">
+    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2 pb-20 sm:pb-2">
       {/* Subnavbar */}
       <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
         {/* Desktop navbar (centered pills) */}
@@ -1019,21 +1019,21 @@ export const RecurringScheduleView = () => {
                               <div className="text-xs sm:text-sm font-medium">
                                 {format(dia, "dd 'de' MMMM", { locale: es })}
                               </div>
+                            </td>
+                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
+                              <div className="text-xs sm:text-sm text-muted-foreground">
+                                {format(dia, 'EEEE', { locale: es })}
+                              </div>
                               {clase.horario.cancelada && (
                                 <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
                                   CANCELADA
                                 </div>
                               )}
                               {clase.horario.bloqueada && (
-                                <div className="text-[10px] sm:text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                                <div className="text-[8px] sm:text-xs text-yellow-600 dark:text-yellow-400 font-light sm:font-medium">
                                   CLASE BLOQUEADA
                                 </div>
                               )}
-                            </td>
-                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
-                              <div className="text-xs sm:text-sm text-muted-foreground">
-                                {format(dia, 'EEEE', { locale: es })}
-                              </div>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left hidden sm:table-cell">
                               <div className="text-xs sm:text-sm font-medium">

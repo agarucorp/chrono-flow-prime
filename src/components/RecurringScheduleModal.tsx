@@ -85,6 +85,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const fetchHorariosClase = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Cargando horarios...');
       const { data, error } = await supabase
         .from('horarios_semanales')
         .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, capacidad, activo')
@@ -93,14 +94,15 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         .order('clase_numero', { ascending: true });
 
       if (error) {
-        console.error('Error cargando horarios:', error);
+        console.error('❌ Error cargando horarios:', error);
         showError('Error', 'No se pudieron cargar los horarios disponibles');
         return;
       }
 
+      console.log('✅ Horarios cargados:', data?.length || 0, data);
       setHorariosClase(data || []);
     } catch (error) {
-      console.error('Error inesperado:', error);
+      console.error('❌ Error inesperado:', error);
       showError('Error', 'Error inesperado al cargar horarios');
     } finally {
       setLoading(false);
@@ -114,29 +116,11 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   }
 
   const toggleHorario = (horarioId: string, diaSemana: number) => {
+    console.log('CLICK EN HORARIO:', horarioId);
     setHorariosSeleccionados(prev => {
       const newSelection = new Set(prev);
-      
-      // Verificar si ya hay un horario seleccionado para este día
-      const horariosDelDia = horariosClase.filter(h => h.dia_semana === diaSemana);
-      const horariosDelDiaSeleccionados = horariosDelDia.filter(h => newSelection.has(h.id));
-      
-      if (horariosDelDiaSeleccionados.length > 0 && !newSelection.has(horarioId)) {
-        // Si ya hay un horario seleccionado para este día, remover el anterior
-        horariosDelDiaSeleccionados.forEach(h => newSelection.delete(h.id));
-      }
-      
-      if (newSelection.has(horarioId)) {
-        newSelection.delete(horarioId);
-      } else {
-        // Verificar que no se exceda el límite del paquete
-        if (newSelection.size >= (paqueteSeleccionado || 0)) {
-          showError('Límite alcanzado', `Tu plan permite seleccionar hasta ${paqueteSeleccionado} día${(paqueteSeleccionado || 0) > 1 ? 's' : ''}`);
-          return prev;
-        }
-        newSelection.add(horarioId);
-      }
-      
+      newSelection.add(horarioId);
+      console.log('NUEVA SELECCION:', Array.from(newSelection));
       return newSelection;
     });
   };
@@ -362,7 +346,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-1 px-3 pb-3">
-                      <div className="text-lg sm:text-2xl font-bold text-primary break-words">
+                      <div className="text-lg sm:text-2xl font-bold text-gray-300 break-words">
                         {formatPrecio(paquete.precioPorClase)}
                       </div>
                       <div className="text-[10px] sm:text-xs text-muted-foreground pt-1 border-t leading-tight">
@@ -384,13 +368,21 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                   <div className="text-xs sm:text-sm text-blue-800 flex-1 min-w-0">
                     <p className="font-medium">Sistema de cuota por clase</p>
                     <p className="text-[11px] sm:text-xs mt-1 leading-relaxed">
-                      <span className="font-semibold">Plan: {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''}/semana</span>
-                      <br />
-                      Seleccioná exactamente {paqueteSeleccionado} horario{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} (uno por día).
-                      Los horarios se reservarán cada mes.
+                      Seleccioná 1 horario por día de acuerdo al plan elegido, para cambiar de plan volver al paso anterior. Los horarios se reservarán automáticamente cada mes.
                     </p>
-                    <div className="text-xs sm:text-sm mt-2 font-semibold bg-white/50 px-2 py-1 rounded inline-block">
-                      Seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado}
+                    {/* Indicador de selección */}
+                    <div className="mt-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
+                        <span className="text-xs font-medium">
+                          Horarios seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado || 0}
+                        </span>
+                      </div>
+                      {paqueteSeleccionado && horariosSeleccionados.size >= paqueteSeleccionado && (
+                        <span className="text-xs text-green-600 font-medium">
+                          ✓ Plan completo
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -419,15 +411,19 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                       ) : (
                         <div className="grid grid-cols-2 gap-2">
                           {horariosDelDia.map(horario => (
-                            <Button
-                              key={horario.id}
-                              variant={isHorarioSeleccionado(horario.id) ? 'default' : 'outline'}
-                              size="sm"
-                              className="w-full justify-center text-sm h-10"
-                              onClick={() => toggleHorario(horario.id, dia.numero)}
-                            >
-                              {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
-                            </Button>
+                              <Button
+                                key={horario.id}
+                                variant="outline"
+                                size="sm"
+                                className={`w-full justify-center text-sm h-10 ${
+                                  isHorarioSeleccionado(horario.id) 
+                                    ? 'bg-white text-gray-900 border-white shadow-md' 
+                                    : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                                }`}
+                                onClick={() => toggleHorario(horario.id, dia.numero)}
+                              >
+                                {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                              </Button>
                           ))}
                         </div>
                       )}
@@ -454,15 +450,19 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                         <p className="text-xs text-muted-foreground text-center py-2">No hay horarios disponibles</p>
                       ) : (
                         horariosDelDia.map(horario => (
-                          <Button
-                            key={horario.id}
-                            variant={isHorarioSeleccionado(horario.id) ? 'default' : 'outline'}
-                            size="sm"
-                            className="w-full justify-start text-xs h-8"
-                            onClick={() => toggleHorario(horario.id, dia.numero)}
-                          >
-                            {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
-                          </Button>
+                            <Button
+                              key={horario.id}
+                              variant="outline"
+                              size="sm"
+                              className={`w-full justify-start text-xs h-8 ${
+                                isHorarioSeleccionado(horario.id) 
+                                  ? 'bg-white text-gray-900 border-white shadow-md' 
+                                  : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                              }`}
+                              onClick={() => toggleHorario(horario.id, dia.numero)}
+                            >
+                              {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                            </Button>
                         ))
                       )}
                     </div>
@@ -486,7 +486,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                       {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
                     </p>
                   </div>
-                  <div className="text-xl sm:text-2xl font-bold text-primary flex-shrink-0 break-words">
+                  <div className="text-xl sm:text-2xl font-bold text-gray-300 flex-shrink-0 break-words">
                     {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
                   </div>
                 </div>
@@ -558,10 +558,14 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
               >
                 Volver al paso anterior
               </Button>
-              <Button onClick={handleConfirm} disabled={saving}>
+              <Button 
+                onClick={handleConfirm} 
+                disabled={saving}
+                className="bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+              >
                 {saving ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
                     Guardando...
                   </>
                 ) : (

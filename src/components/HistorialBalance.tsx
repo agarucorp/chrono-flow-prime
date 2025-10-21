@@ -16,6 +16,8 @@ import {
 } from 'lucide-react';
 import { Turno, ResumenMensual, ResumenDiario } from '@/types/historial';
 import { HistorialService } from '@/services/historialService';
+import { supabase } from '@/lib/supabase';
+import { format } from 'date-fns';
 
 export const HistorialBalance: React.FC = () => {
   const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear());
@@ -33,9 +35,65 @@ export const HistorialBalance: React.FC = () => {
   const [filtroSemana, setFiltroSemana] = useState<string>('todas');
   const [filtroDia, setFiltroDia] = useState<string>('todos');
   const [filtroPago, setFiltroPago] = useState<string>('todos');
+  const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
 
   // Duración fija para todas las clases (en horas)
   const duracionClaseFija = 2;
+
+  // Cargar ausencias del admin
+  const cargarAusenciasAdmin = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .select('*')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('❌ Error al cargar ausencias del admin:', error);
+        return;
+      }
+
+      setAusenciasAdmin(data || []);
+    } catch (error) {
+      console.error('❌ Error inesperado al cargar ausencias:', error);
+    }
+  };
+
+  // Función helper para verificar si una fecha+clase está bloqueada por ausencia del admin
+  const estaClaseBloqueada = (fecha: Date, claseNumero?: number): boolean => {
+    const fechaStr = format(fecha, 'yyyy-MM-dd');
+    
+    return ausenciasAdmin.some(ausencia => {
+      // Verificar ausencia única
+      if (ausencia.tipo_ausencia === 'unica') {
+        const fechaAusenciaISO = ausencia.fecha_inicio.split('T')[0];
+        
+        if (fechaAusenciaISO === fechaStr) {
+          // Si no hay clases_canceladas específicas, se bloquean todas
+          if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
+            return true;
+          }
+          // Si hay clases específicas, verificar si esta clase está en la lista
+          if (claseNumero && ausencia.clases_canceladas.includes(claseNumero)) {
+            return true;
+          }
+        }
+      }
+      
+      // Verificar ausencia por período
+      if (ausencia.tipo_ausencia === 'periodo') {
+        const fechaInicio = new Date(ausencia.fecha_inicio);
+        const fechaFin = new Date(ausencia.fecha_fin);
+        const fechaClase = new Date(fecha);
+        
+        if (fechaClase >= fechaInicio && fechaClase <= fechaFin) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
+  };
 
   // Datos simulados de julio 2024 (TEMPORAL - BORRAR DESPUÉS)
   const turnosSimuladosJulio: Turno[] = [

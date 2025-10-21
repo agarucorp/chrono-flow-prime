@@ -98,7 +98,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
         {/* Botón X para mobile */}
         <Button
           variant="ghost"
@@ -201,7 +201,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
             <div className="flex gap-2 pt-2">
               <Button variant="outline" className="flex-1 text-sm h-9" onClick={onClose} disabled={saving}>Cancelar</Button>
-              <Button className="flex-1 text-sm h-9" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
+              <Button className="flex-1 text-sm h-9 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300" onClick={handleSave} disabled={saving}>{saving ? 'Guardando...' : 'Guardar cambios'}</Button>
             </div>
           </div>
         </div>
