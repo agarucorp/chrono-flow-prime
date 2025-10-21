@@ -475,42 +475,59 @@ export const HistorialBalance: React.FC = () => {
 
   const cargarDatosHistorial = async (año: number, mes: number) => {
     try {
+      // Cargar ausencias del admin primero
+      await cargarAusenciasAdmin();
+      
       // Verificar si es julio 2024 para usar datos simulados
       if (año === 2024 && mes === 6) { // mes 6 = julio (0-indexed)
-        // Usar datos simulados de julio
-        setTurnosIndividuales(turnosSimuladosJulio);
+        // Filtrar turnos que no estén bloqueados por ausencias del admin
+        const turnosValidos = turnosSimuladosJulio.filter(turno => {
+          const fechaTurno = new Date(turno.fecha);
+          return !estaClaseBloqueada(fechaTurno, turno.clase_numero);
+        });
         
-        // Calcular resumen mensual con duración fija
+        // Guardar turnos válidos
+        setTurnosIndividuales(turnosValidos);
+        
+        // Calcular resumen mensual con duración fija (solo turnos válidos)
         const resumen = {
-          ingresos_totales: turnosSimuladosJulio
+          ingresos_totales: turnosValidos
             .filter(t => t.estado_pago === 'pagado')
             .reduce((total, turno) => total + (turno.tarifa_aplicada * duracionClaseFija), 0),
-          total_horas: turnosSimuladosJulio.length * duracionClaseFija,
-          cantidad_clientes: new Set(turnosSimuladosJulio.map(t => t.usuario.email)).size
+          total_horas: turnosValidos.length * duracionClaseFija,
+          cantidad_clientes: new Set(turnosValidos.map(t => t.usuario.email)).size
         };
         setResumenMensual(resumen);
         
         // Agrupar por día (para mantener compatibilidad)
-        const resumenDiario = HistorialService.agruparTurnosPorDia(turnosSimuladosJulio);
+        const resumenDiario = HistorialService.agruparTurnosPorDia(turnosValidos);
         setResumenDiario(resumenDiario);
         
-        console.log('📊 Cargando datos simulados de julio 2024');
+        console.log(`📊 Cargando datos simulados de julio 2024 (${turnosValidos.length} válidos de ${turnosSimuladosJulio.length} totales)`);
         return;
       }
       
       // Obtener turnos del período (datos reales)
       const turnos = await HistorialService.obtenerTurnosPeriodo(año, mes);
       
-      // Guardar turnos individuales
-      setTurnosIndividuales(turnos);
+      // Filtrar turnos que no estén bloqueados por ausencias del admin
+      const turnosValidos = turnos.filter(turno => {
+        const fechaTurno = new Date(turno.fecha);
+        return !estaClaseBloqueada(fechaTurno, turno.clase_numero);
+      });
       
-      // Calcular resumen mensual
-      const resumen = HistorialService.calcularResumenMensual(turnos);
+      // Guardar turnos individuales (solo los válidos)
+      setTurnosIndividuales(turnosValidos);
+      
+      // Calcular resumen mensual (solo con turnos válidos)
+      const resumen = HistorialService.calcularResumenMensual(turnosValidos);
       setResumenMensual(resumen);
       
-      // Agrupar por día (para mantener compatibilidad)
-      const resumenDiario = HistorialService.agruparTurnosPorDia(turnos);
+      // Agrupar por día (para mantener compatibilidad, solo turnos válidos)
+      const resumenDiario = HistorialService.agruparTurnosPorDia(turnosValidos);
       setResumenDiario(resumenDiario);
+      
+      console.log(`📊 Cargados ${turnosValidos.length} turnos válidos de ${turnos.length} totales (excluyendo ${turnos.length - turnosValidos.length} bloqueados por ausencias del admin)`);
     } catch (error) {
       console.error('Error al cargar datos del historial:', error);
       // En caso de error, mostrar datos vacíos

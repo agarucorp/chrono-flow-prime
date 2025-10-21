@@ -11,6 +11,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { AdminTurnoModal } from './AdminTurnoModal';
 import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
+import { format } from 'date-fns';
 
 interface Turno {
   id: string;
@@ -66,12 +67,70 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
   const [adminSlots, setAdminSlots] = useState<{ horaInicio: string; horaFin: string; capacidad: number }[]>([]);
   
+  // Estado para ausencias del admin
+  const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+  
   // Formatear fecha local a YYYY-MM-DD para evitar TZ
   const formatLocalDate = (d: Date) => {
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, '0');
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
+  };
+  
+  // Cargar ausencias del admin
+  const cargarAusenciasAdmin = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('ausencias_admin')
+        .select('*')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('❌ Error al cargar ausencias del admin:', error);
+        return;
+      }
+
+      setAusenciasAdmin(data || []);
+      console.log('✅ Ausencias del admin cargadas en CalendarView:', data?.length || 0);
+    } catch (error) {
+      console.error('❌ Error inesperado al cargar ausencias:', error);
+    }
+  };
+  
+  // Función helper para verificar si una fecha+hora está bloqueada por ausencia del admin
+  const estaHorarioBloqueado = (fecha: string, horaInicio: string): boolean => {
+    const fechaStr = fecha; // Ya viene en formato YYYY-MM-DD
+    
+    return ausenciasAdmin.some(ausencia => {
+      // Verificar ausencia única
+      if (ausencia.tipo_ausencia === 'unica') {
+        const fechaAusenciaISO = ausencia.fecha_inicio.split('T')[0];
+        
+        if (fechaAusenciaISO === fechaStr) {
+          // Si no hay clases específicas, se bloquean todas
+          if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
+            return true;
+          }
+          // Si hay clases específicas, necesitamos mapear la hora al número de clase
+          // Por simplicidad, bloqueamos todas si coincide la fecha
+          return true;
+        }
+      }
+      
+      // Verificar ausencia por período
+      if (ausencia.tipo_ausencia === 'periodo') {
+        const fechaInicio = new Date(ausencia.fecha_inicio);
+        const fechaFin = new Date(ausencia.fecha_fin);
+        const fechaCheck = new Date(fechaStr);
+        
+        if (fechaCheck >= fechaInicio && fechaCheck <= fechaFin) {
+          return true;
+        }
+      }
+      
+      return false;
+    });
   };
   
   // Estado para acordeón
@@ -98,11 +157,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Obtener turnos desde Supabase
   useEffect(() => {
     fetchTurnos();
+    cargarAusenciasAdmin(); // Cargar ausencias del admin
     if (isAdminView) {
       fetchAlumnosHorarios();
       fetchAdminSlots();
     }
   }, [currentDate, isAdminView]);
+
+  // Escuchar cambios en ausencias del admin
+  useEffect(() => {
+    const handler = async () => {
+      console.log('🔄 CalendarView: Recargando ausencias por cambio del admin');
+      await cargarAusenciasAdmin();
+      if (isAdminView) {
+        await fetchAlumnosHorarios();
+      }
+    };
+    window.addEventListener('ausenciasAdmin:updated', handler);
+    return () => window.removeEventListener('ausenciasAdmin:updated', handler);
+  }, [isAdminView]);
 
   // Suscripciones en tiempo real para admin: reflejar altas/bajas al instante
   useEffect(() => {
@@ -828,18 +901,24 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             const nombre = partesNombre[0] || '';
                             const apellido = partesNombre.slice(1).join(' ') || '';
                             
+                            // Verificar si este horario está bloqueado por ausencia del admin
+                            const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.hora_inicio);
+                            
                             return (
                               <div 
                                 key={alumnoIndex} 
-                                onClick={() => handleAlumnoClick(alumno)}
+                                onClick={() => !estaBloqueado && handleAlumnoClick(alumno)}
                                 className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${
-                                  alumno.tipo === 'recurrente' ? 'border-green-200' :
+                                  estaBloqueado 
+                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60' 
+                                    : alumno.tipo === 'recurrente' ? 'border-green-200' :
                                   alumno.tipo === 'variable' ? 'border-blue-200' :
                                   'border-red-200'
-                                } ${alumno.tipo !== 'cancelado' && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : ''}`}
+                                } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado ? 'cursor-not-allowed' : ''}`}
                               >
                                 <div className="font-light text-[10px] sm:text-[12px]">
                                   {nombre} {apellido}
+                                  {estaBloqueado && <span className="ml-2 text-[8px] text-yellow-400">(BLOQUEADA)</span>}
                                 </div>
                               </div>
                             );

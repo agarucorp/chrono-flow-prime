@@ -869,11 +869,17 @@ export const RecurringScheduleView = () => {
             }`}
           >
             Vacantes
-            {turnosCancelados.length > 0 && (
-              <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
-                {turnosCancelados.length}
-              </Badge>
-            )}
+            {(() => {
+              const turnosDisponibles = turnosCancelados.filter(turno => {
+                const fecha = new Date(turno.turno_fecha);
+                return !estaClaseBloqueada(fecha, turno.clase_numero);
+              });
+              return turnosDisponibles.length > 0 && (
+                <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
+                  {turnosDisponibles.length}
+                </Badge>
+              );
+            })()}
           </button>
         </div>
         </div>
@@ -905,11 +911,17 @@ export const RecurringScheduleView = () => {
                 >
                   <div className="relative">
                     <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                    {turnosCancelados.length > 0 && (
-                      <Badge variant="default" className="absolute -top-1 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[8px] font-bold">
-                        {turnosCancelados.length}
-                      </Badge>
-                    )}
+                    {(() => {
+                      const turnosDisponibles = turnosCancelados.filter(turno => {
+                        const fecha = new Date(turno.turno_fecha);
+                        return !estaClaseBloqueada(fecha, turno.clase_numero);
+                      });
+                      return turnosDisponibles.length > 0 && (
+                        <Badge variant="default" className="absolute -top-1 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[8px] font-bold">
+                          {turnosDisponibles.length}
+                        </Badge>
+                      );
+                    })()}
                   </div>
                   {activeView === 'turnos-disponibles' && <span className="leading-none">Vacantes</span>}
                   {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
@@ -1144,28 +1156,45 @@ export const RecurringScheduleView = () => {
       )}
 
       {/* Vista de Turnos Disponibles */}
-      {activeView === 'turnos-disponibles' && (
-        <div className="w-full animate-view-swap pb-24 sm:pb-0">
-          <div className="mb-4">
-            <h2 className="text-lg sm:text-2xl font-semibold">Turnos Cancelados Disponibles</h2>
-          </div>
-          {loadingTurnosCancelados ? (
-            <div className="p-8 text-center">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-              <p className="text-muted-foreground">Cargando turnos cancelados...</p>
+      {activeView === 'turnos-disponibles' && (() => {
+        // Marcar turnos bloqueados por ausencias del admin (pero no filtrarlos)
+        const turnosConEstado = turnosCancelados.map(turno => {
+          const fecha = new Date(turno.turno_fecha);
+          const bloqueado = estaClaseBloqueada(fecha, turno.clase_numero);
+          return {
+            ...turno,
+            bloqueadoPorAdmin: bloqueado
+          };
+        });
+        
+        return (
+          <div className="w-full animate-view-swap pb-24 sm:pb-0">
+            <div className="mb-4">
+              <h2 className="text-lg sm:text-2xl font-semibold">Turnos Cancelados Disponibles</h2>
             </div>
-          ) : turnosCancelados.length === 0 ? (
-            <div className="p-8 text-center text-muted-foreground">
-              <p>No hay turnos cancelados disponibles</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-x-hidden">
-              {turnosCancelados.map((turno) => (
-                <Card key={turno.id} className="hover:bg-muted/50 transition-colors flex flex-col">
+            {loadingTurnosCancelados ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-muted-foreground">Cargando turnos cancelados...</p>
+              </div>
+            ) : turnosConEstado.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground">
+                <p>No hay turnos cancelados disponibles</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-x-hidden">
+                {turnosConEstado.map((turno) => (
+                <Card key={turno.id} className={`transition-colors flex flex-col ${
+                  turno.bloqueadoPorAdmin 
+                    ? 'bg-muted/30 border-muted-foreground/50 opacity-60' 
+                    : 'hover:bg-muted/50'
+                }`}>
                   <CardContent className="p-4 flex flex-col h-full">
                     <div className="flex items-start justify-between mb-3">
                       <div className="flex items-baseline gap-2">
-                        <h3 className="font-semibold text-sm sm:text-base">Clase Disponible</h3>
+                        <h3 className="font-semibold text-sm sm:text-base">
+                          {turno.bloqueadoPorAdmin ? 'Clase No Disponible' : 'Clase Disponible'}
+                        </h3>
                       </div>
                     </div>
                     <p className="text-xs text-muted-foreground mb-2">
@@ -1192,18 +1221,23 @@ export const RecurringScheduleView = () => {
                       variant="default"
                       size="sm"
                       onClick={() => handleReservarClick(turno)}
-                      disabled={turno.reservado}
-                      className="w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm bg-gray-600 hover:bg-gray-700 text-white"
+                      disabled={turno.reservado || turno.bloqueadoPorAdmin}
+                      className={`w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm ${
+                        turno.bloqueadoPorAdmin 
+                          ? 'bg-muted-foreground/50 hover:bg-muted-foreground/50 cursor-not-allowed' 
+                          : 'bg-gray-600 hover:bg-gray-700'
+                      } text-white`}
                     >
-                      {turno.reservado ? 'Reservado' : 'Reservar Clase'}
+                      {turno.bloqueadoPorAdmin ? 'No disponible' : turno.reservado ? 'Reservado' : 'Reservar Clase'}
                     </Button>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Modal de detalles de la clase */}
       <Dialog open={showModal} onOpenChange={setShowModal}>
