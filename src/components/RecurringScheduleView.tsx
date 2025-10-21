@@ -717,6 +717,9 @@ export const RecurringScheduleView = () => {
       // Recargar las clases del mes para reflejar el cambio (forzar recarga)
       await cargarClasesDelMes(true);
 
+      // Disparar evento para actualizar balance del admin
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
+
       setShowModal(false);
       setConfirmOpen(false);
       toast({
@@ -779,6 +782,9 @@ export const RecurringScheduleView = () => {
         .from('turnos_disponibles')
         .delete()
         .eq('id', turnoToReserve.id);
+
+      // Disparar evento para actualizar balance del admin
+      window.dispatchEvent(new Event('turnosVariables:updated'));
 
       toast({
         title: "✅ Turno reservado",
