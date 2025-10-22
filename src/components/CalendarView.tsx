@@ -244,7 +244,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Calcular fechas de inicio y fin según la vista
       const { startDate, endDate } = getDateRange();
       
-      const { data, error } = await supabase
+      // 1. Cargar turnos normales
+      const { data: turnosNormales, error: errorNormales } = await supabase
         .from('turnos')
         .select(`
           *,
@@ -256,13 +257,29 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         .order('fecha', { ascending: true })
         .order('hora_inicio', { ascending: true });
 
-      if (error) {
-        console.error('Error obteniendo turnos:', error);
-        return;
+      if (errorNormales) {
+        console.error('Error obteniendo turnos normales:', errorNormales);
       }
 
-      // Transformar datos
-      const turnosFormateados = data?.map(turno => ({
+      // 2. Cargar turnos variables
+      const { data: turnosVariables, error: errorVariables } = await supabase
+        .from('turnos_variables')
+        .select(`
+          *,
+          profiles!cliente_id(full_name)
+        `)
+        .eq('estado', 'confirmada')
+        .gte('turno_fecha', formatLocalDate(startDate))
+        .lte('turno_fecha', formatLocalDate(endDate))
+        .order('turno_fecha', { ascending: true })
+        .order('turno_hora_inicio', { ascending: true });
+
+      if (errorVariables) {
+        console.error('Error obteniendo turnos variables:', errorVariables);
+      }
+
+      // 3. Transformar turnos normales
+      const turnosNormalesFormateados = (turnosNormales || []).map(turno => ({
         id: turno.id,
         fecha: turno.fecha,
         hora_inicio: turno.hora_inicio,
@@ -272,11 +289,29 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         cliente_nombre: turno.profiles?.full_name || 'Sin asignar',
         profesional_id: turno.profesional_id,
         profesional_nombre: turno.profiles?.full_name || 'Sin asignar',
-        servicio: turno.servicio || 'Sin especificar'
-      })) || [];
+        servicio: turno.servicio || 'Sin especificar',
+        tipo: 'normal'
+      }));
 
-      // Nota: Se muestran hasta 24 turnos por día (8 horarios × 3 turnos por horario)
-      setTurnos(turnosFormateados);
+      // 4. Transformar turnos variables
+      const turnosVariablesFormateados = (turnosVariables || []).map(turno => ({
+        id: `variable_${turno.id}`, // Prefijo para evitar conflictos de ID
+        fecha: turno.turno_fecha,
+        hora_inicio: turno.turno_hora_inicio,
+        hora_fin: turno.turno_hora_fin,
+        estado: 'ocupado', // Los turnos variables siempre están ocupados
+        cliente_id: turno.cliente_id,
+        cliente_nombre: turno.profiles?.full_name || 'Sin asignar',
+        profesional_id: null,
+        profesional_nombre: 'Sin asignar',
+        servicio: 'Entrenamiento Variable',
+        tipo: 'variable'
+      }));
+
+      // 5. Combinar ambos tipos de turnos
+      const todosLosTurnos = [...turnosNormalesFormateados, ...turnosVariablesFormateados];
+
+      setTurnos(todosLosTurnos);
     } catch (error) {
       console.error('Error inesperado:', error);
     } finally {
@@ -902,7 +937,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             const apellido = partesNombre.slice(1).join(' ') || '';
                             
                             // Verificar si este horario está bloqueado por ausencia del admin
-                            const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.hora_inicio);
+                            const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.horaInicio);
                             
                             return (
                               <div 
@@ -953,6 +988,29 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     }
 
     // Vista normal para clientes (código existente)
+    // Separar slots en AM y PM con propiedades completas
+    const amSlots = adminSlots
+      .filter(slot => {
+        const hora = parseInt(slot.horaInicio.split(':')[0]);
+        return hora < 12;
+      })
+      .map(slot => ({
+        ...slot,
+        estado: 'disponible' as const,
+        turnosDisponibles: slot.capacidad || 0
+      }));
+    
+    const pmSlots = adminSlots
+      .filter(slot => {
+        const hora = parseInt(slot.horaInicio.split(':')[0]);
+        return hora >= 12;
+      })
+      .map(slot => ({
+        ...slot,
+        estado: 'disponible' as const,
+        turnosDisponibles: slot.capacidad || 0
+      }));
+
     return (
       <div className="space-y-6">
         {/* Horarios AM */}
