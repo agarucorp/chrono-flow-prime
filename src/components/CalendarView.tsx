@@ -212,6 +212,33 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     };
   }, [isAdminView, currentDate]);
 
+  // Escuchar eventos de actualización desde AdminTurnoModal
+  useEffect(() => {
+    const handleTurnosCanceladosUpdated = async () => {
+      await fetchAlumnosHorarios();
+    };
+    
+    const handleTurnosVariablesUpdated = async () => {
+      await fetchTurnos();
+      await fetchAlumnosHorarios();
+    };
+    
+    const handleClasesDelMesUpdated = async () => {
+      await fetchTurnos();
+      await fetchAlumnosHorarios();
+    };
+
+    window.addEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
+    window.addEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);
+    window.addEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
+
+    return () => {
+      window.removeEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
+      window.removeEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);
+      window.removeEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
+    };
+  }, []);
+
   // Cargar slots configurados por admin desde horarios_semanales
   const fetchAdminSlots = async () => {
     try {
@@ -400,24 +427,56 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Combinar todos los datos
       const todosAlumnos: AlumnoHorario[] = [];
 
-      // Agregar horarios recurrentes (excluyendo admins)
+      // Crear un Set de turnos cancelados para esta fecha específica
+      const turnosCanceladosHoy = new Set<string>();
+      if (turnosCancelados && turnosCancelados.length > 0) {
+        turnosCancelados.forEach(turno => {
+          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
+          // Filtrar admins: solo agregar si el perfil existe y NO es admin
+          if (profile && profile.role !== 'admin') {
+            // Crear clave única: usuario_id + hora_inicio + hora_fin
+            const claveCancelado = `${turno.cliente_id}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+            turnosCanceladosHoy.add(claveCancelado);
+            
+            todosAlumnos.push({
+              id: turno.id,
+              nombre: getProfileFullName(profile),
+              email: profile.email || '',
+              telefono: profile.phone || '',
+              tipo: 'cancelado',
+              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
+              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
+              fecha: turno.turno_fecha,
+              usuario_id: turno.cliente_id
+            });
+          }
+        });
+      }
+
+      // Agregar horarios recurrentes (excluyendo admins y los que están cancelados)
       if (horariosRecurrentes && horariosRecurrentes.length > 0) {
         horariosRecurrentes.forEach(horario => {
           const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            todosAlumnos.push({
-              id: horario.id,
-              nombre: getProfileFullName(profile),
-              email: profile.email || '',
-              telefono: profile.phone,
-              tipo: 'recurrente',
-              hora_inicio: (horario.hora_inicio || '').substring(0,5),
-              hora_fin: (horario.hora_fin || '').substring(0,5),
-              fecha: fechaActual,
-              activo: horario.activo,
-              usuario_id: horario.usuario_id
-            });
+            // Crear clave única para verificar si está cancelado
+            const claveRecurrente = `${horario.usuario_id}-${horario.hora_inicio}-${horario.hora_fin}`;
+            
+            // Solo agregar si NO está cancelado para esta fecha
+            if (!turnosCanceladosHoy.has(claveRecurrente)) {
+              todosAlumnos.push({
+                id: horario.id,
+                nombre: getProfileFullName(profile),
+                email: profile.email || '',
+                telefono: profile.phone,
+                tipo: 'recurrente',
+                hora_inicio: (horario.hora_inicio || '').substring(0,5),
+                hora_fin: (horario.hora_fin || '').substring(0,5),
+                fecha: fechaActual,
+                activo: horario.activo,
+                usuario_id: horario.usuario_id
+              });
+            }
           }
         });
       }
@@ -443,26 +502,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         });
       }
 
-      // Agregar turnos cancelados (excluyendo admins)
-      if (turnosCancelados && turnosCancelados.length > 0) {
-        turnosCancelados.forEach(turno => {
-          const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
-          // Filtrar admins: solo agregar si el perfil existe y NO es admin
-          if (profile && profile.role !== 'admin') {
-            todosAlumnos.push({
-              id: turno.id,
-              nombre: getProfileFullName(profile),
-              email: profile.email || '',
-              telefono: profile.phone || '',
-              tipo: 'cancelado',
-              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
-              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
-              fecha: turno.turno_fecha,
-              usuario_id: turno.cliente_id
-            });
-          }
-        });
-      }
 
       console.log('📊 Total de alumnos cargados:', todosAlumnos.length);
       console.log('📋 Alumnos por tipo:', {
@@ -497,11 +536,26 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     }
   };
 
-  // Función para abrir modal de cancelación de alumno
+  // Función para abrir modal de gestión de turno
   const handleAlumnoClick = (alumno: AlumnoHorario) => {
     if (alumno.tipo === 'cancelado' || !isAdminView) return;
-    setSelectedAlumno(alumno);
-    setShowCancelAlumnoModal(true);
+    
+    // Crear un objeto Turno para el AdminTurnoModal
+    const turnoParaModal: Turno = {
+      id: alumno.tipo === 'variable' ? `variable_${alumno.id}` : alumno.id,
+      fecha: alumno.fecha || formatLocalDate(currentDate),
+      hora_inicio: alumno.hora_inicio || '',
+      hora_fin: alumno.hora_fin || '',
+      estado: 'ocupado',
+      cliente_id: alumno.usuario_id,
+      cliente_nombre: alumno.nombre,
+      profesional_id: null,
+      profesional_nombre: 'Sin asignar',
+      servicio: alumno.tipo === 'variable' ? 'Entrenamiento Variable' : 'Entrenamiento Recurrente'
+    };
+    
+    setAdminSelectedTurno(turnoParaModal);
+    setShowAdminModal(true);
   };
 
   // Función para cancelar clase de alumno (solo admin)

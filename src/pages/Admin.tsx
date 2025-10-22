@@ -162,7 +162,6 @@ export default function Admin() {
       }
 
       setAusenciasAdmin(data || []);
-      console.log('✅ Ausencias del admin cargadas:', data?.length || 0);
     } catch (error) {
       console.error('Error inesperado cargando ausencias del admin:', error);
     }
@@ -207,7 +206,6 @@ export default function Admin() {
         .rpc('obtener_tarifa_usuario', { p_usuario_id: userId });
       
       if (error) {
-        console.error('Error cargando tarifa:', error);
         return;
       }
       
@@ -216,7 +214,7 @@ export default function Admin() {
         setNuevaTarifa(data[0].tarifa_efectiva.toString());
       }
     } catch (error) {
-      console.error('Error:', error);
+      // Error silencioso
     }
   };
 
@@ -246,7 +244,6 @@ export default function Admin() {
       dismissToast(loadingToast);
       
       if (error) {
-        console.error('Error guardando tarifa:', error);
         showError('Error', 'No se pudo actualizar la tarifa');
         return;
       }
@@ -263,7 +260,6 @@ export default function Admin() {
       }
     } catch (error) {
       dismissToast(loadingToast);
-      console.error('Error:', error);
       showError('Error', 'Ocurrió un error al actualizar la tarifa');
     } finally {
       setLoadingTarifa(false);
@@ -292,14 +288,12 @@ export default function Admin() {
         .order('hora_inicio', { ascending: true });
 
       if (error) {
-        console.error('Error al cargar horarios recurrentes:', error);
         showError('Error', 'No se pudieron cargar los horarios recurrentes');
         return;
       }
 
       setHorariosRecurrentes(data || []);
     } catch (error) {
-      console.error('Error inesperado:', error);
       showError('Error', 'Error inesperado al cargar horarios');
     } finally {
       setLoadingHorarios(false);
@@ -316,14 +310,13 @@ export default function Admin() {
         .single();
 
       if (error) {
-        console.error('Error al cargar datos del usuario:', error);
         return;
       }
 
       // Establecer directamente el usuario seleccionado con los datos más recientes
       setSelectedUser(data);
     } catch (error) {
-      console.error('Error inesperado cargando datos del usuario:', error);
+      // Error silencioso
     }
   };
 
@@ -434,7 +427,6 @@ export default function Admin() {
   // Listener para actualizar cuotas cuando cambien las ausencias del admin
   useEffect(() => {
     const handleAusenciasUpdate = () => {
-      console.log('🔄 Ausencias del admin actualizadas, recargando cuotas...');
       // Recargar cuotas del período actual
       (async () => {
         await cargarAusenciasAdmin();
@@ -443,7 +435,6 @@ export default function Admin() {
     };
 
     const handleClasesUpdate = () => {
-      console.log('🔄 Clases actualizadas (cancelación/reserva), recargando cuotas...');
       // El useEffect principal se encargará del recálculo
     };
 
@@ -469,14 +460,12 @@ export default function Admin() {
         .eq('activo', true);
 
       if (error) {
-        console.error('Error cargando horarios recurrentes:', error);
         return;
       }
 
       setHorariosRecurrentes(data || []);
-      console.log('✅ Horarios recurrentes cargados:', data?.length || 0);
     } catch (error) {
-      console.error('Error inesperado cargando horarios recurrentes:', error);
+      // Error silencioso
     }
   };
 
@@ -484,9 +473,6 @@ export default function Admin() {
   useEffect(() => {
     const refreshAdminCheck = async () => {
       if (user) {
-        console.log('=== VERIFICACIÓN ADICIONAL DE ADMIN ===');
-        console.log('Usuario actual:', user.email, 'ID:', user.id);
-        
         // Verificar por email
         const { data: byEmail, error: emailError } = await supabase
           .from('profiles')
@@ -494,17 +480,12 @@ export default function Admin() {
           .eq('email', user.email)
           .single();
 
-        console.log('Consulta por email:', { byEmail, emailError });
-
         // Verificar por ID
         const { data: byId, error: idError } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', user.id)
           .single();
-
-        console.log('Consulta por ID:', { byId, idError });
-        console.log('=== FIN VERIFICACIÓN ===');
       }
     };
 
@@ -552,19 +533,6 @@ export default function Admin() {
     return 0;
   });
 
-  // Debug: Mostrar información de usuarios en consola
-  useEffect(() => {
-    console.log('📋 Estado de usuarios en Admin.tsx:', {
-      totalUsuarios: allUsers.length,
-      usuariosFiltrados: filteredUsers.length,
-      usuariosOrdenados: sortedUsers.length,
-      ordenPago: paymentSortOrder,
-      roles: allUsers.reduce((acc, u) => {
-        acc[u.role] = (acc[u.role] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>)
-    });
-  }, [allUsers, filteredUsers, sortedUsers, paymentSortOrder]);
 
   // Función para alternar ordenamiento por pago
   const togglePaymentSort = () => {
@@ -609,9 +577,6 @@ export default function Admin() {
       // Cargar ausencias del admin primero
       await cargarAusenciasAdmin();
       
-      console.log('🔍 Calculando cuotas para:', selectedYear, selectedMonth);
-      console.log('🔍 Usuarios disponibles:', allUsers.length);
-      
       // Construir filas para Balance calculando directamente desde turnos
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
       let totalAbonado = 0;
@@ -636,7 +601,6 @@ export default function Admin() {
             .eq('usuario_id', usuario.id)
             .eq('activo', true);
 
-          console.log(`🔍 Usuario ${nombre}: ${horariosRecurrentes?.length || 0} horarios recurrentes configurados`);
 
           if (!errorHorarios && horariosRecurrentes && horariosRecurrentes.length > 0) {
             // Obtener tarifa del usuario
@@ -701,8 +665,6 @@ export default function Admin() {
             
             const montoCorregido = clasesFinales * tarifaIndividual;
             
-            console.log(`🔍 Usuario ${nombre}: ${clasesBase} base - ${canceladasCount} canceladas + ${reservadasCount} reservadas = ${clasesValidas} válidas, tarifa $${tarifaIndividual} = $${montoCorregido}`);
-            
             // Estado por defecto (pendiente)
             const estado = 'pendiente' as 'pendiente'|'abonada'|'vencida';
             const descuento = 0;
@@ -720,8 +682,6 @@ export default function Admin() {
             if (estado === 'abonada') totalAbonado += montoCorregido; 
             else totalPendiente += montoCorregido;
           } else {
-            console.log(`🔍 Usuario ${nombre}: Sin horarios recurrentes configurados`);
-            
             // Agregar usuario con cuota 0
             rows.push({ 
               usuario_id: usuario.id, 
@@ -749,9 +709,6 @@ export default function Admin() {
         }
       }
       
-      console.log('🔍 Total filas generadas:', rows.length);
-      console.log('🔍 Total abonado:', totalAbonado);
-      console.log('🔍 Total pendiente:', totalPendiente);
       
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });

@@ -193,16 +193,14 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       setLoading(true);
       const loadingToast = showLoading('Cancelando reserva...');
 
-      // 1. Buscar primero en turnos_variables (turnos variables)
-      // Si el turno tiene prefijo 'variable_', es un turno variable
+      // 1. Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');
-      
-      let turnoVariable = null;
-      let errorVariable = null;
+      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
       
       if (esTurnoVariable) {
+        // CANCELAR TURNO VARIABLE
         const turnoVariableId = turno.id.replace('variable_', '');
-        const { data, error } = await supabase
+        const { data: turnoVariable, error: errorVariable } = await supabase
           .from('turnos_variables')
           .select('id, creado_desde_disponible_id')
           .eq('id', turnoVariableId)
@@ -210,25 +208,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           .eq('estado', 'confirmada')
           .single();
         
-        turnoVariable = data;
-        errorVariable = error;
-      } else {
-        // Buscar por fecha y hora para turnos normales
-        const { data, error } = await supabase
-          .from('turnos_variables')
-          .select('id, creado_desde_disponible_id')
-          .eq('cliente_id', clienteId)
-          .eq('turno_fecha', turno.fecha)
-          .eq('turno_hora_inicio', turno.hora_inicio)
-          .eq('turno_hora_fin', turno.hora_fin)
-          .eq('estado', 'confirmada')
-          .single();
-        
-        turnoVariable = data;
-        errorVariable = error;
-      }
+        if (errorVariable || !turnoVariable) {
+          showError('Error', 'No se encontró el turno variable');
+          return;
+        }
 
-      if (!errorVariable && turnoVariable) {
         // Eliminar el turno variable
         const { error: errorEliminar } = await supabase
           .from('turnos_variables')
@@ -253,6 +237,23 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
         if (errorCancelacion) {
           showError('Error', 'No se pudo crear la cancelación');
+          return;
+        }
+
+      } else if (esTurnoRecurrente) {
+        // CANCELAR TURNO RECURRENTE (solo crear cancelación, no eliminar horario fijo)
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: clienteId,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación del turno recurrente');
           return;
         }
 
@@ -334,17 +335,139 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       setLoading(true);
       const loadingToast = showLoading('Eliminando turno...');
 
-      const { error } = await supabase
-        .from('turnos')
-        .delete()
-        .eq('id', turno.id);
+      // Determinar el tipo de turno
+      const esTurnoVariable = turno.id.startsWith('variable_');
+      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
+      
+      console.log('🔍 DEBUG eliminarTurno:', {
+        turnoId: turno.id,
+        turnoServicio: turno.servicio,
+        esTurnoVariable,
+        esTurnoRecurrente,
+        clienteId: turno.cliente_id,
+        fecha: turno.fecha,
+        horaInicio: turno.hora_inicio,
+        horaFin: turno.hora_fin
+      });
+
+      if (esTurnoVariable) {
+        // ELIMINAR TURNO VARIABLE - igual que en RecurringScheduleView
+        const turnoVariableId = turno.id.replace('variable_', '');
+        
+        // 1. Eliminar el turno variable
+        const { error: errorEliminar } = await supabase
+          .from('turnos_variables')
+          .delete()
+          .eq('id', turnoVariableId);
+
+        if (errorEliminar) throw errorEliminar;
+
+        // 2. Crear registro en turnos_cancelados
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) throw errorCancelacion;
+
+      } else if (esTurnoRecurrente) {
+        // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
+        // Solo crear cancelación, NO eliminar nada
+        
+        console.log('🔄 Procesando turno recurrente...');
+        
+        // Verificar si ya existe una cancelación para este turno
+        const { data: cancelacionExistente, error: errorVerificar } = await supabase
+          .from('turnos_cancelados')
+          .select('id')
+          .eq('cliente_id', turno.cliente_id)
+          .eq('turno_fecha', turno.fecha)
+          .eq('turno_hora_inicio', turno.hora_inicio)
+          .eq('turno_hora_fin', turno.hora_fin);
+
+        console.log('🔍 Verificación cancelación existente:', {
+          cancelacionExistente,
+          errorVerificar,
+          count: cancelacionExistente?.length || 0
+        });
+
+        if (errorVerificar) {
+          console.error('❌ Error verificando cancelación existente:', errorVerificar);
+          throw errorVerificar;
+        }
+
+        if (cancelacionExistente && cancelacionExistente.length > 0) {
+          console.log('⚠️ Turno ya cancelado');
+          showError('Error', 'Este turno ya está cancelado');
+          return;
+        }
+
+        // Crear registro de cancelación
+        console.log('➕ Creando cancelación...');
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        console.log('🔍 Resultado insertar cancelación:', {
+          errorCancelacion,
+          success: !errorCancelacion
+        });
+
+        if (errorCancelacion) {
+          console.error('❌ Error creando cancelación:', errorCancelacion);
+          throw errorCancelacion;
+        }
+        
+        console.log('✅ Cancelación creada exitosamente');
+
+      } else {
+        // ELIMINAR TURNO NORMAL
+        const { error } = await supabase
+          .from('turnos')
+          .delete()
+          .eq('id', turno.id);
+
+        if (error) throw error;
+
+        // Crear registro en turnos_cancelados
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) throw errorCancelacion;
+      }
 
       dismissToast(loadingToast);
 
-      if (error) throw error;
-
       showSuccess('Turno eliminado', 'El turno ha sido eliminado exitosamente');
+      
+      console.log('🎉 Éxito! Disparando eventos de actualización...');
+      
+      // Disparar eventos para actualizar otras vistas
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
+      window.dispatchEvent(new Event('turnosVariables:updated'));
+      window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      console.log('📡 Eventos disparados, llamando onTurnoUpdated...');
       onTurnoUpdated();
+      console.log('🚪 Cerrando modal...');
       onClose();
     } catch (error) {
       console.error('Error eliminando turno:', error);
