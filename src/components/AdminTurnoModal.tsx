@@ -81,7 +81,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     if (!turno) return;
 
     try {
-      const { data, error } = await supabase
+      // 1. Buscar reservas normales en reservas_turnos
+      const { data: reservasNormales, error: errorNormales } = await supabase
         .from('reservas_turnos')
         .select(`
           cliente_id,
@@ -91,20 +92,51 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         .eq('turno_id', turno.id)
         .eq('estado', 'confirmada');
 
-      if (error) throw error;
+      if (errorNormales) {
+        console.error('Error cargando reservas normales:', errorNormales);
+      }
 
-      const clientesReservados = data?.map((reserva: any) => ({
+      // 2. Buscar turnos variables que coincidan con este horario
+      const { data: turnosVariables, error: errorVariables } = await supabase
+        .from('turnos_variables')
+        .select(`
+          cliente_id,
+          estado,
+          clientes:cliente_id(id, full_name, email)
+        `)
+        .eq('turno_fecha', turno.fecha)
+        .eq('turno_hora_inicio', turno.hora_inicio)
+        .eq('turno_hora_fin', turno.hora_fin)
+        .eq('estado', 'confirmada');
+
+      if (errorVariables) {
+        console.error('Error cargando turnos variables:', errorVariables);
+      }
+
+      // 3. Combinar ambas listas
+      const clientesReservadosNormales = (reservasNormales || []).map((reserva: any) => ({
         id: reserva.clientes.id,
         full_name: reserva.clientes.full_name,
         email: reserva.clientes.email,
-        role: 'client'
-      })) || [];
+        role: 'client',
+        tipo: 'normal'
+      }));
 
-      setClientesReservados(clientesReservados);
+      const clientesReservadosVariables = (turnosVariables || []).map((turno: any) => ({
+        id: turno.clientes.id,
+        full_name: turno.clientes.full_name,
+        email: turno.clientes.email,
+        role: 'client',
+        tipo: 'variable'
+      }));
+
+      const todosLosClientes = [...clientesReservadosNormales, ...clientesReservadosVariables];
+
+      setClientesReservados(todosLosClientes);
       
       // Calcular capacidad disponible
       const maxAlumnos = turno.max_alumnos || 1;
-      setCapacidadDisponible(Math.max(0, maxAlumnos - clientesReservados.length));
+      setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));
     } catch (error) {
       console.error('Error cargando reservas:', error);
     }
@@ -161,53 +193,130 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       setLoading(true);
       const loadingToast = showLoading('Cancelando reserva...');
 
-      // Buscar el turno específico de este cliente en este horario
-      const { data: turnoCliente, error: errorBuscar } = await supabase
-        .from('turnos')
-        .select('*')
-        .eq('fecha', turno.fecha)
-        .eq('hora_inicio', turno.hora_inicio)
-        .eq('cliente_id', clienteId)
-        .eq('estado', 'ocupado')
-        .single();
+      // 1. Determinar el tipo de turno
+      const esTurnoVariable = turno.id.startsWith('variable_');
+      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
+      
+      if (esTurnoVariable) {
+        // CANCELAR TURNO VARIABLE
+        const turnoVariableId = turno.id.replace('variable_', '');
+        const { data: turnoVariable, error: errorVariable } = await supabase
+          .from('turnos_variables')
+          .select('id, creado_desde_disponible_id')
+          .eq('id', turnoVariableId)
+          .eq('cliente_id', clienteId)
+          .eq('estado', 'confirmada')
+          .single();
+        
+        if (errorVariable || !turnoVariable) {
+          showError('Error', 'No se encontró el turno variable');
+          return;
+        }
 
-      if (errorBuscar) {
-        showError('Error', 'No se pudo encontrar la reserva del cliente');
-        return;
+        // Eliminar el turno variable
+        const { error: errorEliminar } = await supabase
+          .from('turnos_variables')
+          .delete()
+          .eq('id', turnoVariable.id);
+
+        if (errorEliminar) {
+          showError('Error', 'No se pudo eliminar el turno variable');
+          return;
+        }
+
+        // Crear registro en turnos_cancelados (el trigger creará turnos_disponibles)
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: clienteId,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación');
+          return;
+        }
+
+      } else if (esTurnoRecurrente) {
+        // CANCELAR TURNO RECURRENTE (solo crear cancelación, no eliminar horario fijo)
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: clienteId,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación del turno recurrente');
+          return;
+        }
+
+      } else {
+        // 2. Buscar en turnos normales
+        const { data: turnoCliente, error: errorBuscar } = await supabase
+          .from('turnos')
+          .select('*')
+          .eq('fecha', turno.fecha)
+          .eq('hora_inicio', turno.hora_inicio)
+          .eq('cliente_id', clienteId)
+          .eq('estado', 'ocupado')
+          .single();
+
+        if (errorBuscar) {
+          showError('Error', 'No se pudo encontrar la reserva del cliente');
+          return;
+        }
+
+        // Cancelar la reserva normal
+        const { error: errorCancelar } = await supabase
+          .from('turnos')
+          .update({
+            estado: 'disponible',
+            cliente_id: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', turnoCliente.id);
+
+        if (errorCancelar) {
+          showError('Error', 'No se pudo cancelar la reserva');
+          return;
+        }
+
+        // Registrar disponibilidad en turnos_cancelados
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: clienteId,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación');
+          return;
+        }
       }
-
-      // Cancelar la reserva
-      const { error: errorCancelar } = await supabase
-        .from('turnos')
-        .update({
-          estado: 'disponible',
-          cliente_id: null,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', turnoCliente.id);
-
-      if (errorCancelar) {
-        showError('Error', 'No se pudo cancelar la reserva');
-        return;
-      }
-
-      // Registrar disponibilidad en turnos_cancelados
-      await supabase
-        .from('turnos_cancelados')
-        .insert({
-          cliente_id: clienteId,
-          turno_fecha: turno.fecha,
-          turno_hora_inicio: turno.hora_inicio,
-          turno_hora_fin: turno.hora_fin,
-          tipo_cancelacion: 'admin'
-        });
 
       showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada exitosamente');
+      
+      // Disparar eventos para actualizar otras vistas
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
+      window.dispatchEvent(new Event('turnosVariables:updated'));
+      window.dispatchEvent(new Event('clasesDelMes:updated'));
       
       // Recargar datos
       await cargarReservasExistentes();
       onTurnoUpdated();
     } catch (error) {
+      console.error('Error al cancelar reserva:', error);
       showError('Error', 'No se pudo cancelar la reserva');
     } finally {
       setLoading(false);
@@ -226,17 +335,139 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       setLoading(true);
       const loadingToast = showLoading('Eliminando turno...');
 
-      const { error } = await supabase
-        .from('turnos')
-        .delete()
-        .eq('id', turno.id);
+      // Determinar el tipo de turno
+      const esTurnoVariable = turno.id.startsWith('variable_');
+      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
+      
+      console.log('🔍 DEBUG eliminarTurno:', {
+        turnoId: turno.id,
+        turnoServicio: turno.servicio,
+        esTurnoVariable,
+        esTurnoRecurrente,
+        clienteId: turno.cliente_id,
+        fecha: turno.fecha,
+        horaInicio: turno.hora_inicio,
+        horaFin: turno.hora_fin
+      });
+
+      if (esTurnoVariable) {
+        // ELIMINAR TURNO VARIABLE - igual que en RecurringScheduleView
+        const turnoVariableId = turno.id.replace('variable_', '');
+        
+        // 1. Eliminar el turno variable
+        const { error: errorEliminar } = await supabase
+          .from('turnos_variables')
+          .delete()
+          .eq('id', turnoVariableId);
+
+        if (errorEliminar) throw errorEliminar;
+
+        // 2. Crear registro en turnos_cancelados
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) throw errorCancelacion;
+
+      } else if (esTurnoRecurrente) {
+        // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
+        // Solo crear cancelación, NO eliminar nada
+        
+        console.log('🔄 Procesando turno recurrente...');
+        
+        // Verificar si ya existe una cancelación para este turno
+        const { data: cancelacionExistente, error: errorVerificar } = await supabase
+          .from('turnos_cancelados')
+          .select('id')
+          .eq('cliente_id', turno.cliente_id)
+          .eq('turno_fecha', turno.fecha)
+          .eq('turno_hora_inicio', turno.hora_inicio)
+          .eq('turno_hora_fin', turno.hora_fin);
+
+        console.log('🔍 Verificación cancelación existente:', {
+          cancelacionExistente,
+          errorVerificar,
+          count: cancelacionExistente?.length || 0
+        });
+
+        if (errorVerificar) {
+          console.error('❌ Error verificando cancelación existente:', errorVerificar);
+          throw errorVerificar;
+        }
+
+        if (cancelacionExistente && cancelacionExistente.length > 0) {
+          console.log('⚠️ Turno ya cancelado');
+          showError('Error', 'Este turno ya está cancelado');
+          return;
+        }
+
+        // Crear registro de cancelación
+        console.log('➕ Creando cancelación...');
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        console.log('🔍 Resultado insertar cancelación:', {
+          errorCancelacion,
+          success: !errorCancelacion
+        });
+
+        if (errorCancelacion) {
+          console.error('❌ Error creando cancelación:', errorCancelacion);
+          throw errorCancelacion;
+        }
+        
+        console.log('✅ Cancelación creada exitosamente');
+
+      } else {
+        // ELIMINAR TURNO NORMAL
+        const { error } = await supabase
+          .from('turnos')
+          .delete()
+          .eq('id', turno.id);
+
+        if (error) throw error;
+
+        // Crear registro en turnos_cancelados
+        const { error: errorCancelacion } = await supabase
+          .from('turnos_cancelados')
+          .insert({
+            cliente_id: turno.cliente_id,
+            turno_fecha: turno.fecha,
+            turno_hora_inicio: turno.hora_inicio,
+            turno_hora_fin: turno.hora_fin,
+            tipo_cancelacion: 'admin'
+          });
+
+        if (errorCancelacion) throw errorCancelacion;
+      }
 
       dismissToast(loadingToast);
 
-      if (error) throw error;
-
       showSuccess('Turno eliminado', 'El turno ha sido eliminado exitosamente');
+      
+      console.log('🎉 Éxito! Disparando eventos de actualización...');
+      
+      // Disparar eventos para actualizar otras vistas
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
+      window.dispatchEvent(new Event('turnosVariables:updated'));
+      window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      console.log('📡 Eventos disparados, llamando onTurnoUpdated...');
       onTurnoUpdated();
+      console.log('🚪 Cerrando modal...');
       onClose();
     } catch (error) {
       console.error('Error eliminando turno:', error);
