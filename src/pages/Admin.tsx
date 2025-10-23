@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { 
   Users, 
   Shield, 
@@ -85,6 +85,8 @@ export default function Admin() {
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
   const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }>>([]);
   const [balanceTotals, setBalanceTotals] = useState<{ totalAbonado: number; totalPendiente: number }>({ totalAbonado: 0, totalPendiente: 0 });
+  const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
+  const skipNextReload = useRef(false);
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
   const [editingTarifa, setEditingTarifa] = useState(false);
   const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
@@ -606,157 +608,75 @@ export default function Admin() {
   // Cargar cuotas del periodo seleccionado y mapear por usuario
   useEffect(() => {
     (async () => {
-      // Cargar ausencias del admin primero
-      await cargarAusenciasAdmin();
+      console.log('🔄 USEEFFECT: Ejecutándose', {
+        selectedYear,
+        selectedMonth,
+        isUpdatingPayment,
+        skipNextReload: skipNextReload.current
+      });
       
-      console.log('🔍 Calculando cuotas para:', selectedYear, selectedMonth);
-      console.log('🔍 Usuarios disponibles:', allUsers.length);
+      // No recargar si hay una actualización de pago en progreso o si se debe saltar
+      if (isUpdatingPayment || skipNextReload.current) {
+        console.log('🔄 USEEFFECT: Saltando recarga');
+        skipNextReload.current = false; // Resetear el flag
+        return;
+      }
       
-      // Construir filas para Balance calculando directamente desde turnos
+      // Solo cargar ausencias del admin si es necesario
+      if (ausenciasAdmin.length === 0) {
+        await cargarAusenciasAdmin();
+      }
+      
+      // Cargar cuotas desde la base de datos
+      const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+      console.log('🔍 Cuotas cargadas desde BD:', cuotas.length, cuotas);
+      
+      // Si no hay cuotas, no procesar
+      if (cuotas.length === 0) {
+        console.log('🔍 No hay cuotas para procesar');
+        setBalanceRows([]);
+        setBalanceTotals({ totalAbonado: 0, totalPendiente: 0 });
+        return;
+      }
+      
+      // Construir filas para Balance usando datos de la BD
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
       
-      // Procesar cada usuario
-      for (const usuario of allUsers) {
-        // Solo procesar usuarios que no sean admin
-        if (usuario.role === 'admin') continue;
+      // Procesar cada cuota de la base de datos
+      for (const cuota of cuotas) {
+        const usuario = allUsers.find(u => u.id === cuota.usuario_id);
+        if (!usuario) continue;
         
         const nombre = usuario.first_name || usuario.last_name ? 
           `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim() : 
           (usuario.full_name || usuario.email);
         const email = usuario.email || '';
         
-        // Obtener clases del usuario para el mes seleccionado
-        try {
-          // Primero verificar si el usuario tiene horarios recurrentes configurados
-          const { data: horariosRecurrentes, error: errorHorarios } = await supabase
-            .from('horarios_recurrentes_usuario')
-            .select('*')
-            .eq('usuario_id', usuario.id)
-            .eq('activo', true);
-
-          console.log(`🔍 Usuario ${nombre}: ${horariosRecurrentes?.length || 0} horarios recurrentes configurados`);
-
-          if (!errorHorarios && horariosRecurrentes && horariosRecurrentes.length > 0) {
-            // Obtener tarifa del usuario
-            const { data: tarifaData, error: tarifaError } = await supabase
-              .rpc('obtener_tarifa_usuario', { p_usuario_id: usuario.id });
-            
-            let tarifaIndividual = 0;
-            if (!tarifaError && tarifaData && tarifaData.length > 0) {
-              tarifaIndividual = Number(tarifaData[0].tarifa_efectiva) || 0;
-            } else {
-              // Usar tarifa por defecto del sistema
-              const { data: configAdmin } = await supabase
-                .from('configuracion_admin')
-                .select('precio_clase')
-                .eq('sistema_activo', true)
-                .limit(1)
-                .single();
-              
-              tarifaIndividual = Number(configAdmin?.precio_clase) || 5000;
-            }
-            
-            // Calcular clases reales del mes (no estimadas)
-            let clasesValidas = 0;
-            
-            // 1. Clases de horarios recurrentes (base)
-            const diasPorSemana = horariosRecurrentes.length;
-            const semanasEnMes = 4; // Aproximación
-            const clasesBase = diasPorSemana * semanasEnMes;
-            
-            // 2. Restar clases canceladas por el usuario
-            const { data: clasesCanceladas, error: errorCanceladas } = await supabase
-              .from('turnos_cancelados')
-              .select('turno_fecha')
-              .eq('cliente_id', usuario.id)
-              .gte('turno_fecha', `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-              .lt('turno_fecha', `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`);
-            
-            const canceladasCount = clasesCanceladas?.length || 0;
-            
-            // 3. Sumar clases reservadas en "Vacantes" (turnos_variables)
-            const { data: clasesReservadas, error: errorReservadas } = await supabase
-              .from('turnos_variables')
-              .select('turno_fecha')
-              .eq('cliente_id', usuario.id)
-              .eq('estado', 'confirmada')
-              .gte('turno_fecha', `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-              .lt('turno_fecha', `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`);
-            
-            const reservadasCount = clasesReservadas?.length || 0;
-            
-            // 4. Calcular clases finales
-            clasesValidas = Math.max(0, clasesBase - canceladasCount + reservadasCount);
-            
-            // 5. Filtrar clases bloqueadas por ausencias del admin
-            let clasesFinales = clasesValidas;
-            if (clasesValidas > 0) {
-              // Simular verificación de bloqueos (simplificado)
-              // En un caso real, aquí se verificarían las fechas específicas
-              const bloqueosEstimados = Math.floor(clasesValidas * 0.1); // 10% estimado de bloqueos
-              clasesFinales = Math.max(0, clasesValidas - bloqueosEstimados);
-            }
-            
-            const montoCorregido = clasesFinales * tarifaIndividual;
-            
-            console.log(`🔍 Usuario ${nombre}: ${clasesBase} base - ${canceladasCount} canceladas + ${reservadasCount} reservadas = ${clasesValidas} válidas, tarifa $${tarifaIndividual} = $${montoCorregido}`);
-            
-            // Estado por defecto (pendiente)
-            const estado = 'pendiente' as 'pendiente'|'abonada'|'vencida';
-            const descuento = 0;
-            
-            rows.push({ 
-              usuario_id: usuario.id, 
-              nombre, 
-              email, 
-              monto: montoCorregido, 
-              montoOriginal: montoCorregido,
-              estado, 
-              descuento
-            });
-            
-            if (estado === 'abonada') totalAbonado += montoCorregido; 
-            else totalPendiente += montoCorregido;
-          } else {
-            console.log(`🔍 Usuario ${nombre}: Sin horarios recurrentes configurados`);
-            
-            // Agregar usuario con cuota 0
-            rows.push({ 
-              usuario_id: usuario.id, 
-              nombre, 
-              email, 
-              monto: 0, 
-              montoOriginal: 0,
-              estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
-              descuento: 0
-            });
-          }
-        } catch (error) {
-          console.error(`Error calculando clases para ${nombre}:`, error);
-          
-          // Agregar usuario con cuota 0 en caso de error
-          rows.push({ 
-            usuario_id: usuario.id, 
-            nombre, 
-            email, 
-            monto: 0, 
-            montoOriginal: 0,
-            estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
-            descuento: 0
-          });
-        }
+        const montoOriginal = Number(cuota.monto_total) || 0;
+        const descuentoPorcentaje = Number(cuota.descuento_porcentaje) || 0;
+        const montoConDescuento = Number(cuota.monto_con_descuento) || montoOriginal;
+        const estado = (cuota.estado_pago as any) || 'pendiente';
+        
+        rows.push({ 
+          usuario_id: cuota.usuario_id, 
+          nombre, 
+          email, 
+          monto: montoConDescuento, 
+          montoOriginal,
+          estado, 
+          descuento: descuentoPorcentaje
+        });
+        
+        if (estado === 'abonada') totalAbonado += montoConDescuento; 
+        else totalPendiente += montoConDescuento;
       }
-      
-      console.log('🔍 Total filas generadas:', rows.length);
-      console.log('🔍 Total abonado:', totalAbonado);
-      console.log('🔍 Total pendiente:', totalPendiente);
       
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
     })();
-  }, [selectedYear, selectedMonth, allUsers, ausenciasAdmin]);
+  }, [selectedYear, selectedMonth, allUsers, isUpdatingPayment]);
 
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -1202,36 +1122,50 @@ export default function Admin() {
                             <Select
                               value={row.estado === 'abonada' ? 'pagado' : 'pendiente'}
                               onValueChange={async (v) => {
+                                console.log('🔄 SWITCH: Cambiando estado', {
+                                  usuario: row.nombre,
+                                  de: row.estado,
+                                  a: v,
+                                  nuevoEstadoDb: (v === 'pagado') ? 'abonada' : 'pendiente'
+                                });
+                                
+                                setIsUpdatingPayment(true);
+                                skipNextReload.current = true; // Evitar que el useEffect se ejecute
+                                
                                 const nuevoEstadoDb = (v === 'pagado') ? 'abonada' : 'pendiente';
                                 const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
+                                
+                                console.log('🔄 SWITCH: Resultado BD:', res);
+                                
                                 if (res.success) {
-                                  // Recargar cuotas para reflejar los cambios
-                                  const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-                                  const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
-                                  let totalAbonado = 0;
-                                  let totalPendiente = 0;
-                                  for (const c of cuotas) {
-                                    const u = allUsers.find(u => u.id === c.usuario_id);
-                                    const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
-                                    const email = u?.email || '';
-                                    const montoOriginal = Number(c.monto_total) || 0;
-                                    const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
-                                    const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
-                                    const estado = (c.estado_pago as any) || 'pendiente';
-                                    rows.push({ 
-                                      usuario_id: c.usuario_id, 
-                                      nombre, 
-                                      email, 
-                                      monto: montoConDescuento, 
-                                      montoOriginal,
-                                      estado, 
-                                      descuento: descuentoPorcentaje 
-                                    });
-                                    if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
-                                  }
-                                  setBalanceRows(rows);
-                                  setBalanceTotals({ totalAbonado, totalPendiente });
+                                  // Actualizar solo la fila específica en lugar de recargar toda la lista
+                                  setBalanceRows(prevRows => 
+                                    prevRows.map(r => 
+                                      r.usuario_id === row.usuario_id 
+                                        ? { ...r, estado: nuevoEstadoDb }
+                                        : r
+                                    )
+                                  );
+                                  
+                                  // Actualizar totales
+                                  setBalanceTotals(prevTotals => {
+                                    const monto = row.monto;
+                                    return nuevoEstadoDb === 'abonada' ? {
+                                      totalAbonado: prevTotals.totalAbonado + monto,
+                                      totalPendiente: prevTotals.totalPendiente - monto
+                                    } : {
+                                      totalAbonado: prevTotals.totalAbonado - monto,
+                                      totalPendiente: prevTotals.totalPendiente + monto
+                                    };
+                                  });
+                                  
+                                  showSuccess(`Estado de pago actualizado a ${v === 'pagado' ? 'pagado' : 'pendiente'}`);
+                                } else {
+                                  showError('Error al actualizar el estado de pago');
                                 }
+                                
+                                console.log('🔄 SWITCH: Actualización completada');
+                                setIsUpdatingPayment(false);
                               }}
                             >
                               <SelectTrigger className={`w-[130px] h-8 ${row.estado==='abonada' ? 'text-green-600' : 'text-red-600'}`}>
