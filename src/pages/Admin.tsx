@@ -583,10 +583,8 @@ export default function Admin() {
         skipNextReload: skipNextReload.current
       });
       
-<<<<<<< HEAD
       // No recargar si hay una actualización de pago en progreso o si se debe saltar
       if (isUpdatingPayment || skipNextReload.current) {
-        console.log('🔄 USEEFFECT: Saltando recarga');
         skipNextReload.current = false; // Resetear el flag
         return;
       }
@@ -598,20 +596,15 @@ export default function Admin() {
       
       // Cargar cuotas desde la base de datos
       const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-      console.log('🔍 Cuotas cargadas desde BD:', cuotas.length, cuotas);
       
       // Si no hay cuotas, no procesar
       if (cuotas.length === 0) {
-        console.log('🔍 No hay cuotas para procesar');
         setBalanceRows([]);
         setBalanceTotals({ totalAbonado: 0, totalPendiente: 0 });
         return;
       }
       
       // Construir filas para Balance usando datos de la BD
-=======
-      // Construir filas para Balance calculando directamente desde turnos
->>>>>>> 2c1c3d42fc4aebe8137f18cc51377933d648f9dd
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
@@ -626,7 +619,6 @@ export default function Admin() {
           (usuario.full_name || usuario.email);
         const email = usuario.email || '';
         
-<<<<<<< HEAD
         const montoOriginal = Number(cuota.monto_total) || 0;
         const descuentoPorcentaje = Number(cuota.descuento_porcentaje) || 0;
         const montoConDescuento = Number(cuota.monto_con_descuento) || montoOriginal;
@@ -645,127 +637,6 @@ export default function Admin() {
         if (estado === 'abonada') totalAbonado += montoConDescuento; 
         else totalPendiente += montoConDescuento;
       }
-      
-=======
-        // Obtener clases del usuario para el mes seleccionado
-        try {
-          // Primero verificar si el usuario tiene horarios recurrentes configurados
-          const { data: horariosRecurrentes, error: errorHorarios } = await supabase
-            .from('horarios_recurrentes_usuario')
-            .select('*')
-            .eq('usuario_id', usuario.id)
-            .eq('activo', true);
-
-
-          if (!errorHorarios && horariosRecurrentes && horariosRecurrentes.length > 0) {
-            // Obtener tarifa del usuario
-            const { data: tarifaData, error: tarifaError } = await supabase
-              .rpc('obtener_tarifa_usuario', { p_usuario_id: usuario.id });
-            
-            let tarifaIndividual = 0;
-            if (!tarifaError && tarifaData && tarifaData.length > 0) {
-              tarifaIndividual = Number(tarifaData[0].tarifa_efectiva) || 0;
-            } else {
-              // Usar tarifa por defecto del sistema
-              const { data: configAdmin } = await supabase
-                .from('configuracion_admin')
-                .select('precio_clase')
-                .eq('sistema_activo', true)
-                .limit(1)
-                .single();
-              
-              tarifaIndividual = Number(configAdmin?.precio_clase) || 5000;
-            }
-            
-            // Calcular clases reales del mes (no estimadas)
-            let clasesValidas = 0;
-            
-            // 1. Clases de horarios recurrentes (base)
-            const diasPorSemana = horariosRecurrentes.length;
-            const semanasEnMes = 4; // Aproximación
-            const clasesBase = diasPorSemana * semanasEnMes;
-            
-            // 2. Restar clases canceladas por el usuario
-            const { data: clasesCanceladas, error: errorCanceladas } = await supabase
-              .from('turnos_cancelados')
-              .select('turno_fecha')
-              .eq('cliente_id', usuario.id)
-              .gte('turno_fecha', `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-              .lt('turno_fecha', `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`);
-            
-            const canceladasCount = clasesCanceladas?.length || 0;
-            
-            // 3. Sumar clases reservadas en "Vacantes" (turnos_variables)
-            const { data: clasesReservadas, error: errorReservadas } = await supabase
-              .from('turnos_variables')
-              .select('turno_fecha')
-              .eq('cliente_id', usuario.id)
-              .eq('estado', 'confirmada')
-              .gte('turno_fecha', `${selectedYear}-${String(selectedMonth).padStart(2, '0')}-01`)
-              .lt('turno_fecha', `${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}-01`);
-            
-            const reservadasCount = clasesReservadas?.length || 0;
-            
-            // 4. Calcular clases finales
-            clasesValidas = Math.max(0, clasesBase - canceladasCount + reservadasCount);
-            
-            // 5. Filtrar clases bloqueadas por ausencias del admin
-            let clasesFinales = clasesValidas;
-            if (clasesValidas > 0) {
-              // Simular verificación de bloqueos (simplificado)
-              // En un caso real, aquí se verificarían las fechas específicas
-              const bloqueosEstimados = Math.floor(clasesValidas * 0.1); // 10% estimado de bloqueos
-              clasesFinales = Math.max(0, clasesValidas - bloqueosEstimados);
-            }
-            
-            const montoCorregido = clasesFinales * tarifaIndividual;
-            
-            // Estado por defecto (pendiente)
-            const estado = 'pendiente' as 'pendiente'|'abonada'|'vencida';
-            const descuento = 0;
-            
-            rows.push({ 
-              usuario_id: usuario.id, 
-              nombre, 
-              email, 
-              monto: montoCorregido, 
-              montoOriginal: montoCorregido,
-              estado, 
-              descuento
-            });
-            
-            if (estado === 'abonada') totalAbonado += montoCorregido; 
-            else totalPendiente += montoCorregido;
-          } else {
-            // Agregar usuario con cuota 0
-            rows.push({ 
-              usuario_id: usuario.id, 
-              nombre, 
-              email, 
-              monto: 0, 
-              montoOriginal: 0,
-              estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
-              descuento: 0
-            });
-          }
-        } catch (error) {
-          console.error(`Error calculando clases para ${nombre}:`, error);
-          
-          // Agregar usuario con cuota 0 en caso de error
-          rows.push({ 
-            usuario_id: usuario.id, 
-            nombre, 
-            email, 
-            monto: 0, 
-            montoOriginal: 0,
-            estado: 'pendiente' as 'pendiente'|'abonada'|'vencida', 
-            descuento: 0
-          });
-        }
-      }
-      
-      
->>>>>>> 2c1c3d42fc4aebe8137f18cc51377933d648f9dd
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
     })();
