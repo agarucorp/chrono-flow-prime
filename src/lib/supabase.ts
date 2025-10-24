@@ -13,11 +13,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    storageKey: 'cfp_supabase_auth',
+    storageKey: 'maldagym_supabase_auth',
   },
   global: {
     headers: {
-      'x-application-name': 'chrono-flow-prime',
+      'x-application-name': 'MaldaGym',
     },
   },
   db: {

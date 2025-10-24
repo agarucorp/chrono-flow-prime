@@ -45,7 +45,7 @@ export const Navigation: React.FC = () => {
 
           <div className="absolute left-1/2 transform -translate-x-1/2">
             <div className="w-32 h-12">
-              <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+              <img src="/letrasgym.png" alt="Logo MaldaGym" className="w-full h-full object-contain" />
             </div>
           </div>
 

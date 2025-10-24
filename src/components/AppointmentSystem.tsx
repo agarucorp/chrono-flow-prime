@@ -30,7 +30,7 @@ export const AppointmentSystem = () => {
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div className="w-32 h-12">
-                <img src="/letrasgym.png" alt="Logo Letras Gym" className="w-full h-full object-contain" />
+                <img src="/letrasgym.png" alt="Logo MaldaGym" className="w-full h-full object-contain" />
               </div>
                              <div>
                  <p className="text-sm text-muted-foreground">Sistema de Gestión de Turnos</p>
