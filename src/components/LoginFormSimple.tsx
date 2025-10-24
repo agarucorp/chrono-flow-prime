@@ -46,8 +46,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       // Login real con Supabase
       try {
         setIsLoading(true);
-        console.log("Intentando login con:", credentials.email);
-        
         const result = await signIn(credentials.email, credentials.password);
 
         if (!result.success || !result.user) {
@@ -57,9 +55,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
 
-        console.log('Login exitoso');
-
-        // Consultar rol desde profiles para decidir la redirección
         try {
           const { data: profile, error: profileError } = await supabase
             .from('profiles')
@@ -116,7 +111,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       
       try {
         setIsLoading(true);
-        console.log("Registrando usuario:", registerData.email);
         
         // Crear usuario en Supabase Auth
         const result = await signUp(
@@ -135,7 +129,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
         
-        console.log('Registro exitoso:', result.user);
         setError(null);
         setIsRegisterMode(false);
         setCurrentStep(1);

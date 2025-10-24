@@ -52,26 +52,26 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const { isAdmin } = useAdmin();
-  
+
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [selectedTurno, setSelectedTurno] = useState<Turno | null>(null);
   const [showReservationModal, setShowReservationModal] = useState(false);
   const [reservationLoading, setReservationLoading] = useState(false);
-  
+
   // Estado para admin
   const [showAdminModal, setShowAdminModal] = useState(false);
   const [adminSelectedTurno, setAdminSelectedTurno] = useState<Turno | null>(null);
-  
+
   // Estado para alumnos
   const [alumnosHorarios, setAlumnosHorarios] = useState<AlumnoHorario[]>([]);
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
   const [adminSlots, setAdminSlots] = useState<{ horaInicio: string; horaFin: string; capacidad: number }[]>([]);
-  
+
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
-  
+
   // Estado para agregar usuario a slot
   const [showAddUserModal, setShowAddUserModal] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
@@ -80,7 +80,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const [addingUser, setAddingUser] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
-  
+
   // Formatear fecha local a YYYY-MM-DD para evitar TZ
   const formatLocalDate = (d: Date) => {
     const y = d.getFullYear();
@@ -88,7 +88,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const day = String(d.getDate()).padStart(2, '0');
     return `${y}-${m}-${day}`;
   };
-  
+
   // Cargar ausencias del admin
   const cargarAusenciasAdmin = async () => {
     try {
@@ -103,21 +103,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       setAusenciasAdmin(data || []);
-      console.log('✅ Ausencias del admin cargadas en CalendarView:', data?.length || 0);
     } catch (error) {
       console.error('❌ Error inesperado al cargar ausencias:', error);
     }
   };
-  
+
   // Función helper para verificar si una fecha+hora está bloqueada por ausencia del admin
   const estaHorarioBloqueado = (fecha: string, horaInicio: string): boolean => {
     const fechaStr = fecha; // Ya viene en formato YYYY-MM-DD
-    
+
     return ausenciasAdmin.some(ausencia => {
       // Verificar ausencia única
       if (ausencia.tipo_ausencia === 'unica') {
         const fechaAusenciaISO = ausencia.fecha_inicio.split('T')[0];
-        
+
         if (fechaAusenciaISO === fechaStr) {
           // Si no hay clases específicas, se bloquean todas
           if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
@@ -128,25 +127,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           return true;
         }
       }
-      
+
       // Verificar ausencia por período
       if (ausencia.tipo_ausencia === 'periodo') {
         const fechaInicio = new Date(ausencia.fecha_inicio);
         const fechaFin = new Date(ausencia.fecha_fin);
         const fechaCheck = new Date(fechaStr);
-        
+
         if (fechaCheck >= fechaInicio && fechaCheck <= fechaFin) {
           return true;
         }
       }
-      
+
       return false;
     });
   };
-  
+
   // Estado para acordeón
   const [horariosExpandidos, setHorariosExpandidos] = useState<Set<string>>(new Set());
-  
+
   // Estado para modal de cancelación de alumno
   const [showCancelAlumnoModal, setShowCancelAlumnoModal] = useState(false);
   const [selectedAlumno, setSelectedAlumno] = useState<AlumnoHorario | null>(null);
@@ -162,7 +161,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     // Si ya estaba expandido, lo cerramos (nuevosExpandidos queda vacío)
     setHorariosExpandidos(nuevosExpandidos);
   };
-  
+
 
 
   // Obtener turnos desde Supabase
@@ -178,7 +177,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Escuchar cambios en ausencias del admin
   useEffect(() => {
     const handler = async () => {
-      console.log('🔄 CalendarView: Recargando ausencias por cambio del admin');
       await cargarAusenciasAdmin();
       if (isAdminView) {
         await fetchAlumnosHorarios();
@@ -228,12 +226,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const handleTurnosCanceladosUpdated = async () => {
       await fetchAlumnosHorarios();
     };
-    
+
     const handleTurnosVariablesUpdated = async () => {
       await fetchTurnos();
       await fetchAlumnosHorarios();
     };
-    
+
     const handleClasesDelMesUpdated = async () => {
       await fetchTurnos();
       await fetchAlumnosHorarios();
@@ -265,8 +263,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         return;
       }
       const slots = (data || []).map((h: any) => ({
-        horaInicio: (h.hora_inicio || '').substring(0,5),
-        horaFin: (h.hora_fin || '').substring(0,5),
+        horaInicio: (h.hora_inicio || '').substring(0, 5),
+        horaFin: (h.hora_fin || '').substring(0, 5),
         capacidad: Number(h.capacidad) || 0,
       }));
       setAdminSlots(slots);
@@ -278,10 +276,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const fetchTurnos = async () => {
     try {
       setLoading(true);
-      
+
       // Calcular fechas de inicio y fin según la vista
       const { startDate, endDate } = getDateRange();
-      
+
       // 1. Cargar turnos normales (usando turnos_variables que es la tabla actual)
       const { data: turnosNormales, error: errorNormales } = await supabase
         .from('turnos_variables')
@@ -365,9 +363,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Convertir día de la semana: JS (0=domingo) -> DB (1=lunes)
       const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
 
-      console.log('🔍 Cargando datos para admin - Fecha:', fechaActual, 'Día semana:', diaSemana);
-
-      // Cargar horarios recurrentes con mejor manejo de errores
       const { data: horariosRecurrentes, error: errorRecurrentes } = await supabase
         .from('horarios_recurrentes_usuario')
         .select(`
@@ -385,7 +380,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       if (errorRecurrentes) {
         console.error('❌ Error cargando horarios recurrentes:', errorRecurrentes);
       } else {
-        console.log('✅ Horarios recurrentes cargados:', horariosRecurrentes?.length || 0);
       }
 
       // Cargar turnos variables
@@ -406,7 +400,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       if (errorVariables) {
         console.error('❌ Error cargando turnos variables:', errorVariables);
       } else {
-        console.log('✅ Turnos variables cargados:', turnosVariables?.length || 0);
       }
 
       // Cargar turnos cancelados
@@ -425,7 +418,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       if (errorCancelados) {
         console.error('❌ Error cargando turnos cancelados:', errorCancelados);
       } else {
-        console.log('✅ Turnos cancelados cargados:', turnosCancelados?.length || 0);
       }
 
       // Helper para nombre completo
@@ -448,15 +440,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             // Crear clave única: usuario_id + hora_inicio + hora_fin
             const claveCancelado = `${turno.cliente_id}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
             turnosCanceladosHoy.add(claveCancelado);
-            
+
             todosAlumnos.push({
               id: turno.id,
               nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone || '',
               tipo: 'cancelado',
-              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
-              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
+              hora_inicio: (turno.turno_hora_inicio || '').substring(0, 5),
+              hora_fin: (turno.turno_hora_fin || '').substring(0, 5),
               fecha: turno.turno_fecha,
               usuario_id: turno.cliente_id
             });
@@ -472,7 +464,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           if (profile && profile.role !== 'admin') {
             // Crear clave única para verificar si está cancelado
             const claveRecurrente = `${horario.usuario_id}-${horario.hora_inicio}-${horario.hora_fin}`;
-            
+
             // Solo agregar si NO está cancelado para esta fecha
             if (!turnosCanceladosHoy.has(claveRecurrente)) {
               todosAlumnos.push({
@@ -481,8 +473,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 email: profile.email || '',
                 telefono: profile.phone,
                 tipo: 'recurrente',
-                hora_inicio: (horario.hora_inicio || '').substring(0,5),
-                hora_fin: (horario.hora_fin || '').substring(0,5),
+                hora_inicio: (horario.hora_inicio || '').substring(0, 5),
+                hora_fin: (horario.hora_fin || '').substring(0, 5),
                 fecha: fechaActual,
                 activo: horario.activo,
                 usuario_id: horario.usuario_id
@@ -498,15 +490,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            const horaInicio = (turno.turno_hora_inicio || '').substring(0,5);
-            const horaFin = (turno.turno_hora_fin || '').substring(0,5);
-            
+            const horaInicio = (turno.turno_hora_inicio || '').substring(0, 5);
+            const horaFin = (turno.turno_hora_fin || '').substring(0, 5);
+
             // Verificar si ya existe este usuario para esta hora (evitar duplicados)
-            const yaExiste = todosAlumnos.some(alumno => 
-              alumno.usuario_id === turno.cliente_id && 
+            const yaExiste = todosAlumnos.some(alumno =>
+              alumno.usuario_id === turno.cliente_id &&
               alumno.hora_inicio === horaInicio
             );
-            
+
             if (!yaExiste) {
               todosAlumnos.push({
                 id: turno.id,
@@ -523,19 +515,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           }
         });
       }
-
-
-      console.log('📊 Total de alumnos cargados:', todosAlumnos.length);
-      console.log('📋 Alumnos por tipo:', {
-        recurrentes: todosAlumnos.filter(a => a.tipo === 'recurrente').length,
-        variables: todosAlumnos.filter(a => a.tipo === 'variable').length,
-        cancelados: todosAlumnos.filter(a => a.tipo === 'cancelado').length
-      });
-
-      // Si no hay datos, mostrar mensaje informativo
       if (todosAlumnos.length === 0) {
-        console.log('ℹ️ No hay clases registradas para esta fecha');
-        // Agregar un mensaje informativo
         todosAlumnos.push({
           id: 'no-data',
           nombre: 'Sin clases registradas',
@@ -561,7 +541,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Función para abrir modal de gestión de turno
   const handleAlumnoClick = (alumno: AlumnoHorario) => {
     if (alumno.tipo === 'cancelado' || !isAdminView) return;
-    
+
     // Crear un objeto Turno para el AdminTurnoModal
     const turnoParaModal: Turno = {
       id: alumno.tipo === 'variable' ? `variable_${alumno.id}` : alumno.id,
@@ -575,7 +555,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       profesional_nombre: 'Sin asignar',
       servicio: alumno.tipo === 'variable' ? 'Entrenamiento Variable' : 'Entrenamiento Recurrente'
     };
-    
+
     setAdminSelectedTurno(turnoParaModal);
     setShowAdminModal(true);
   };
@@ -633,10 +613,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       showSuccess('Clase cancelada', `La clase de ${selectedAlumno.nombre} ha sido cancelada exitosamente`);
-      
+
       // Recargar horarios de alumnos
       await fetchAlumnosHorarios();
-      
+
       setShowCancelAlumnoModal(false);
       setSelectedAlumno(null);
     } catch (error) {
@@ -651,23 +631,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const esClaseFutura = (fecha: string, horaInicio: string) => {
     try {
       // Asegurar que la hora tenga formato completo HH:MM:SS
-      const horaCompleta = horaInicio.includes(':') && horaInicio.split(':').length === 2 
-        ? horaInicio + ':00' 
+      const horaCompleta = horaInicio.includes(':') && horaInicio.split(':').length === 2
+        ? horaInicio + ':00'
         : horaInicio;
-      
+
       // Crear fecha de la clase con timezone local
       const fechaClase = new Date(fecha + 'T' + horaCompleta);
       const ahora = new Date();
-      
-      console.log('🔍 Validando clase futura:', {
-        fecha,
-        horaInicio,
-        horaCompleta,
-        fechaClase: fechaClase.toISOString(),
-        ahora: ahora.toISOString(),
-        esFutura: fechaClase > ahora
-      });
-      
+
+
       return fechaClase > ahora;
     } catch (error) {
       console.error('Error validando fecha:', error);
@@ -686,7 +658,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
       setSelectedSlot(slot);
       setSearchTerm('');
-      
+
       // Cargar usuarios disponibles
       const { data: users, error } = await supabase
         .from('profiles')
@@ -704,7 +676,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Filtrar usuarios que ya están en este slot
       const usuariosEnSlot = slot.alumnos.map((alumno: any) => alumno.usuario_id);
       const usuariosDisponibles = users?.filter(user => !usuariosEnSlot.includes(user.id)) || [];
-      
+
       setAvailableUsers(usuariosDisponibles);
       setShowAddUserModal(true);
     } catch (error) {
@@ -747,10 +719,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       showSuccess('Usuario agregado', `${selectedUser.full_name} ha sido agregado a la clase exitosamente`);
-      
+
       // Recargar horarios de alumnos
       await fetchAlumnosHorarios();
-      
+
       setShowAddUserModal(false);
       setShowConfirmModal(false);
       setSelectedSlot(null);
@@ -777,9 +749,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     try {
       setReservationLoading(true);
-      
+
       let error;
-      
+
       if (turno.id === 'temp') {
         // Crear nuevo turno si es temporal
         const { error: insertError } = await supabase
@@ -813,17 +785,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         return;
       }
 
-      showSuccess('¡Entrenamiento reservado!', 
+      showSuccess('¡Entrenamiento reservado!',
         `Has reservado entrenamiento para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
-      
+
       // Recargar turnos
       await fetchTurnos();
-      
+
       // Notificar al componente padre
       if (onTurnoReservado) {
         onTurnoReservado();
       }
-      
+
       // Cerrar modal
       setShowReservationModal(false);
       setSelectedTurno(null);
@@ -859,9 +831,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Función para manejar clic en horario para reserva
   const handleTimeSlotReservation = (horaInicio: string, horaFin: string) => {
     const dayTurnos = getTurnosForDate(currentDate);
-    
+
     // Buscar turnos ocupados para este horario
-    const turnosOcupados = dayTurnos.filter(turno => 
+    const turnosOcupados = dayTurnos.filter(turno =>
       turno.hora_inicio === horaInicio &&
       turno.estado === 'ocupado'
     );
@@ -878,7 +850,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         servicio: 'Entrenamiento Personal',
         profesional_nombre: 'Sin asignar'
       };
-      
+
       setSelectedTurno(turnoTemporal);
       setShowReservationModal(true);
     } else {
@@ -892,7 +864,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         servicio: 'Entrenamiento Personal',
         profesional_nombre: 'Sin asignar'
       };
-      
+
       setSelectedTurno(turnoTemporal);
       setShowReservationModal(true);
     }
@@ -901,7 +873,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const getDateRange = () => {
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
-    
+
     return {
       startDate: new Date(year, month, 1),
       endDate: new Date(year, month + 1, 0)
@@ -925,7 +897,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const getTurnosForDate = (date: Date) => {
     const dateStr = formatLocalDate(date);
     const turnosDelDia = turnos.filter(turno => turno.fecha === dateStr);
-    
+
     // Retornar todos los turnos del día (hasta 24: 8 horarios × 3 turnos por horario)
     return turnosDelDia;
   };
@@ -968,7 +940,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Componente para marcar el día seleccionado
   const SelectedDayMarker = ({ isSelected }: { isSelected: boolean }) => {
     if (!isSelected) return null;
-    
+
     return (
       <div className="absolute inset-0 bg-accent-foreground/15 rounded-lg pointer-events-none" />
     );
@@ -981,17 +953,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const lastDay = new Date(endDate);
     const daysInMonth = lastDay.getDate();
     const firstDayOfWeek = firstDay.getDay();
-    
+
     const days = [];
     const today = new Date();
-    
+
     // Agregar días del mes anterior para completar la primera semana
     for (let i = 0; i < firstDayOfWeek; i++) {
       const prevDate = new Date(firstDay);
       prevDate.setDate(firstDay.getDate() - (firstDayOfWeek - i));
       days.push({ date: prevDate, isCurrentMonth: false });
     }
-    
+
     // Agregar días del mes actual
     for (let i = 1; i <= daysInMonth; i++) {
       const dayDate = new Date(firstDay);
@@ -1006,7 +978,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           const isToday = date.toDateString() === today.toDateString();
           const isSelected = date.toDateString() === currentDate.toDateString();
           const isWeekend = date.getDay() === 0 || date.getDay() === 6;
-          
+
           // Si no es del mes actual, mostrar celda vacía
           if (!isCurrentMonth) {
             return (
@@ -1016,13 +988,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               />
             );
           }
-          
+
           return (
             <div
               key={index}
-              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 bg-muted/40 hover:bg-muted/60 ${
-                isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'
-              }`}
+              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 bg-muted/40 hover:bg-muted/60 ${isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'
+                }`}
               onClick={() => !isWeekend && handleDateSelect(date)}
             >
               <SelectedDayMarker isSelected={isSelected} />
@@ -1039,7 +1010,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Función para renderizar los horarios disponibles como CTAs
   const renderAvailableTimeSlots = () => {
     const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
-    
+
     if (isWeekend) {
       return (
         <div className="text-center py-8">
@@ -1062,8 +1033,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const timeSlots = adminSlots.map(slot => {
       // Filtrar solo alumnos activos (no cancelados) y eliminar duplicados por usuario
       const alumnosActivos = alumnosHorarios
-        .filter(alumno => 
-          (alumno.hora_inicio || '').substring(0,5) === slot.horaInicio && 
+        .filter(alumno =>
+          (alumno.hora_inicio || '').substring(0, 5) === slot.horaInicio &&
           alumno.tipo !== 'cancelado'
         )
         .reduce((acc, alumno) => {
@@ -1074,7 +1045,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           }
           return acc;
         }, [] as AlumnoHorario[]);
-      
+
       return {
         horaInicio: slot.horaInicio,
         horaFin: slot.horaFin,
@@ -1112,11 +1083,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           {timeSlots.map((slot, index) => {
             const horarioKey = `slot-${slot.horaInicio}`;
             const isExpanded = horariosExpandidos.has(horarioKey);
-            
+
             return (
               <Card key={`slot-${index}`} className="">
                 <CardContent className="p-4">
-                  <div 
+                  <div
                     className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
                     onClick={() => toggleHorario(horarioKey)}
                   >
@@ -1152,7 +1123,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                       )}
                     </div>
                   </div>
-                  
+
                   {isExpanded && (
                     <div className="mt-4">
                       {slot.alumnos.length > 0 ? (
@@ -1163,24 +1134,23 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             const partesNombre = nombreCompleto.split(' ');
                             const nombre = partesNombre[0] || '';
                             const apellido = partesNombre.slice(1).join(' ') || '';
-                            
+
                             // Verificar si este horario está bloqueado por ausencia del admin
                             const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.horaInicio);
-                            
+
                             // Verificar si la clase es futura para permitir cancelación
                             const esClaseFuturaParaAlumno = esClaseFutura(formatLocalDate(currentDate), slot.horaInicio);
-                            
+
                             return (
-                              <div 
-                                key={alumnoIndex} 
+                              <div
+                                key={alumnoIndex}
                                 onClick={() => !estaBloqueado && esClaseFuturaParaAlumno && handleAlumnoClick(alumno)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${
-                                  estaBloqueado 
-                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60' 
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${estaBloqueado
+                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60'
                                     : alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                  alumno.tipo === 'variable' ? 'border-blue-200' :
-                                  'border-red-200'
-                                } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView && esClaseFuturaParaAlumno ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado || !esClaseFuturaParaAlumno ? 'cursor-not-allowed' : ''}`}
+                                      alumno.tipo === 'variable' ? 'border-blue-200' :
+                                        'border-red-200'
+                                  } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView && esClaseFuturaParaAlumno ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado || !esClaseFuturaParaAlumno ? 'cursor-not-allowed' : ''}`}
                               >
                                 <div className="font-light text-[10px] sm:text-[12px]">
                                   {nombre} {apellido}
@@ -1195,7 +1165,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                           Sin alumnos en este horario
                         </div>
                       )}
-                      
+
                       {/* Botón + para agregar usuario - visible en mobile dentro del dropdown, deshabilitado para clases pasadas */}
                       {isAdminView && slot.cupoDisponible > 0 && (
                         <div className="mt-3 flex justify-center sm:hidden">
@@ -1248,7 +1218,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         estado: 'disponible' as const,
         turnosDisponibles: slot.capacidad || 0
       }));
-    
+
     const pmSlots = adminSlots
       .filter(slot => {
         const hora = parseInt(slot.horaInicio.split(':')[0]);
@@ -1271,21 +1241,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 <Button
                   key={`am-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${
-                    slot.estado === 'disponible' 
-                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
+                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${slot.estado === 'disponible'
+                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
-                  }`}
+                    }`}
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${
-                      slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
-                    }`} />
+                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
+                      }`} />
                     <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   {slot.estado === 'disponible' && (
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
@@ -1307,21 +1275,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 <Button
                   key={`pm-${index}`}
                   variant={slot.estado === 'disponible' ? 'default' : 'outline'}
-                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${
-                    slot.estado === 'disponible' 
-                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90' 
+                  className={`h-12 sm:h-14 justify-center px-2 sm:px-4 transition-all duration-200 ${slot.estado === 'disponible'
+                      ? 'hover:shadow-md hover:scale-[1.02] bg-primary text-primary-foreground hover:bg-primary/90'
                       : 'hover:bg-muted/50 border-muted-foreground/30 text-muted-foreground'
-                  }`}
+                    }`}
                   onClick={() => handleTimeSlotReservation(slot.horaInicio, slot.horaFin)}
                 >
                   <div className="flex items-center">
-                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${
-                      slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
-                    }`} />
+                    <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
+                      }`} />
                     <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
                   </div>
                   {slot.estado === 'disponible' && (
-                    <Badge 
+                    <Badge
                       variant="secondary"
                       className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
@@ -1358,10 +1324,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             </div>
           )}
         </CardHeader>
-        
+
         <CardContent className="w-full max-w-full">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8 w-full max-w-full">
-                          {/* Calendario pequeño a la izquierda */}
+            {/* Calendario pequeño a la izquierda */}
             <div className="space-y-4 w-full max-w-full">
               <div className="text-center mb-4 w-full max-w-full">
                 <div className="flex items-center justify-between mb-2 w-full max-w-full">
@@ -1373,13 +1339,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
-                  
+
                   <h3 className="text-lg font-bold text-muted-foreground truncate px-2">
-                    {currentDate.toLocaleDateString('es-ES', { 
+                    {currentDate.toLocaleDateString('es-ES', {
                       month: 'long'
                     }).replace(/^\w/, c => c.toUpperCase())}
                   </h3>
-                  
+
                   <Button
                     variant="outline"
                     size="sm"
@@ -1390,7 +1356,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   </Button>
                 </div>
               </div>
-              
+
               {/* Días de la semana */}
               <div className="grid grid-cols-7 gap-1 mb-3 w-full max-w-full">
                 {['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'].map(day => (
@@ -1399,25 +1365,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   </div>
                 ))}
               </div>
-              
+
               {/* Calendario de días */}
               <div className="w-full max-w-full">
                 {renderCompactCalendar()}
               </div>
             </div>
-            
+
             {/* Horarios disponibles a la derecha */}
             <div className="space-y-4 w-full max-w-full">
               <div className="text-center w-full max-w-full">
                 <h3 className="text-sm sm:text-base font-semibold mb-2 truncate">
-                  {!isAdminView && 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', { 
-                    weekday: 'long', 
-                    day: 'numeric', 
-                    month: 'long' 
+                  {!isAdminView && 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', {
+                    weekday: 'long',
+                    day: 'numeric',
+                    month: 'long'
                   })}
                 </h3>
               </div>
-              
+
               <div className="w-full max-w-full overflow-x-auto">
                 {renderAvailableTimeSlots()}
               </div>
@@ -1470,7 +1436,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               ¿Desea cancelar la clase de este alumno?
             </DialogDescription>
           </DialogHeader>
-          
+
           {selectedAlumno && (
             <div className="space-y-4 py-3">
               <div className="space-y-3">
@@ -1481,7 +1447,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     <p className="text-[12px] text-muted-foreground">{selectedAlumno.nombre}</p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
@@ -1491,32 +1457,31 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     </p>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   <Calendar className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <p className="text-[12px] font-medium">Tipo</p>
-                    <Badge variant="outline" className={`text-[12px] ${
-                      selectedAlumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
-                      selectedAlumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
-                      'text-red-600 border-red-300'
-                    }`}>
+                    <Badge variant="outline" className={`text-[12px] ${selectedAlumno.tipo === 'recurrente' ? 'text-green-600 border-green-300' :
+                        selectedAlumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
+                          'text-red-600 border-red-300'
+                      }`}>
                       {selectedAlumno.tipo === 'recurrente' ? 'Clase Recurrente' :
-                       selectedAlumno.tipo === 'variable' ? 'Clase Variable' : 'Cancelada'}
+                        selectedAlumno.tipo === 'variable' ? 'Clase Variable' : 'Cancelada'}
                     </Badge>
                   </div>
                 </div>
               </div>
-              
+
               <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
                 <p className="text-[12px] text-yellow-800 dark:text-yellow-200">
-                  <strong>Importante:</strong> Esta acción cancelará la clase para esta fecha específica. 
+                  <strong>Importante:</strong> Esta acción cancelará la clase para esta fecha específica.
                   El alumno verá esta clase como cancelada en su panel.
                 </p>
               </div>
             </div>
           )}
-          
+
           <DialogFooter className="gap-3">
             <Button
               variant="outline"
@@ -1550,7 +1515,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               Selecciona un usuario para agregar a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="space-y-3 flex-1 flex flex-col min-h-0">
             {/* Barra de búsqueda */}
             <Input
@@ -1559,12 +1524,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full text-xs sm:text-sm flex-shrink-0"
             />
-            
+
             {/* Lista de usuarios */}
             <ScrollArea className="flex-1 min-h-0">
               <div className="space-y-2 pr-2">
                 {availableUsers
-                  .filter(user => 
+                  .filter(user =>
                     user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                     user.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -1582,14 +1547,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                   ))}
               </div>
             </ScrollArea>
-            
+
             {availableUsers.length === 0 && (
               <p className="text-center text-muted-foreground py-4 text-xs sm:text-sm flex-shrink-0">
                 No hay usuarios disponibles para esta clase
               </p>
             )}
           </div>
-          
+
           <DialogFooter className="pt-3 flex-shrink-0">
             <Button
               variant="outline"
@@ -1612,7 +1577,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               ¿Estás seguro de que quieres agregar a <strong>{selectedUser?.full_name}</strong> a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}?
             </DialogDescription>
           </DialogHeader>
-          
+
           <div className="flex-1 flex flex-col min-h-0">
             {/* Contenido de confirmación */}
             <div className="flex-1 flex items-center justify-center">
@@ -1626,7 +1591,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               </div>
             </div>
           </div>
-          
+
           <DialogFooter className="pt-3 flex-shrink-0">
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full">
               <Button

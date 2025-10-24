@@ -150,7 +150,6 @@ export const TurnoManagement = () => {
           horaFin: h.hora_fin.substring(0, 5)
         }));
         setHorariosFijos(horariosDB);
-        console.log('✅ Horarios cargados desde BD:', horariosDB.length, 'clases');
       }
     } catch (error) {
       console.error('Error inesperado cargando horarios:', error);
@@ -393,8 +392,6 @@ export const TurnoManagement = () => {
         updateData.combo_5_tarifa = parseFloat(combo5Tarifa);
       }
 
-      // Actualizar configuración en la tabla configuracion_admin existente
-      console.log('Intentando actualizar con datos:', updateData);
       
       const { data: updateResult, error: errorConfiguracion } = await supabase
         .from('configuracion_admin')
@@ -402,7 +399,6 @@ export const TurnoManagement = () => {
         .eq('sistema_activo', true)
         .select();
 
-      console.log('Resultado de actualización:', { updateResult, errorConfiguracion });
 
       if (errorConfiguracion) {
         console.error('Error guardando configuración:', errorConfiguracion);
@@ -415,7 +411,6 @@ export const TurnoManagement = () => {
       }
 
       // Sincronización con horarios_semanales usando clase_numero
-      console.log('🔄 Sincronizando horarios_semanales usando sistema de clase_numero...');
       const diasLaborales = [1, 2, 3, 4, 5];
       const nowIso = new Date().toISOString();
 
@@ -458,7 +453,6 @@ export const TurnoManagement = () => {
             if (errorUpd) {
               console.error('❌ Error actualizando clase:', { dia: ds, clase: claseNumero, errorUpd });
             } else {
-              console.log('✅ Actualizada:', { dia: ds, clase: claseNumero, hora: hi });
             }
           } else {
             // Insertar nuevo slot con clase_numero
@@ -477,7 +471,6 @@ export const TurnoManagement = () => {
             if (errorIns) {
               console.error('❌ Error insertando clase:', { dia: ds, clase: claseNumero, errorIns });
             } else {
-              console.log('✅ Insertada:', { dia: ds, clase: claseNumero, hora: hi });
             }
           }
         }

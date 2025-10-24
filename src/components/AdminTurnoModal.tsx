@@ -40,22 +40,18 @@ interface AdminTurnoModalProps {
 
 export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: AdminTurnoModalProps) => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
-  
+
   const [clientes, setClientes] = useState<AdminUser[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [clientesReservados, setClientesReservados] = useState<AdminUser[]>([]);
   const [capacidadDisponible, setCapacidadDisponible] = useState(0);
-  
-  // Debug logs
-  console.log('🔍 AdminTurnoModal renderizado - turno:', turno);
-  console.log('🔍 AdminTurnoModal renderizado - isOpen:', isOpen);
-  console.log('🔍 AdminTurnoModal renderizado - loading:', loading);
+
 
   // Estado para el modal de confirmación de cancelación
   const [showCancelacionModal, setShowCancelacionModal] = useState(false);
-  const [turnoToCancel, setTurnoToCancel] = useState<{clienteId: string, clienteNombre: string} | null>(null);
+  const [turnoToCancel, setTurnoToCancel] = useState<{ clienteId: string, clienteNombre: string } | null>(null);
   const [cancelingTurno, setCancelingTurno] = useState(false);
 
   // Cargar clientes disponibles y reservas existentes
@@ -139,7 +135,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       const todosLosClientes = [...clientesReservadosNormales, ...clientesReservadosVariables];
 
       setClientesReservados(todosLosClientes);
-      
+
       // Calcular capacidad disponible
       const maxAlumnos = turno.max_alumnos || 1;
       setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));
@@ -178,7 +174,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       if (error) throw error;
 
       showSuccess('Turno reservado', 'El turno ha sido asignado al cliente exitosamente');
-      
+
       // Recargar reservas y limpiar selección
       await cargarReservasExistentes();
       setClienteSeleccionado('');
@@ -202,7 +198,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       // 1. Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');
       const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
-      
+
       if (esTurnoVariable) {
         // CANCELAR TURNO VARIABLE
         const turnoVariableId = turno.id.replace('variable_', '');
@@ -213,7 +209,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           .eq('cliente_id', clienteId)
           .eq('estado', 'confirmada')
           .single();
-        
+
         if (errorVariable || !turnoVariable) {
           showError('Error', 'No se encontró el turno variable');
           return;
@@ -312,12 +308,12 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       }
 
       showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada exitosamente');
-      
+
       // Disparar eventos para actualizar otras vistas
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
-      
+
       // Recargar datos
       await cargarReservasExistentes();
       onTurnoUpdated();
@@ -332,21 +328,16 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   // Eliminar turno completamente
   const eliminarTurno = async () => {
     try {
-      console.log('🚀 eliminarTurno llamada - turno:', turno);
-      
+
       if (!turno) {
-        console.log('❌ No hay turno seleccionado');
         showError('Error', 'No hay turno seleccionado para eliminar');
         return;
       }
 
-      console.log('🔍 Mostrando confirmación...');
       if (!confirm('¿Estás seguro de que quieres eliminar esta clase? El usuario verá la clase como cancelada y aparecerá en vacantes.')) {
-        console.log('❌ Usuario canceló la eliminación');
         return;
       }
-      
-      console.log('✅ Usuario confirmó la eliminación');
+
     } catch (error) {
       console.error('❌ Error en confirmación:', error);
       showError('Error', 'Error al procesar la confirmación');
@@ -360,22 +351,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       // Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');
       const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
-      
-      console.log('🔍 DEBUG eliminarTurno:', {
-        turnoId: turno.id,
-        turnoServicio: turno.servicio,
-        esTurnoVariable,
-        esTurnoRecurrente,
-        clienteId: turno.cliente_id,
-        fecha: turno.fecha,
-        horaInicio: turno.hora_inicio,
-        horaFin: turno.hora_fin
-      });
 
       if (esTurnoVariable) {
         // CANCELAR TURNO VARIABLE
         const turnoVariableId = turno.id.replace('variable_', '');
-        
+
         // 1. Buscar el turno variable específico
         const { data: turnoVariable, error: errorBuscar } = await supabase
           .from('turnos_variables')
@@ -419,9 +399,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       } else if (esTurnoRecurrente) {
         // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
         // Solo crear cancelación, NO eliminar nada
-        
-        console.log('🔄 Procesando turno recurrente...');
-        
+
+
         // Verificar si ya existe una cancelación para este turno
         const { data: cancelacionExistente, error: errorVerificar } = await supabase
           .from('turnos_cancelados')
@@ -431,11 +410,6 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           .eq('turno_hora_inicio', turno.hora_inicio)
           .eq('turno_hora_fin', turno.hora_fin);
 
-        console.log('🔍 Verificación cancelación existente:', {
-          cancelacionExistente,
-          errorVerificar,
-          count: cancelacionExistente?.length || 0
-        });
 
         if (errorVerificar) {
           console.error('❌ Error verificando cancelación existente:', errorVerificar);
@@ -443,13 +417,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         }
 
         if (cancelacionExistente && cancelacionExistente.length > 0) {
-          console.log('⚠️ Turno ya cancelado');
           showError('Error', 'Este turno ya está cancelado');
           return;
         }
 
         // Crear registro de cancelación
-        console.log('➕ Creando cancelación...');
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -460,17 +432,10 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             tipo_cancelacion: 'admin'
           });
 
-        console.log('🔍 Resultado insertar cancelación:', {
-          errorCancelacion,
-          success: !errorCancelacion
-        });
-
         if (errorCancelacion) {
           console.error('❌ Error creando cancelación:', errorCancelacion);
           throw errorCancelacion;
         }
-        
-        console.log('✅ Cancelación creada exitosamente');
 
       } else {
         // CANCELAR TURNO NORMAL
@@ -524,18 +489,15 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       dismissToast(loadingToast);
 
       showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
-      
-      console.log('🎉 Éxito! Disparando eventos de actualización...');
-      
+
+
       // Disparar eventos para actualizar otras vistas
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
-      
-      console.log('📡 Eventos disparados, llamando onTurnoUpdated...');
+
       onTurnoUpdated();
-      console.log('🚪 Cerrando modal...');
-      
+
       // Cerrar modal después de un pequeño delay para asegurar que se vea el mensaje de éxito
       setTimeout(() => {
         onClose();
@@ -551,7 +513,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   // Filtrar clientes por búsqueda y excluir los ya reservados
   const clientesFiltrados = clientes.filter(cliente =>
     (cliente.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-     cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
+      cliente.email.toLowerCase().includes(searchTerm.toLowerCase())) &&
     !clientesReservados.some(reservado => reservado.id === cliente.id)
   );
 
@@ -568,7 +530,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
   const handleConfirmCancelacion = async () => {
     if (!turnoToCancel) return;
-    
+
     setCancelingTurno(true);
     await cancelarReserva(turnoToCancel.clienteId);
     setCancelingTurno(false);
@@ -592,7 +554,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             </Button>
           </div>
         </CardHeader>
-        
+
         <CardContent className="space-y-6">
           {/* Información del Turno */}
           <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
@@ -615,10 +577,10 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               <Label className="text-sm font-medium text-muted-foreground">Estado</Label>
               <Badge variant={
                 turno.estado === 'disponible' ? 'default' :
-                turno.estado === 'ocupado' ? 'secondary' : 'destructive'
+                  turno.estado === 'ocupado' ? 'secondary' : 'destructive'
               }>
                 {turno.estado === 'disponible' ? 'Disponible' :
-                 turno.estado === 'ocupado' ? 'Ocupado' : 'Cancelado'}
+                  turno.estado === 'ocupado' ? 'Ocupado' : 'Cancelado'}
               </Badge>
             </div>
             <div>
@@ -638,7 +600,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                   Clientes Reservados ({clientesReservados.length})
                 </Label>
               </div>
-              
+
               <div className="space-y-2">
                 {clientesReservados.map((cliente) => (
                   <div key={cliente.id} className="flex items-center justify-between p-2 bg-white dark:bg-blue-900 rounded border">
@@ -680,7 +642,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                   {capacidadDisponible} cupo{capacidadDisponible > 1 ? 's' : ''} disponible{capacidadDisponible > 1 ? 's' : ''}
                 </Badge>
               </div>
-              
+
               {/* Búsqueda de clientes */}
               <div className="space-y-3">
                 <Input
@@ -688,7 +650,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                 />
-                
+
                 {/* Lista de clientes */}
                 <div className="max-h-40 overflow-y-auto border rounded-lg">
                   {clientesFiltrados.length === 0 ? (
@@ -700,9 +662,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                       {clientesFiltrados.map((cliente) => (
                         <div
                           key={cliente.id}
-                          className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors ${
-                            clienteSeleccionado === cliente.id ? 'bg-primary/10 border-l-2 border-primary' : ''
-                          }`}
+                          className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors ${clienteSeleccionado === cliente.id ? 'bg-primary/10 border-l-2 border-primary' : ''
+                            }`}
                           onClick={() => setClienteSeleccionado(cliente.id)}
                         >
                           <div className="flex items-center justify-between">
@@ -747,14 +708,10 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             <Button
               variant="destructive"
               onClick={() => {
-                console.log('🔘 Botón Eliminar Clase clickeado');
-                console.log('🔍 Estado loading:', loading);
-                console.log('🔍 Turno actual:', turno);
-                console.log('🔍 Botón disabled:', loading);
                 eliminarTurno();
               }}
               disabled={loading}
-              style={{ 
+              style={{
                 opacity: loading ? 0.5 : 1,
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}

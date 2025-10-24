@@ -88,19 +88,16 @@ export const RecurringScheduleView = () => {
 
   // Función para cambiar la vista activa
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
-    console.log('🔄 Cambiando vista a:', view);
     setActiveView(view);
     
     // Si se cambia a vacantes, recargar los datos
     if (view === 'turnos-disponibles') {
-      console.log('🔄 Recargando datos para vacantes...');
       cargarTurnosCancelados(true);
     }
   };
 
   // Cargar turnos cancelados al inicio y cuando se cambie a la vista de turnos disponibles
   useEffect(() => {
-    console.log('🔄 useEffect cargarTurnosCancelados ejecutado', { userId: user?.id });
     if (user?.id) {
       cargarTurnosCancelados();
     }
@@ -215,9 +212,7 @@ export const RecurringScheduleView = () => {
 
   // Cargar turnos cancelados disponibles
   const cargarTurnosCancelados = async (forceReload = false) => {
-    console.log('🚀 INICIANDO cargarTurnosCancelados', { forceReload, userId: user?.id });
     if (!user?.id) {
-      console.log('❌ No hay usuario, saliendo de cargarTurnosCancelados');
       return;
     }
 
@@ -225,7 +220,6 @@ export const RecurringScheduleView = () => {
     try {
       // Obtener todos los turnos cancelados disponibles con el cliente que canceló
       const fechaHoy = format(new Date(), 'yyyy-MM-dd');
-      console.log('📅 Consultando turnos_disponibles con fecha >=', fechaHoy);
       
       const { data, error } = await supabase
         .from('turnos_disponibles')
@@ -234,7 +228,6 @@ export const RecurringScheduleView = () => {
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
 
-      console.log('📊 Resultado de consulta turnos_disponibles:', { data, error });
 
       if (error) {
         console.error('❌ Error al cargar turnos cancelados:', error);
@@ -297,26 +290,13 @@ export const RecurringScheduleView = () => {
       // Mostrar todos los turnos disponibles (globales para todos los usuarios)
       // Solo excluir los que ya están reservados por el usuario actual
       const turnosFiltrados = turnosMarcados.filter(turno => {
-        console.log('🔍 Analizando turno:', {
-          turno_fecha: turno.turno_fecha,
-          turno_hora_inicio: turno.turno_hora_inicio,
-          cliente_que_cancelo: turno.cliente_que_cancelo,
-          tipo_cancelacion: turno.tipo_cancelacion,
-          reservado: turno.reservado,
-          usuario_actual: user.id
-        });
-        
-        // Solo excluir si ya está reservado por el usuario actual
         if (turno.reservado) {
-          console.log('❌ Excluyendo turno ya reservado por el usuario actual');
           return false;
         }
         
-        console.log('✅ Incluyendo turno en vacantes (disponible globalmente)');
         return true;
       });
 
-      console.log('📅 Turnos filtrados para vacantes:', turnosFiltrados);
       setTurnosCancelados(turnosFiltrados);
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);

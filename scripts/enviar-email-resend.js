@@ -61,7 +61,6 @@ async function enviarEmail() {
     if (error) {
       console.error('❌ Error:', error);
     } else {
-      console.log('✅ Email enviado exitosamente:', data);
     }
   } catch (error) {
     console.error('❌ Error inesperado:', error);

@@ -41,8 +41,6 @@ export const useAuth = () => {
     // Escuchar cambios en la autenticación
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth event:', event, session?.user?.email_confirmed_at)
-        
         if (event === 'TOKEN_REFRESHED') {
           setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
           return
@@ -51,15 +49,11 @@ export const useAuth = () => {
           setAuthState({ user: null, loading: false, error: null })
           return
         }
-        if (event === 'USER_DELETED') {
-          setAuthState({ user: null, loading: false, error: null })
-          return
-        }
         if (event === 'USER_UPDATED') {
           setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
           return
         }
-        if (event === 'SIGNED_IN' || event === 'SIGNED_UP') {
+        if (event === 'SIGNED_IN') {
           setAuthState({ user: session?.user || null, loading: false, error: null })
           return
         }
@@ -83,7 +77,6 @@ export const useAuth = () => {
       if (error) {
         // Si el error es "Email not confirmed", permitir el login pero mostrar mensaje
         if (error.message.includes('Email not confirmed')) {
-          console.log('Email no confirmado, pero permitiendo login')
           setAuthState({
             user: data.user,
             loading: false,

@@ -62,9 +62,6 @@ export const TurnoReservation = () => {
       
       // Obtener turnos disponibles desde turnos_disponibles
       const fechaHoy = new Date().toISOString().split('T')[0];
-      console.log('🔍 Fecha seleccionada:', selectedDate.toISOString().split('T')[0]);
-      console.log('🔍 Fecha actual (cliente):', fechaHoy);
-      
       const { data: disponibles, error: errorDisponibles } = await supabase
         .from('turnos_disponibles')
         .select('*')
@@ -72,9 +69,6 @@ export const TurnoReservation = () => {
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
         
-      console.log('🔍 Consulta ejecutada con filtro >=', fechaHoy);
-      console.log('🔍 Resultados de la consulta:', disponibles);
-
       if (errorDisponibles) {
         console.error('❌ Error obteniendo turnos disponibles:', errorDisponibles);
         return;
@@ -83,26 +77,19 @@ export const TurnoReservation = () => {
 
       // Convertir turnos_disponibles al formato esperado
       const turnosDisponiblesFormateados = (disponibles || []).map(turno => {
-        console.log('🔍 Procesando turno disponible:', {
-          id: turno.id,
-          turno_fecha: turno.turno_fecha,
-          turno_hora_inicio: turno.turno_hora_inicio,
-          turno_hora_fin: turno.turno_hora_fin
-        });
         
         return {
           id: turno.id,
           fecha: turno.turno_fecha, // Ya está en formato YYYY-MM-DD
           hora_inicio: turno.turno_hora_inicio,
           hora_fin: turno.turno_hora_fin,
-          estado: 'disponible',
+          estado: 'disponible' as const,
           servicio: 'Entrenamiento Personal',
           max_alumnos: 1,
           activo: true
         };
       });
 
-      console.log('📅 Turnos disponibles formateados:', turnosDisponiblesFormateados);
       setTurnosDisponibles(turnosDisponiblesFormateados);
 
       // Obtener turnos reservados por el usuario
@@ -184,7 +171,6 @@ export const TurnoReservation = () => {
         .eq('id', turno.id)
         .select(); // Agregamos .select() para ver qué se actualizó
 
-      console.log('🔍 handleConfirmReservation: Respuesta completa de Supabase:', { data, error, count });
 
       dismissToast(loadingToast);
 
@@ -200,7 +186,6 @@ export const TurnoReservation = () => {
         return;
       }
 
-      console.log('✅ Turno actualizado en base de datos:', data[0]);
       
       // Verificar que el turno se actualizó correctamente
       const { data: turnoVerificado, error: errorVerificacion2 } = await supabase
@@ -212,10 +197,8 @@ export const TurnoReservation = () => {
       if (errorVerificacion2) {
         console.error('❌ Error verificando turno actualizado:', errorVerificacion2);
       } else {
-        console.log('✅ Turno verificado después de actualización:', turnoVerificado);
       }
 
-      console.log('✅ Turno reservado exitosamente');
       showSuccess('¡Turno reservado exitosamente!', 
         `Has reservado ${turno.servicio} para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
       
@@ -375,11 +358,6 @@ export const TurnoReservation = () => {
                               {(() => {
                                 const fechaOriginal = turno.fecha;
                                 const fechaCorregida = new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES');
-                                console.log('📅 Renderizando fecha:', {
-                                  fechaOriginal,
-                                  fechaCorregida,
-                                  turnoId: turno.id
-                                });
                                 return fechaCorregida;
                               })()}
                             </span>

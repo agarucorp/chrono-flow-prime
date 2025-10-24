@@ -9,10 +9,6 @@
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
-
-console.log('🔍 Verificando configuración de MCP con Supabase...\n');
-
-// Colores para terminal
 const colors = {
   reset: '\x1b[0m',
   green: '\x1b[32m',

@@ -3,8 +3,6 @@
 
 async function testCobrosMensuales() {
   try {
-    console.log('🧪 Iniciando prueba de cobros mensuales...');
-    
     const response = await fetch('https://bihqdptdkgdfztufrmlm.supabase.co/functions/v1/enviar-cobros-mensuales', {
       method: 'POST',
       headers: {
@@ -16,21 +14,12 @@ async function testCobrosMensuales() {
     const result = await response.json();
     
     if (result.success) {
-      console.log('✅ Cobros enviados exitosamente');
-      console.log(`📊 Total procesados: ${result.resultados.length}`);
-      
       const exitosos = result.resultados.filter(r => r.status === 'success').length;
       const errores = result.resultados.filter(r => r.status === 'error').length;
-      
-      console.log(`✅ Exitosos: ${exitosos}`);
-      console.log(`❌ Errores: ${errores}`);
-      
       if (errores > 0) {
-        console.log('Errores detallados:');
         result.resultados
           .filter(r => r.status === 'error')
           .forEach(error => {
-            console.log(`  - ${error.email}: ${error.error}`);
           });
       }
     } else {

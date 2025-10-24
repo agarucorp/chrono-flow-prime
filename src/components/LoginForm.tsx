@@ -42,8 +42,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   // Redirigir cuando el usuario esté autenticado
   useEffect(() => {
     if (user && user.email_confirmed_at) {
-      console.log('🔍 Usuario autenticado y confirmado');
-      // Redirigir al panel de usuario
       window.location.href = '/dashboard';
     }
   }, [user]);
@@ -117,17 +115,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         });
         
         if (result.success && result.user) {
-          // ✅ Determinar el rol según el email - Temporalmente todos son clientes
-          const userRole = 'client'; // Temporalmente todos son clientes
-          
           // Nota: En este flujo el email debe confirmarse, por lo que el perfil se completará
           // con los metadatos del auth.user en el backend (trigger). Aquí solo mostramos feedback.
           dismissToast(loadingToast);
           {
             // ✅ Usuario creado exitosamente - mostrar toast y volver al login
-            const roleMessage = userRole === 'admin' 
-              ? "¡Usuario ADMIN creado exitosamente! Revise su email y confirme la cuenta."
-              : "¡Usuario creado exitosamente! Revise su email y confirme la cuenta para poder iniciar sesión";
+            const roleMessage = "¡Usuario creado exitosamente! Revise su email y confirme la cuenta para poder iniciar sesión";
             
             showSuccess(
               "¡Usuario creado exitosamente!", 

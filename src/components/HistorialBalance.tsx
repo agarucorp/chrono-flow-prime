@@ -4,12 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Calendar, 
-  DollarSign, 
-  Clock, 
-  Users, 
-  Search, 
+import {
+  Calendar,
+  DollarSign,
+  Clock,
+  Users,
+  Search,
   Download,
   ChevronDown,
   ChevronRight
@@ -62,12 +62,12 @@ export const HistorialBalance: React.FC = () => {
   // Función helper para verificar si una fecha+clase está bloqueada por ausencia del admin
   const estaClaseBloqueada = (fecha: Date, claseNumero?: number): boolean => {
     const fechaStr = format(fecha, 'yyyy-MM-dd');
-    
+
     return ausenciasAdmin.some(ausencia => {
       // Verificar ausencia única
       if (ausencia.tipo_ausencia === 'unica') {
         const fechaAusenciaISO = ausencia.fecha_inicio.split('T')[0];
-        
+
         if (fechaAusenciaISO === fechaStr) {
           // Si no hay clases_canceladas específicas, se bloquean todas
           if (!ausencia.clases_canceladas || ausencia.clases_canceladas.length === 0) {
@@ -79,18 +79,18 @@ export const HistorialBalance: React.FC = () => {
           }
         }
       }
-      
+
       // Verificar ausencia por período
       if (ausencia.tipo_ausencia === 'periodo') {
         const fechaInicio = new Date(ausencia.fecha_inicio);
         const fechaFin = new Date(ausencia.fecha_fin);
         const fechaClase = new Date(fecha);
-        
+
         if (fechaClase >= fechaInicio && fechaClase <= fechaFin) {
           return true;
         }
       }
-      
+
       return false;
     });
   };
@@ -168,7 +168,7 @@ export const HistorialBalance: React.FC = () => {
       tarifa_aplicada: 2500,
       duracion_horas: 2
     },
-    
+
     // Semana 2 (8-14 julio)
     {
       id: '8',
@@ -230,7 +230,7 @@ export const HistorialBalance: React.FC = () => {
       tarifa_aplicada: 2500,
       duracion_horas: 2
     },
-    
+
     // Semana 3 (15-21 julio)
     {
       id: '14',
@@ -292,7 +292,7 @@ export const HistorialBalance: React.FC = () => {
       tarifa_aplicada: 2500,
       duracion_horas: 2
     },
-    
+
     // Semana 4 (22-28 julio)
     {
       id: '20',
@@ -354,7 +354,7 @@ export const HistorialBalance: React.FC = () => {
       tarifa_aplicada: 2500,
       duracion_horas: 2
     },
-    
+
     // Semana 5 (29-31 julio)
     {
       id: '26',
@@ -410,30 +410,30 @@ export const HistorialBalance: React.FC = () => {
     const primerDia = new Date(añoSeleccionado, mesSeleccionado, 1);
     const ultimoDia = new Date(añoSeleccionado, mesSeleccionado + 1, 0);
     const semanas = [];
-    
+
     let fechaActual = new Date(primerDia);
     let semanaActual = 1;
-    
+
     while (fechaActual <= ultimoDia) {
       const inicioSemana = new Date(fechaActual);
       const finSemana = new Date(fechaActual);
       finSemana.setDate(finSemana.getDate() + 6);
-      
+
       if (finSemana > ultimoDia) {
         finSemana.setTime(ultimoDia.getTime());
       }
-      
+
       semanas.push({
         numero: semanaActual,
         inicio: inicioSemana,
         fin: finSemana,
         label: `Semana ${semanaActual} (${inicioSemana.getDate()}-${finSemana.getDate()})`
       });
-      
+
       fechaActual.setDate(fechaActual.getDate() + 7);
       semanaActual++;
     }
-    
+
     return semanas;
   };
 
@@ -441,7 +441,7 @@ export const HistorialBalance: React.FC = () => {
   const obtenerDiasDelMes = () => {
     const ultimoDia = new Date(añoSeleccionado, mesSeleccionado + 1, 0);
     const dias = [];
-    
+
     for (let dia = 1; dia <= ultimoDia.getDate(); dia++) {
       const fecha = new Date(añoSeleccionado, mesSeleccionado, dia);
       dias.push({
@@ -450,7 +450,7 @@ export const HistorialBalance: React.FC = () => {
         label: `${dia} de ${meses[mesSeleccionado]}`
       });
     }
-    
+
     return dias;
   };
 
@@ -459,7 +459,7 @@ export const HistorialBalance: React.FC = () => {
     // Por defecto mostrar julio 2024 (datos simulados)
     setMesSeleccionado(6); // Julio (0-indexed)
     setAñoSeleccionado(2024);
-    
+
     cargarDatosHistorial(2024, 6);
     cargarTarifaActual();
   }, []);
@@ -477,18 +477,18 @@ export const HistorialBalance: React.FC = () => {
     try {
       // Cargar ausencias del admin primero
       await cargarAusenciasAdmin();
-      
+
       // Verificar si es julio 2024 para usar datos simulados
       if (año === 2024 && mes === 6) { // mes 6 = julio (0-indexed)
         // Filtrar turnos que no estén bloqueados por ausencias del admin
         const turnosValidos = turnosSimuladosJulio.filter(turno => {
           const fechaTurno = new Date(turno.fecha);
-          return !estaClaseBloqueada(fechaTurno, turno.clase_numero);
+          return !estaClaseBloqueada(fechaTurno);
         });
-        
+
         // Guardar turnos válidos
         setTurnosIndividuales(turnosValidos);
-        
+
         // Calcular resumen mensual con duración fija (solo turnos válidos)
         const resumen = {
           ingresos_totales: turnosValidos
@@ -498,36 +498,34 @@ export const HistorialBalance: React.FC = () => {
           cantidad_clientes: new Set(turnosValidos.map(t => t.usuario.email)).size
         };
         setResumenMensual(resumen);
-        
+
         // Agrupar por día (para mantener compatibilidad)
         const resumenDiario = HistorialService.agruparTurnosPorDia(turnosValidos);
         setResumenDiario(resumenDiario);
-        
-        console.log(`📊 Cargando datos simulados de julio 2024 (${turnosValidos.length} válidos de ${turnosSimuladosJulio.length} totales)`);
+
         return;
       }
-      
+
       // Obtener turnos del período (datos reales)
       const turnos = await HistorialService.obtenerTurnosPeriodo(año, mes);
-      
+
       // Filtrar turnos que no estén bloqueados por ausencias del admin
       const turnosValidos = turnos.filter(turno => {
         const fechaTurno = new Date(turno.fecha);
-        return !estaClaseBloqueada(fechaTurno, turno.clase_numero);
+        return !estaClaseBloqueada(fechaTurno, (turno as any).clase_numero);
       });
-      
+
       // Guardar turnos individuales (solo los válidos)
       setTurnosIndividuales(turnosValidos);
-      
+
       // Calcular resumen mensual (solo con turnos válidos)
       const resumen = HistorialService.calcularResumenMensual(turnosValidos);
       setResumenMensual(resumen);
-      
+
       // Agrupar por día (para mantener compatibilidad, solo turnos válidos)
       const resumenDiario = HistorialService.agruparTurnosPorDia(turnosValidos);
       setResumenDiario(resumenDiario);
-      
-      console.log(`📊 Cargados ${turnosValidos.length} turnos válidos de ${turnos.length} totales (excluyendo ${turnos.length - turnosValidos.length} bloqueados por ausencias del admin)`);
+
     } catch (error) {
       console.error('Error al cargar datos del historial:', error);
       // En caso de error, mostrar datos vacíos
@@ -551,7 +549,7 @@ export const HistorialBalance: React.FC = () => {
 
   const exportarDatos = () => {
     const nombreArchivo = `historial-${meses[mesSeleccionado]}-${añoSeleccionado}.csv`;
-    
+
     // Crear CSV con turnos individuales
     const headers = ['Fecha', 'Día', 'Alumno', 'Email', 'Horario', 'Duración', 'Estado Pago', 'Tarifa por Hora', 'Total'];
     const datosCSV = turnosIndividualesFiltrados.map(turno => [
@@ -565,14 +563,14 @@ export const HistorialBalance: React.FC = () => {
       `$${turno.tarifa_aplicada.toLocaleString()}`,
       `$${(turno.tarifa_aplicada * duracionClaseFija).toLocaleString()}`
     ]);
-    
+
     const csvContent = [headers, ...datosCSV]
       .map(row => row.join(','))
       .join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
-    
+
     if (link.download !== undefined) {
       const url = URL.createObjectURL(blob);
       link.setAttribute('href', url);
@@ -595,12 +593,12 @@ export const HistorialBalance: React.FC = () => {
   // Filtrar turnos individuales según criterios
   const turnosIndividualesFiltrados = turnosIndividuales.filter(turno => {
     // Filtro por búsqueda
-    const coincideBusqueda = 
+    const coincideBusqueda =
       turno.usuario.full_name.toLowerCase().includes(terminoBusqueda.toLowerCase()) ||
       turno.usuario.email.toLowerCase().includes(terminoBusqueda.toLowerCase());
-    
+
     if (!coincideBusqueda) return false;
-    
+
     // Filtro por semana
     if (filtroSemana !== 'todas') {
       const semanaSeleccionada = parseInt(filtroSemana);
@@ -611,19 +609,19 @@ export const HistorialBalance: React.FC = () => {
         if (fechaTurno < semana.inicio || fechaTurno > semana.fin) return false;
       }
     }
-    
+
     // Filtro por día
     if (filtroDia !== 'todos') {
       const diaSeleccionado = parseInt(filtroDia);
       const fechaTurno = new Date(turno.fecha);
       if (fechaTurno.getDate() !== diaSeleccionado) return false;
     }
-    
+
     // Filtro por estado de pago
     if (filtroPago !== 'todos') {
       if (turno.estado_pago !== filtroPago) return false;
     }
-    
+
     return true;
   });
 
@@ -631,8 +629,6 @@ export const HistorialBalance: React.FC = () => {
     try {
       const exito = await HistorialService.actualizarTarifa(tarifaPorHora);
       if (exito) {
-        // Mostrar mensaje de éxito (podrías usar un toast aquí)
-        console.log('Tarifa actualizada exitosamente');
       } else {
         console.error('Error al actualizar la tarifa');
       }
@@ -670,7 +666,7 @@ export const HistorialBalance: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium">Mes:</span>
               <Select value={mesSeleccionado.toString()} onValueChange={(value) => {
@@ -715,7 +711,7 @@ export const HistorialBalance: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               {/* Filtro por día */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Día</label>
@@ -733,7 +729,7 @@ export const HistorialBalance: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               {/* Filtro por estado de pago */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Estado de Pago</label>
@@ -748,7 +744,7 @@ export const HistorialBalance: React.FC = () => {
                   </SelectContent>
                 </Select>
               </div>
-              
+
               {/* Búsqueda por nombre/email */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">Buscar Alumno</label>
@@ -763,7 +759,7 @@ export const HistorialBalance: React.FC = () => {
                 </div>
               </div>
             </div>
-            
+
             {/* Botón de exportación */}
             <div className="flex justify-end">
               <Button onClick={exportarDatos} variant="outline" className="flex items-center gap-2">
@@ -842,7 +838,7 @@ export const HistorialBalance: React.FC = () => {
                     </td>
                   </tr>
                 ))}
-                
+
                 {turnosIndividualesFiltrados.length === 0 && (
                   <tr>
                     <td colSpan={6} className="text-center py-8">

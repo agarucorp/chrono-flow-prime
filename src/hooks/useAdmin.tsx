@@ -49,23 +49,13 @@ export const useAdmin = () => {
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
-        console.log('❌ No hay usuario autenticado');
         setIsAdmin(false);
         setIsLoading(false);
         return;
       }
 
       try {
-        console.log('🔍 Verificando admin para usuario:', {
-          email: user.email,
-          id: user.id,
-          aud: user.aud,
-          role: user.role
-        });
-
-        // Verificar primero la sesión de Supabase
         const { data: session, error: sessionError } = await supabase.auth.getSession();
-        console.log('📱 Sesión actual:', { session: session?.session?.user?.email, error: sessionError });
 
         // Intentar consulta por ID
         const { data, error } = await supabase
@@ -74,49 +64,39 @@ export const useAdmin = () => {
           .eq('id', user.id)
           .single();
 
-        console.log('📊 Respuesta de la consulta por ID:', { data, error });
 
         // Si falla por ID, intentar por email
         if (error && user.email) {
-          console.log('🔄 Reintentando consulta por email...');
           const { data: emailData, error: emailError } = await supabase
             .from('profiles')
             .select('id, email, role, created_at')
             .eq('email', user.email)
             .single();
 
-          console.log('📧 Respuesta de la consulta por email:', { data: emailData, error: emailError });
 
           if (!emailError && emailData) {
             const isUserAdmin = emailData.role === 'admin';
             setIsAdmin(isUserAdmin);
-            console.log('✅ Usuario encontrado por email:', emailData);
-            console.log('✅ Admin status:', isUserAdmin, 'for user:', user.email);
           } else {
             console.error('❌ Error en ambas consultas:', { error, emailError });
             // Fallback: verificar admin por email
             const isAdminByEmail = checkAdminByEmail(user.email || '');
             setIsAdmin(isAdminByEmail);
-            console.log('🔄 Usando verificación por email como fallback:', isAdminByEmail);
           }
         } else if (!error && data) {
           const isUserAdmin = data.role === 'admin';
           setIsAdmin(isUserAdmin);
-          console.log('✅ Usuario encontrado por ID:', data);
-          console.log('✅ Admin status:', isUserAdmin, 'for user:', user.email);
         } else {
           console.error('❌ Error verificando rol de admin:', error);
           // Fallback: verificar admin por email
           const isAdminByEmail = checkAdminByEmail(user.email || '');
           setIsAdmin(isAdminByEmail);
-          console.log('🔄 Usando verificación por email como fallback:', isAdminByEmail);
         }
       } catch (err) {
         console.error('❌ Error inesperado verificando admin:', err);
         // Fallback final: verificar admin por email
         const isAdminByEmail = checkAdminByEmail(user?.email || '');
         setIsAdmin(isAdminByEmail);
-        console.log('🔄 Usando verificación por email como fallback final:', isAdminByEmail);
       } finally {
         setIsLoading(false);
       }
@@ -157,11 +137,9 @@ export const useAdmin = () => {
   // Obtener todos los usuarios (solo para admins)
   const fetchAllUsers = useCallback(async () => {
     if (!isAdmin) {
-      console.log('❌ No se puede obtener usuarios: no eres admin');
       return;
     }
 
-    console.log('🔄 Obteniendo todos los usuarios de Supabase...');
 
     try {
       const { data, error } = await supabase
@@ -169,11 +147,6 @@ export const useAdmin = () => {
         .select('id, email, role, created_at, full_name, first_name, last_name, phone')
         .order('created_at', { ascending: false });
 
-      console.log('📊 Respuesta de Supabase:', { 
-        total: data?.length || 0, 
-        error: error?.message,
-        usuarios: data 
-      });
 
       if (error) {
         console.error('❌ Error obteniendo usuarios:', error);
@@ -186,9 +159,7 @@ export const useAdmin = () => {
         return;
       }
 
-      console.log(`✅ Se encontraron ${data.length} usuarios en total`);
-      const clientes = data.filter(u => u.role === 'client');
-      console.log(`👥 De los cuales ${clientes.length} son clientes`);
+        const clientes = data.filter(u => u.role === 'client');
 
       // Obtener horarios para cada usuario de manera individual
       const usersWithHorarios = await Promise.all(
@@ -205,7 +176,6 @@ export const useAdmin = () => {
       const hidden = new Set(getHiddenUserIds());
       const visibleUsers = usersWithHorarios.filter(u => !hidden.has(u.id));
       setAllUsers(visibleUsers);
-      console.log('✅ Usuarios cargados exitosamente');
     } catch (err) {
       console.error('❌ Error inesperado obteniendo usuarios:', err);
     }
@@ -377,7 +347,6 @@ export const useAdmin = () => {
   // Obtener todas las ausencias activas
   const fetchAusencias = useCallback(async () => {
     if (!isAdmin) {
-      console.log('❌ No se puede obtener ausencias: no eres admin');
       return [];
     }
 
@@ -429,7 +398,6 @@ export const useAdmin = () => {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Ausencia única creada exitosamente:', data);
       return { success: true, data };
     } catch (err) {
       console.error('❌ Error inesperado creando ausencia única:', err);
@@ -466,7 +434,6 @@ export const useAdmin = () => {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Ausencia por período creada exitosamente:', data);
       return { success: true, data };
     } catch (err) {
       console.error('❌ Error inesperado creando ausencia por período:', err);
@@ -491,7 +458,6 @@ export const useAdmin = () => {
         return { success: false, error: error.message };
       }
 
-      console.log('✅ Ausencia eliminada exitosamente');
       return { success: true };
     } catch (err) {
       console.error('❌ Error inesperado eliminando ausencia:', err);

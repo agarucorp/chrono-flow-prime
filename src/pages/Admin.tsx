@@ -576,13 +576,7 @@ export default function Admin() {
   // Cargar cuotas del periodo seleccionado y mapear por usuario
   useEffect(() => {
     (async () => {
-      console.log('🔄 USEEFFECT: Ejecutándose', {
-        selectedYear,
-        selectedMonth,
-        isUpdatingPayment,
-        skipNextReload: skipNextReload.current
-      });
-      
+
       // No recargar si hay una actualización de pago en progreso o si se debe saltar
       if (isUpdatingPayment || skipNextReload.current) {
         skipNextReload.current = false; // Resetear el flag
@@ -1086,12 +1080,6 @@ export default function Admin() {
                             <Select
                               value={row.estado === 'abonada' ? 'pagado' : 'pendiente'}
                               onValueChange={async (v) => {
-                                console.log('🔄 SWITCH: Cambiando estado', {
-                                  usuario: row.nombre,
-                                  de: row.estado,
-                                  a: v,
-                                  nuevoEstadoDb: (v === 'pagado') ? 'abonada' : 'pendiente'
-                                });
                                 
                                 setIsUpdatingPayment(true);
                                 skipNextReload.current = true; // Evitar que el useEffect se ejecute
@@ -1099,7 +1087,6 @@ export default function Admin() {
                                 const nuevoEstadoDb = (v === 'pagado') ? 'abonada' : 'pendiente';
                                 const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
                                 
-                                console.log('🔄 SWITCH: Resultado BD:', res);
                                 
                                 if (res.success) {
                                   // Actualizar solo la fila específica en lugar de recargar toda la lista
@@ -1128,7 +1115,6 @@ export default function Admin() {
                                   showError('Error al actualizar el estado de pago');
                                 }
                                 
-                                console.log('🔄 SWITCH: Actualización completada');
                                 setIsUpdatingPayment(false);
                               }}
                             >

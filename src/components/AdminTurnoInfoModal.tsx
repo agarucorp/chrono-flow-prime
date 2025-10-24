@@ -42,17 +42,13 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
   // Eliminar clase (cancelar como admin)
   const eliminarTurno = async () => {
     try {
-      console.log('🚀 eliminarTurno llamada - turno:', turno);
-      
       if (!turno) {
-        console.log('❌ No hay turno seleccionado');
         showError('Error', 'No hay turno seleccionado para eliminar');
         return;
       }
 
       setShowConfirmAlert(false);
-      
-      console.log('✅ Usuario confirmó la eliminación');
+
     } catch (error) {
       console.error('❌ Error en confirmación:', error);
       showError('Error', 'Error al procesar la confirmación');
@@ -66,22 +62,11 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       // Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');
       const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
-      
-      console.log('🔍 DEBUG eliminarTurno:', {
-        turnoId: turno.id,
-        turnoServicio: turno.servicio,
-        esTurnoVariable,
-        esTurnoRecurrente,
-        clienteId: turno.cliente_id,
-        fecha: turno.fecha,
-        horaInicio: turno.hora_inicio,
-        horaFin: turno.hora_fin
-      });
 
       if (esTurnoVariable) {
         // CANCELAR TURNO VARIABLE
         const turnoVariableId = turno.id.replace('variable_', '');
-        
+
         // 1. Buscar el turno variable específico
         const { data: turnoVariable, error: errorBuscar } = await supabase
           .from('turnos_variables')
@@ -110,7 +95,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         const fechaHoraTurno = new Date(turno.fecha);
         const [hora, minuto] = turno.hora_inicio.split(':');
         fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-        
+
         const ahora = new Date();
         const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
         const esCancelacionTardia = diferenciaHoras < 24;
@@ -133,11 +118,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         }
 
       } else if (esTurnoRecurrente) {
-        // CANCELAR TURNO RECURRENTE (solo crear cancelación, no eliminar horario fijo)
-        
-        console.log('🔄 Procesando turno recurrente...');
-        
-        // Verificar si ya existe una cancelación para este turno
+
         const { data: cancelacionExistente, error: errorVerificar } = await supabase
           .from('turnos_cancelados')
           .select('id')
@@ -153,7 +134,6 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         }
 
         if (cancelacionExistente && cancelacionExistente.length > 0) {
-          console.log('⚠️ Turno ya cancelado');
           showError('Error', 'Este turno ya está cancelado');
           return;
         }
@@ -162,13 +142,12 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         const fechaHoraTurno = new Date(turno.fecha);
         const [hora, minuto] = turno.hora_inicio.split(':');
         fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-        
+
         const ahora = new Date();
         const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
         const esCancelacionTardia = diferenciaHoras < 24;
 
         // Crear registro de cancelación
-        console.log('➕ Creando cancelación...');
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -185,9 +164,6 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
           showError('Error', 'No se pudo crear la cancelación del turno recurrente');
           return;
         }
-        
-        console.log('✅ Cancelación creada exitosamente');
-
       } else {
         // CANCELAR TURNO NORMAL
         // 1. Buscar el turno específico
@@ -224,7 +200,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         const fechaHoraTurno = new Date(turno.fecha);
         const [hora, minuto] = turno.hora_inicio.split(':');
         fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-        
+
         const ahora = new Date();
         const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
         const esCancelacionTardia = diferenciaHoras < 24;
@@ -249,19 +225,13 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
 
       dismissToast(loadingToast);
       showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
-      
-      console.log('🎉 Éxito! Disparando eventos de actualización...');
-      
-      // Disparar eventos para actualizar otras vistas
+
+
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
-      
-      console.log('📡 Eventos disparados, llamando onTurnoUpdated...');
+
       onTurnoUpdated();
-      console.log('🚪 Cerrando modal...');
-      
-      // Cerrar modal después de un pequeño delay para asegurar que se vea el mensaje de éxito
       setTimeout(() => {
         onClose();
       }, 1000);
@@ -289,7 +259,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             <X className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </CardHeader>
-        
+
         <CardContent className="space-y-3 sm:space-y-6">
           {/* Información del turno */}
           <div className="space-y-2 sm:space-y-4">
@@ -310,7 +280,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                 <p className="font-medium text-xs sm:text-sm">{turno.hora_inicio} - {turno.hora_fin}</p>
               </div>
             </div>
-            
+
             {turno.cliente_nombre && (
               <div>
                 <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Cliente</Label>
@@ -332,14 +302,11 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             <Button
               variant="destructive"
               onClick={() => {
-                console.log('🔘 Botón Eliminar Clase clickeado');
-                console.log('🔍 Estado loading:', loading);
-                console.log('🔍 Turno actual:', turno);
                 mostrarConfirmacion();
               }}
               disabled={loading}
               className="text-xs sm:text-sm w-full sm:w-auto"
-              style={{ 
+              style={{
                 opacity: loading ? 0.5 : 1,
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}
@@ -360,16 +327,16 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                 <Trash2 className="h-6 w-6 text-red-600" />
               </div>
             </div>
-            
+
             <div className="text-center">
               <h3 className="text-lg font-medium text-gray-900 mb-2">
                 Confirmar Cancelación
               </h3>
               <p className="text-sm text-gray-500 mb-6">
-                ¿Estás seguro de que quieres cancelar esta clase?<br/>
+                ¿Estás seguro de que quieres cancelar esta clase?<br />
                 El usuario verá la clase como cancelada y aparecerá en vacantes.
               </p>
-              
+
               <div className="flex space-x-3">
                 <Button
                   variant="outline"

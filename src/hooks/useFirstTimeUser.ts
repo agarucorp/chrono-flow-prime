@@ -34,7 +34,6 @@ export const useFirstTimeUser = () => {
         console.error('Error verificando usuario primerizo:', error);
         // Si la tabla no existe aún, asumir que es primera vez
         if (error.code === 'PGRST116' || error.message.includes('relation') || error.message.includes('does not exist')) {
-          console.log('Tabla horarios_recurrentes_usuario no existe aún, asumiendo primera vez');
           setIsFirstTime(true);
         } else {
           setIsFirstTime(false);
