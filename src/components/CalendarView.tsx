@@ -282,18 +282,18 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Calcular fechas de inicio y fin según la vista
       const { startDate, endDate } = getDateRange();
       
-      // 1. Cargar turnos normales
+      // 1. Cargar turnos normales (usando turnos_variables que es la tabla actual)
       const { data: turnosNormales, error: errorNormales } = await supabase
-        .from('turnos')
+        .from('turnos_variables')
         .select(`
           *,
-          profiles!cliente_id(full_name),
-          profiles!profesional_id(full_name)
+          cliente:profiles!cliente_id(full_name)
         `)
-        .gte('fecha', formatLocalDate(startDate))
-        .lte('fecha', formatLocalDate(endDate))
-        .order('fecha', { ascending: true })
-        .order('hora_inicio', { ascending: true });
+        .eq('estado', 'confirmada')
+        .gte('turno_fecha', formatLocalDate(startDate))
+        .lte('turno_fecha', formatLocalDate(endDate))
+        .order('turno_fecha', { ascending: true })
+        .order('turno_hora_inicio', { ascending: true });
 
       if (errorNormales) {
         console.error('Error obteniendo turnos normales:', errorNormales);
@@ -319,15 +319,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // 3. Transformar turnos normales
       const turnosNormalesFormateados = (turnosNormales || []).map(turno => ({
         id: turno.id,
-        fecha: turno.fecha,
-        hora_inicio: turno.hora_inicio,
-        hora_fin: turno.hora_fin,
+        fecha: turno.turno_fecha,
+        hora_inicio: turno.turno_hora_inicio,
+        hora_fin: turno.turno_hora_fin,
         estado: turno.estado,
         cliente_id: turno.cliente_id,
-        cliente_nombre: turno.profiles?.full_name || 'Sin asignar',
-        profesional_id: turno.profesional_id,
-        profesional_nombre: turno.profiles?.full_name || 'Sin asignar',
-        servicio: turno.servicio || 'Sin especificar',
+        cliente_nombre: turno.cliente?.full_name || 'Sin asignar',
+        profesional_id: null, // turnos_variables no tiene profesional_id
+        profesional_nombre: 'Sin asignar',
+        servicio: 'Entrenamiento Personal',
         tipo: 'normal'
       }));
 
