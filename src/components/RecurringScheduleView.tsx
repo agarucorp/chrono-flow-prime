@@ -88,11 +88,19 @@ export const RecurringScheduleView = () => {
 
   // Función para cambiar la vista activa
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
+    console.log('🔄 Cambiando vista a:', view);
     setActiveView(view);
+    
+    // Si se cambia a vacantes, recargar los datos
+    if (view === 'turnos-disponibles') {
+      console.log('🔄 Recargando datos para vacantes...');
+      cargarTurnosCancelados(true);
+    }
   };
 
   // Cargar turnos cancelados al inicio y cuando se cambie a la vista de turnos disponibles
   useEffect(() => {
+    console.log('🔄 useEffect cargarTurnosCancelados ejecutado', { userId: user?.id });
     if (user?.id) {
       cargarTurnosCancelados();
     }
@@ -207,20 +215,29 @@ export const RecurringScheduleView = () => {
 
   // Cargar turnos cancelados disponibles
   const cargarTurnosCancelados = async (forceReload = false) => {
-    if (!user?.id) return;
+    console.log('🚀 INICIANDO cargarTurnosCancelados', { forceReload, userId: user?.id });
+    if (!user?.id) {
+      console.log('❌ No hay usuario, saliendo de cargarTurnosCancelados');
+      return;
+    }
 
-      setLoadingTurnosCancelados(true);
+    setLoadingTurnosCancelados(true);
     try {
       // Obtener todos los turnos cancelados disponibles con el cliente que canceló
+      const fechaHoy = format(new Date(), 'yyyy-MM-dd');
+      console.log('📅 Consultando turnos_disponibles con fecha >=', fechaHoy);
+      
       const { data, error } = await supabase
         .from('turnos_disponibles')
         .select('*')
-        .gte('turno_fecha', format(new Date(), 'yyyy-MM-dd'))
+        .gte('turno_fecha', fechaHoy)
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
 
+      console.log('📊 Resultado de consulta turnos_disponibles:', { data, error });
+
       if (error) {
-        console.error('Error al cargar turnos cancelados:', error);
+        console.error('❌ Error al cargar turnos cancelados:', error);
         return;
       }
 
@@ -277,16 +294,29 @@ export const RecurringScheduleView = () => {
         canceladoPorUsuario: turno.cliente_que_cancelo === user.id
       }));
 
-      // Filtrar turnos: excluir los que el usuario actual canceló él mismo
+      // Mostrar todos los turnos disponibles (globales para todos los usuarios)
+      // Solo excluir los que ya están reservados por el usuario actual
       const turnosFiltrados = turnosMarcados.filter(turno => {
-        // Si el usuario actual canceló este turno, no mostrarlo
-        if (turno.canceladoPorUsuario) {
+        console.log('🔍 Analizando turno:', {
+          turno_fecha: turno.turno_fecha,
+          turno_hora_inicio: turno.turno_hora_inicio,
+          cliente_que_cancelo: turno.cliente_que_cancelo,
+          tipo_cancelacion: turno.tipo_cancelacion,
+          reservado: turno.reservado,
+          usuario_actual: user.id
+        });
+        
+        // Solo excluir si ya está reservado por el usuario actual
+        if (turno.reservado) {
+          console.log('❌ Excluyendo turno ya reservado por el usuario actual');
           return false;
         }
+        
+        console.log('✅ Incluyendo turno en vacantes (disponible globalmente)');
         return true;
       });
 
-
+      console.log('📅 Turnos filtrados para vacantes:', turnosFiltrados);
       setTurnosCancelados(turnosFiltrados);
     } catch (error) {
       console.error('Error al cargar turnos cancelados:', error);
@@ -1025,7 +1055,6 @@ export const RecurringScheduleView = () => {
                       <tr className="border-b bg-muted/50">
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Fecha</th>
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Día</th>
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground hidden sm:table-cell">Clase</th>
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Horario</th>
                         <th className="px-4 py-3 text-center font-medium text-xs sm:text-sm text-muted-foreground hidden md:table-cell">Acciones</th>
                       </tr>
@@ -1033,7 +1062,7 @@ export const RecurringScheduleView = () => {
                     <tbody>
                       {loading || loadingMonth ? (
                         <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center">
+                          <td colSpan={4} className="px-4 py-8 text-center">
                             <div className="flex flex-col items-center">
                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
                               <p className="text-sm text-muted-foreground">
@@ -1083,11 +1112,6 @@ export const RecurringScheduleView = () => {
                                   CLASE BLOQUEADA
                                 </div>
                               )}
-                            </td>
-                            <td className="px-2 sm:px-4 py-3 text-center sm:text-left hidden sm:table-cell">
-                              <div className="text-xs sm:text-sm font-medium">
-                                {clase.horario.nombre_clase || (clase.horario.clase_numero ? `Clase ${clase.horario.clase_numero}` : '-')}
-                              </div>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <span className={`text-xs sm:text-sm font-medium ${

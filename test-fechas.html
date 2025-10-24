@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test de Fechas</title>
+</head>
+<body>
+    <h1>Test de Fechas - Vacantes</h1>
+    <p>Verificando el comportamiento de las fechas en las vacantes:</p>
+    
+    <div id="resultados"></div>
+    
+    <script>
+        // Simular datos de turnos_disponibles
+        const turnosDisponibles = [
+            {
+                id: '1',
+                turno_fecha: '2025-10-25',
+                turno_hora_inicio: '10:00:00',
+                turno_hora_fin: '11:00:00'
+            },
+            {
+                id: '2',
+                turno_fecha: '2025-10-31',
+                turno_hora_inicio: '20:00:00',
+                turno_hora_fin: '21:00:00'
+            }
+        ];
+        
+        // Convertir al formato del frontend
+        const turnosFormateados = turnosDisponibles.map(turno => ({
+            id: turno.id,
+            fecha: turno.turno_fecha,
+            hora_inicio: turno.turno_hora_inicio,
+            hora_fin: turno.turno_hora_fin,
+            estado: 'disponible',
+            servicio: 'Entrenamiento Personal'
+        }));
+        
+        // Mostrar resultados
+        const resultados = document.getElementById('resultados');
+        
+        turnosFormateados.forEach(turno => {
+            const div = document.createElement('div');
+            div.style.border = '1px solid #ccc';
+            div.style.padding = '10px';
+            div.style.margin = '10px 0';
+            
+            // Fecha original
+            const fechaOriginal = turno.fecha;
+            
+            // Fecha con new Date() (problemática)
+            const fechaProblematica = new Date(turno.fecha).toLocaleDateString('es-ES');
+            
+            // Fecha corregida
+            const fechaCorregida = new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES');
+            
+            div.innerHTML = `
+                <h3>Turno ${turno.id}</h3>
+                <p><strong>Fecha original:</strong> ${fechaOriginal}</p>
+                <p><strong>Fecha problemática:</strong> ${fechaProblematica}</p>
+                <p><strong>Fecha corregida:</strong> ${fechaCorregida}</p>
+                <p><strong>Hora:</strong> ${turno.hora_inicio} - ${turno.hora_fin}</p>
+            `;
+            
+            resultados.appendChild(div);
+        });
+        
+        // Mostrar información de zona horaria
+        const infoDiv = document.createElement('div');
+        infoDiv.style.background = '#f0f0f0';
+        infoDiv.style.padding = '10px';
+        infoDiv.style.margin = '10px 0';
+        infoDiv.innerHTML = `
+            <h3>Información de Zona Horaria</h3>
+            <p><strong>Zona horaria del navegador:</strong> ${Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+            <p><strong>Offset UTC:</strong> ${new Date().getTimezoneOffset()} minutos</p>
+        `;
+        resultados.appendChild(infoDiv);
+    </script>
+</body>
+</html>

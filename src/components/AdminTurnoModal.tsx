@@ -47,6 +47,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   const [searchTerm, setSearchTerm] = useState('');
   const [clientesReservados, setClientesReservados] = useState<AdminUser[]>([]);
   const [capacidadDisponible, setCapacidadDisponible] = useState(0);
+  
+  // Debug logs
+  console.log('🔍 AdminTurnoModal renderizado - turno:', turno);
+  console.log('🔍 AdminTurnoModal renderizado - isOpen:', isOpen);
+  console.log('🔍 AdminTurnoModal renderizado - loading:', loading);
 
   // Estado para el modal de confirmación de cancelación
   const [showCancelacionModal, setShowCancelacionModal] = useState(false);
@@ -81,16 +86,17 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     if (!turno) return;
 
     try {
-      // 1. Buscar reservas normales en reservas_turnos
+      // 1. Buscar reservas normales en turnos
       const { data: reservasNormales, error: errorNormales } = await supabase
-        .from('reservas_turnos')
+        .from('turnos')
         .select(`
           cliente_id,
-          estado,
-          clientes:cliente_id(id, full_name, email)
+          profiles:cliente_id(id, full_name, email)
         `)
-        .eq('turno_id', turno.id)
-        .eq('estado', 'confirmada');
+        .eq('fecha', turno.fecha)
+        .eq('hora_inicio', turno.hora_inicio)
+        .eq('hora_fin', turno.hora_fin)
+        .not('cliente_id', 'is', null);
 
       if (errorNormales) {
         console.error('Error cargando reservas normales:', errorNormales);
@@ -102,7 +108,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         .select(`
           cliente_id,
           estado,
-          clientes:cliente_id(id, full_name, email)
+          profiles:cliente_id(id, full_name, email)
         `)
         .eq('turno_fecha', turno.fecha)
         .eq('turno_hora_inicio', turno.hora_inicio)
@@ -115,17 +121,17 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       // 3. Combinar ambas listas
       const clientesReservadosNormales = (reservasNormales || []).map((reserva: any) => ({
-        id: reserva.clientes.id,
-        full_name: reserva.clientes.full_name,
-        email: reserva.clientes.email,
+        id: reserva.profiles.id,
+        full_name: reserva.profiles.full_name,
+        email: reserva.profiles.email,
         role: 'client',
         tipo: 'normal'
       }));
 
       const clientesReservadosVariables = (turnosVariables || []).map((turno: any) => ({
-        id: turno.clientes.id,
-        full_name: turno.clientes.full_name,
-        email: turno.clientes.email,
+        id: turno.profiles.id,
+        full_name: turno.profiles.full_name,
+        email: turno.profiles.email,
         role: 'client',
         tipo: 'variable'
       }));
@@ -325,15 +331,31 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
   // Eliminar turno completamente
   const eliminarTurno = async () => {
-    if (!turno) return;
+    try {
+      console.log('🚀 eliminarTurno llamada - turno:', turno);
+      
+      if (!turno) {
+        console.log('❌ No hay turno seleccionado');
+        showError('Error', 'No hay turno seleccionado para eliminar');
+        return;
+      }
 
-    if (!confirm('¿Estás seguro de que quieres eliminar este turno? Esta acción no se puede deshacer.')) {
+      console.log('🔍 Mostrando confirmación...');
+      if (!confirm('¿Estás seguro de que quieres eliminar esta clase? El usuario verá la clase como cancelada y aparecerá en vacantes.')) {
+        console.log('❌ Usuario canceló la eliminación');
+        return;
+      }
+      
+      console.log('✅ Usuario confirmó la eliminación');
+    } catch (error) {
+      console.error('❌ Error en confirmación:', error);
+      showError('Error', 'Error al procesar la confirmación');
       return;
     }
 
     try {
       setLoading(true);
-      const loadingToast = showLoading('Eliminando turno...');
+      const loadingToast = showLoading('Eliminando clase...');
 
       // Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');
@@ -351,29 +373,48 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       });
 
       if (esTurnoVariable) {
-        // ELIMINAR TURNO VARIABLE - igual que en RecurringScheduleView
+        // CANCELAR TURNO VARIABLE
         const turnoVariableId = turno.id.replace('variable_', '');
         
-        // 1. Eliminar el turno variable
+        // 1. Buscar el turno variable específico
+        const { data: turnoVariable, error: errorBuscar } = await supabase
+          .from('turnos_variables')
+          .select('id, cliente_id, creado_desde_disponible_id')
+          .eq('id', turnoVariableId)
+          .eq('estado', 'confirmada')
+          .single();
+
+        if (errorBuscar || !turnoVariable) {
+          showError('Error', 'No se encontró el turno variable');
+          return;
+        }
+
+        // 2. Eliminar el turno variable
         const { error: errorEliminar } = await supabase
           .from('turnos_variables')
           .delete()
-          .eq('id', turnoVariableId);
+          .eq('id', turnoVariable.id);
 
-        if (errorEliminar) throw errorEliminar;
+        if (errorEliminar) {
+          showError('Error', 'No se pudo eliminar el turno variable');
+          return;
+        }
 
-        // 2. Crear registro en turnos_cancelados
+        // 3. Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
-            cliente_id: turno.cliente_id,
+            cliente_id: turnoVariable.cliente_id,
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
             tipo_cancelacion: 'admin'
           });
 
-        if (errorCancelacion) throw errorCancelacion;
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación');
+          return;
+        }
 
       } else if (esTurnoRecurrente) {
         // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
@@ -432,15 +473,38 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         console.log('✅ Cancelación creada exitosamente');
 
       } else {
-        // ELIMINAR TURNO NORMAL
-        const { error } = await supabase
+        // CANCELAR TURNO NORMAL
+        // 1. Buscar el turno específico
+        const { data: turnoCliente, error: errorBuscar } = await supabase
           .from('turnos')
-          .delete()
-          .eq('id', turno.id);
+          .select('*')
+          .eq('fecha', turno.fecha)
+          .eq('hora_inicio', turno.hora_inicio)
+          .eq('cliente_id', turno.cliente_id)
+          .eq('estado', 'ocupado')
+          .single();
 
-        if (error) throw error;
+        if (errorBuscar || !turnoCliente) {
+          showError('Error', 'No se encontró la reserva del cliente');
+          return;
+        }
 
-        // Crear registro en turnos_cancelados
+        // 2. Marcar turno como cancelado y liberar cliente
+        const { error: errorCancelar } = await supabase
+          .from('turnos')
+          .update({
+            estado: 'cancelado',
+            cliente_id: null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', turnoCliente.id);
+
+        if (errorCancelar) {
+          showError('Error', 'No se pudo cancelar el turno');
+          return;
+        }
+
+        // 3. Crear registro en turnos_cancelados
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -451,12 +515,15 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             tipo_cancelacion: 'admin'
           });
 
-        if (errorCancelacion) throw errorCancelacion;
+        if (errorCancelacion) {
+          showError('Error', 'No se pudo crear la cancelación');
+          return;
+        }
       }
 
       dismissToast(loadingToast);
 
-      showSuccess('Turno eliminado', 'El turno ha sido eliminado exitosamente');
+      showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
       
       console.log('🎉 Éxito! Disparando eventos de actualización...');
       
@@ -468,10 +535,14 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       console.log('📡 Eventos disparados, llamando onTurnoUpdated...');
       onTurnoUpdated();
       console.log('🚪 Cerrando modal...');
-      onClose();
+      
+      // Cerrar modal después de un pequeño delay para asegurar que se vea el mensaje de éxito
+      setTimeout(() => {
+        onClose();
+      }, 1000);
     } catch (error) {
       console.error('Error eliminando turno:', error);
-      showError('Error', 'No se pudo eliminar el turno');
+      showError('Error', 'No se pudo eliminar la clase');
     } finally {
       setLoading(false);
     }
@@ -675,11 +746,21 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             </Button>
             <Button
               variant="destructive"
-              onClick={eliminarTurno}
+              onClick={() => {
+                console.log('🔘 Botón Eliminar Clase clickeado');
+                console.log('🔍 Estado loading:', loading);
+                console.log('🔍 Turno actual:', turno);
+                console.log('🔍 Botón disabled:', loading);
+                eliminarTurno();
+              }}
               disabled={loading}
+              style={{ 
+                opacity: loading ? 0.5 : 1,
+                cursor: loading ? 'not-allowed' : 'pointer'
+              }}
             >
               <Trash2 className="h-4 w-4 mr-2" />
-              Eliminar Turno
+              Eliminar Clase {loading ? '(Cargando...)' : ''}
             </Button>
           </div>
         </CardContent>

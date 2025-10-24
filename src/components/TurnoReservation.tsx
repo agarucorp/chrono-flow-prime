@@ -60,13 +60,20 @@ export const TurnoReservation = () => {
     try {
       setLoading(true);
       
-      // Obtener turnos disponibles
+      // Obtener turnos disponibles desde turnos_disponibles
+      const fechaHoy = new Date().toISOString().split('T')[0];
+      console.log('🔍 Fecha seleccionada:', selectedDate.toISOString().split('T')[0]);
+      console.log('🔍 Fecha actual (cliente):', fechaHoy);
+      
       const { data: disponibles, error: errorDisponibles } = await supabase
-        .from('turnos')
+        .from('turnos_disponibles')
         .select('*')
-        .eq('fecha', selectedDate.toISOString().split('T')[0])
-        .eq('estado', 'disponible')
-        .order('hora_inicio', { ascending: true });
+        .gte('turno_fecha', fechaHoy) // Solo futuros o hoy
+        .order('turno_fecha', { ascending: true })
+        .order('turno_hora_inicio', { ascending: true });
+        
+      console.log('🔍 Consulta ejecutada con filtro >=', fechaHoy);
+      console.log('🔍 Resultados de la consulta:', disponibles);
 
       if (errorDisponibles) {
         console.error('❌ Error obteniendo turnos disponibles:', errorDisponibles);
@@ -74,8 +81,29 @@ export const TurnoReservation = () => {
       }
 
 
-      // Ya no filtramos por servicio - todos son entrenamiento personal
-      setTurnosDisponibles(disponibles || []);
+      // Convertir turnos_disponibles al formato esperado
+      const turnosDisponiblesFormateados = (disponibles || []).map(turno => {
+        console.log('🔍 Procesando turno disponible:', {
+          id: turno.id,
+          turno_fecha: turno.turno_fecha,
+          turno_hora_inicio: turno.turno_hora_inicio,
+          turno_hora_fin: turno.turno_hora_fin
+        });
+        
+        return {
+          id: turno.id,
+          fecha: turno.turno_fecha, // Ya está en formato YYYY-MM-DD
+          hora_inicio: turno.turno_hora_inicio,
+          hora_fin: turno.turno_hora_fin,
+          estado: 'disponible',
+          servicio: 'Entrenamiento Personal',
+          max_alumnos: 1,
+          activo: true
+        };
+      });
+
+      console.log('📅 Turnos disponibles formateados:', turnosDisponiblesFormateados);
+      setTurnosDisponibles(turnosDisponiblesFormateados);
 
       // Obtener turnos reservados por el usuario
       const { data: reservados, error: errorReservados } = await supabase
@@ -189,7 +217,7 @@ export const TurnoReservation = () => {
 
       console.log('✅ Turno reservado exitosamente');
       showSuccess('¡Turno reservado exitosamente!', 
-        `Has reservado ${turno.servicio} para el ${new Date(turno.fecha).toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
+        `Has reservado ${turno.servicio} para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
       
       // Cerrar modal y limpiar estado
       setShowConfirmationModal(false);
@@ -344,7 +372,16 @@ export const TurnoReservation = () => {
                           <div className="flex items-center space-x-2">
                             <Calendar className="h-3 w-3 text-muted-foreground" />
                             <span className="text-xs">
-                              {new Date(turno.fecha).toLocaleDateString('es-ES')}
+                              {(() => {
+                                const fechaOriginal = turno.fecha;
+                                const fechaCorregida = new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES');
+                                console.log('📅 Renderizando fecha:', {
+                                  fechaOriginal,
+                                  fechaCorregida,
+                                  turnoId: turno.id
+                                });
+                                return fechaCorregida;
+                              })()}
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">
@@ -371,6 +408,13 @@ export const TurnoReservation = () => {
                             <XCircle className="h-3 w-3 mr-1" />
                             Cancelar
                           </Button>
+                        )}
+                        
+                        {turno.estado === 'cancelado' && (
+                          <div className="flex items-center justify-center space-x-1 text-red-600 bg-red-50 rounded-md p-2">
+                            <XCircle className="h-3 w-3" />
+                            <span className="text-xs font-medium">Cancelada</span>
+                          </div>
                         )}
                       </CardContent>
                     </Card>

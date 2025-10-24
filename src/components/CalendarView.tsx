@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
-import { AdminTurnoModal } from './AdminTurnoModal';
+import { AdminTurnoInfoModal } from './AdminTurnoInfoModal';
 import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
 import { format } from 'date-fns';
@@ -670,7 +670,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       showSuccess('¡Entrenamiento reservado!', 
-        `Has reservado entrenamiento para el ${new Date(turno.fecha).toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
+        `Has reservado entrenamiento para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
       
       // Recargar turnos
       await fetchTurnos();
@@ -1247,7 +1247,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
       {/* Modal de gestión para admin */}
       {showAdminModal && adminSelectedTurno && (
-        <AdminTurnoModal
+        <AdminTurnoInfoModal
           turno={adminSelectedTurno}
           isOpen={showAdminModal}
           onClose={() => {
