@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -69,6 +71,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+  
+  // Estado para agregar usuario a slot
+  const [showAddUserModal, setShowAddUserModal] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<any>(null);
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [addingUser, setAddingUser] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   
   // Formatear fecha local a YYYY-MM-DD para evitar TZ
   const formatLocalDate = (d: Date) => {
@@ -481,23 +492,34 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
         });
       }
 
-      // Agregar turnos variables (excluyendo admins)
+      // Agregar turnos variables (excluyendo admins y duplicados)
       if (turnosVariables && turnosVariables.length > 0) {
         turnosVariables.forEach(turno => {
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            todosAlumnos.push({
-              id: turno.id,
-              nombre: getProfileFullName(profile),
-              email: profile.email || '',
-              telefono: profile.phone,
-              tipo: 'variable',
-              hora_inicio: (turno.turno_hora_inicio || '').substring(0,5),
-              hora_fin: (turno.turno_hora_fin || '').substring(0,5),
-              fecha: turno.turno_fecha,
-              usuario_id: turno.cliente_id
-            });
+            const horaInicio = (turno.turno_hora_inicio || '').substring(0,5);
+            const horaFin = (turno.turno_hora_fin || '').substring(0,5);
+            
+            // Verificar si ya existe este usuario para esta hora (evitar duplicados)
+            const yaExiste = todosAlumnos.some(alumno => 
+              alumno.usuario_id === turno.cliente_id && 
+              alumno.hora_inicio === horaInicio
+            );
+            
+            if (!yaExiste) {
+              todosAlumnos.push({
+                id: turno.id,
+                nombre: getProfileFullName(profile),
+                email: profile.email || '',
+                telefono: profile.phone,
+                tipo: 'variable',
+                hora_inicio: horaInicio,
+                hora_fin: horaFin,
+                fecha: turno.turno_fecha,
+                usuario_id: turno.cliente_id
+              });
+            }
           }
         });
       }
@@ -565,6 +587,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       return;
     }
 
+    // Verificar si la clase es futura
+    if (!esClaseFutura(selectedAlumno.fecha || formatLocalDate(currentDate), selectedAlumno.hora_inicio)) {
+      showError('Error', 'Solo se pueden cancelar clases futuras');
+      return;
+    }
+
     try {
       setCancelingAlumno(true);
       const loadingToast = showLoading('Cancelando clase...');
@@ -616,6 +644,122 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       showError('Error', 'No se pudo cancelar la clase');
     } finally {
       setCancelingAlumno(false);
+    }
+  };
+
+  // Función para verificar si una clase es futura
+  const esClaseFutura = (fecha: string, horaInicio: string) => {
+    try {
+      // Asegurar que la hora tenga formato completo HH:MM:SS
+      const horaCompleta = horaInicio.includes(':') && horaInicio.split(':').length === 2 
+        ? horaInicio + ':00' 
+        : horaInicio;
+      
+      // Crear fecha de la clase con timezone local
+      const fechaClase = new Date(fecha + 'T' + horaCompleta);
+      const ahora = new Date();
+      
+      console.log('🔍 Validando clase futura:', {
+        fecha,
+        horaInicio,
+        horaCompleta,
+        fechaClase: fechaClase.toISOString(),
+        ahora: ahora.toISOString(),
+        esFutura: fechaClase > ahora
+      });
+      
+      return fechaClase > ahora;
+    } catch (error) {
+      console.error('Error validando fecha:', error);
+      return false;
+    }
+  };
+
+  // Función para manejar el clic en el botón +
+  const handleAddUserToSlot = async (slot: any) => {
+    try {
+      // Verificar si la clase es futura
+      if (!esClaseFutura(formatLocalDate(currentDate), slot.horaInicio)) {
+        showError('Error', 'Solo se pueden agregar usuarios a clases futuras');
+        return;
+      }
+
+      setSelectedSlot(slot);
+      setSearchTerm('');
+      
+      // Cargar usuarios disponibles
+      const { data: users, error } = await supabase
+        .from('profiles')
+        .select('id, full_name, first_name, last_name, email, role')
+        .eq('role', 'client')
+        .eq('is_active', true)
+        .order('full_name');
+
+      if (error) {
+        console.error('Error cargando usuarios:', error);
+        showError('Error', 'No se pudieron cargar los usuarios');
+        return;
+      }
+
+      // Filtrar usuarios que ya están en este slot
+      const usuariosEnSlot = slot.alumnos.map((alumno: any) => alumno.usuario_id);
+      const usuariosDisponibles = users?.filter(user => !usuariosEnSlot.includes(user.id)) || [];
+      
+      setAvailableUsers(usuariosDisponibles);
+      setShowAddUserModal(true);
+    } catch (error) {
+      console.error('Error inesperado:', error);
+      showError('Error', 'No se pudo abrir el modal de usuarios');
+    }
+  };
+
+  // Función para manejar la selección de usuario
+  const handleUserSelection = (user: any) => {
+    setSelectedUser(user);
+    setShowConfirmModal(true);
+  };
+
+  // Función para confirmar y agregar usuario al slot
+  const confirmAddUserToSlot = async () => {
+    if (!selectedUser || !selectedSlot) return;
+
+    try {
+      setAddingUser(true);
+      const loadingToast = showLoading('Agregando usuario...');
+
+      // Crear turno variable para el usuario
+      const { error } = await supabase
+        .from('turnos_variables')
+        .insert({
+          cliente_id: selectedUser.id,
+          turno_fecha: formatLocalDate(currentDate),
+          turno_hora_inicio: selectedSlot.horaInicio + ':00',
+          turno_hora_fin: selectedSlot.horaFin + ':00',
+          estado: 'confirmada'
+        });
+
+      dismissToast(loadingToast);
+
+      if (error) {
+        console.error('Error agregando usuario:', error);
+        showError('Error', `No se pudo agregar el usuario: ${error.message}`);
+        return;
+      }
+
+      showSuccess('Usuario agregado', `${selectedUser.full_name} ha sido agregado a la clase exitosamente`);
+      
+      // Recargar horarios de alumnos
+      await fetchAlumnosHorarios();
+      
+      setShowAddUserModal(false);
+      setShowConfirmModal(false);
+      setSelectedSlot(null);
+      setSelectedUser(null);
+    } catch (error) {
+      console.error('Error inesperado:', error);
+      showError('Error', 'No se pudo agregar el usuario');
+    } finally {
+      setAddingUser(false);
     }
   };
 
@@ -916,13 +1060,27 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     // Generar horarios dinámicos definidos por admin (horarios_semanales)
     const timeSlots = adminSlots.map(slot => {
-      const alumnos = alumnosHorarios.filter(alumno => (alumno.hora_inicio || '').substring(0,5) === slot.horaInicio);
+      // Filtrar solo alumnos activos (no cancelados) y eliminar duplicados por usuario
+      const alumnosActivos = alumnosHorarios
+        .filter(alumno => 
+          (alumno.hora_inicio || '').substring(0,5) === slot.horaInicio && 
+          alumno.tipo !== 'cancelado'
+        )
+        .reduce((acc, alumno) => {
+          // Evitar duplicados por usuario_id
+          const existe = acc.find(a => a.usuario_id === alumno.usuario_id);
+          if (!existe) {
+            acc.push(alumno);
+          }
+          return acc;
+        }, [] as AlumnoHorario[]);
+      
       return {
         horaInicio: slot.horaInicio,
         horaFin: slot.horaFin,
-        alumnos,
+        alumnos: alumnosActivos,
         capacidad: slot.capacidad,
-        cupoDisponible: Math.max(0, (slot.capacidad || 0) - alumnos.length),
+        cupoDisponible: Math.max(0, (slot.capacidad || 0) - alumnosActivos.length),
       };
     });
 
@@ -956,7 +1114,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             const isExpanded = horariosExpandidos.has(horarioKey);
             
             return (
-              <Card key={`slot-${index}`} className="border-l-4 border-l-blue-500">
+              <Card key={`slot-${index}`} className="">
                 <CardContent className="p-4">
                   <div 
                     className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
@@ -969,8 +1127,24 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-light text-[10px]">
-                        {slot.alumnos.length}/{slot.capacidad || 0} alumnos
+                        <span className="hidden sm:inline">{slot.alumnos.length}/{slot.capacidad || 0} alumnos</span>
+                        <span className="sm:hidden">{slot.alumnos.length}/{slot.capacidad || 0}</span>
                       </Badge>
+                      {/* Botón + para agregar usuario - visible en desktop, deshabilitado para clases pasadas */}
+                      {isAdminView && slot.cupoDisponible > 0 && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="hidden sm:flex h-6 w-6 p-0 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={!esClaseFutura(formatLocalDate(currentDate), slot.horaInicio)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAddUserToSlot(slot);
+                          }}
+                        >
+                          +
+                        </Button>
+                      )}
                       {isExpanded ? (
                         <ChevronUp className="h-4 w-4 text-muted-foreground" />
                       ) : (
@@ -993,17 +1167,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             // Verificar si este horario está bloqueado por ausencia del admin
                             const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.horaInicio);
                             
+                            // Verificar si la clase es futura para permitir cancelación
+                            const esClaseFuturaParaAlumno = esClaseFutura(formatLocalDate(currentDate), slot.horaInicio);
+                            
                             return (
                               <div 
                                 key={alumnoIndex} 
-                                onClick={() => !estaBloqueado && handleAlumnoClick(alumno)}
+                                onClick={() => !estaBloqueado && esClaseFuturaParaAlumno && handleAlumnoClick(alumno)}
                                 className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${
                                   estaBloqueado 
                                     ? 'border-yellow-400 bg-yellow-900/30 opacity-60' 
                                     : alumno.tipo === 'recurrente' ? 'border-green-200' :
                                   alumno.tipo === 'variable' ? 'border-blue-200' :
                                   'border-red-200'
-                                } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado ? 'cursor-not-allowed' : ''}`}
+                                } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView && esClaseFuturaParaAlumno ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado || !esClaseFuturaParaAlumno ? 'cursor-not-allowed' : ''}`}
                               >
                                 <div className="font-light text-[10px] sm:text-[12px]">
                                   {nombre} {apellido}
@@ -1016,6 +1193,24 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                       ) : (
                         <div className="text-center py-4 text-muted-foreground text-sm">
                           Sin alumnos en este horario
+                        </div>
+                      )}
+                      
+                      {/* Botón + para agregar usuario - visible en mobile dentro del dropdown, deshabilitado para clases pasadas */}
+                      {isAdminView && slot.cupoDisponible > 0 && (
+                        <div className="mt-3 flex justify-center sm:hidden">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={!esClaseFutura(formatLocalDate(currentDate), slot.horaInicio)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleAddUserToSlot(slot);
+                            }}
+                          >
+                            +
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -1342,6 +1537,114 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             >
               {cancelingAlumno ? 'Cancelando...' : 'Sí, cancelar clase'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal para agregar usuario a slot */}
+      <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
+        <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-none">
+          <DialogHeader className="pb-3 flex-shrink-0">
+            <DialogTitle className="text-sm sm:text-base">Agregar Usuario a Clase</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Selecciona un usuario para agregar a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-3 flex-1 flex flex-col min-h-0">
+            {/* Barra de búsqueda */}
+            <Input
+              placeholder="Buscar usuario por nombre..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full text-xs sm:text-sm flex-shrink-0"
+            />
+            
+            {/* Lista de usuarios */}
+            <ScrollArea className="flex-1 min-h-0">
+              <div className="space-y-2 pr-2">
+                {availableUsers
+                  .filter(user => 
+                    user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    user.first_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                    user.last_name?.toLowerCase().includes(searchTerm.toLowerCase())
+                  )
+                  .map((user) => (
+                    <div
+                      key={user.id}
+                      className="flex items-center p-3 sm:p-4 border rounded-lg hover:bg-muted cursor-pointer transition-colors"
+                      onClick={() => handleUserSelection(user)}
+                    >
+                      <div className="flex-1">
+                        <p className="font-medium text-xs sm:text-sm">{user.full_name}</p>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </ScrollArea>
+            
+            {availableUsers.length === 0 && (
+              <p className="text-center text-muted-foreground py-4 text-xs sm:text-sm flex-shrink-0">
+                No hay usuarios disponibles para esta clase
+              </p>
+            )}
+          </div>
+          
+          <DialogFooter className="pt-3 flex-shrink-0">
+            <Button
+              variant="outline"
+              onClick={() => setShowAddUserModal(false)}
+              disabled={addingUser}
+              className="text-xs sm:text-sm w-full sm:w-auto"
+            >
+              Cancelar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de confirmación para agregar usuario */}
+      <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
+        <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-none">
+          <DialogHeader className="pb-3 flex-shrink-0">
+            <DialogTitle className="text-sm sm:text-base">Confirmar Agregar Usuario</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              ¿Estás seguro de que quieres agregar a <strong>{selectedUser?.full_name}</strong> a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex-1 flex flex-col min-h-0">
+            {/* Contenido de confirmación */}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
+                  <User className="h-8 w-8 text-blue-600" />
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  El usuario será agregado a la clase y aparecerá en la agenda
+                </p>
+              </div>
+            </div>
+          </div>
+          
+          <DialogFooter className="pt-3 flex-shrink-0">
+            <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full">
+              <Button
+                variant="outline"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={addingUser}
+                className="text-xs sm:text-sm w-full sm:w-auto"
+              >
+                Cancelar
+              </Button>
+              <Button
+                onClick={confirmAddUserToSlot}
+                disabled={addingUser}
+                className="text-xs sm:text-sm w-full sm:w-auto"
+              >
+                {addingUser ? 'Agregando...' : 'Confirmar'}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

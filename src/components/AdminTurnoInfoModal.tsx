@@ -30,8 +30,14 @@ interface AdminTurnoInfoModalProps {
 export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: AdminTurnoInfoModalProps) => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const [loading, setLoading] = useState(false);
+  const [showConfirmAlert, setShowConfirmAlert] = useState(false);
 
   if (!isOpen || !turno) return null;
+
+  // Mostrar alerta de confirmación
+  const mostrarConfirmacion = () => {
+    setShowConfirmAlert(true);
+  };
 
   // Eliminar clase (cancelar como admin)
   const eliminarTurno = async () => {
@@ -44,11 +50,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         return;
       }
 
-      console.log('🔍 Mostrando confirmación...');
-      if (!confirm('¿Estás seguro de que quieres eliminar esta clase? El usuario verá la clase como cancelada y aparecerá en vacantes.')) {
-        console.log('❌ Usuario canceló la eliminación');
-        return;
-      }
+      setShowConfirmAlert(false);
       
       console.log('✅ Usuario confirmó la eliminación');
     } catch (error) {
@@ -273,27 +275,28 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
-          <CardTitle className="text-lg font-semibold">Información de la Clase</CardTitle>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
+      <Card className="w-full max-w-md max-h-[90vh] sm:max-h-none overflow-y-auto">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
+          <CardTitle className="text-sm sm:text-lg font-semibold">Información de la Clase</CardTitle>
           <Button
             variant="ghost"
             size="sm"
             onClick={onClose}
             disabled={loading}
+            className="h-6 w-6 p-0 sm:h-8 sm:w-8"
           >
-            <X className="h-4 w-4" />
+            <X className="h-3 w-3 sm:h-4 sm:w-4" />
           </Button>
         </CardHeader>
         
-        <CardContent className="space-y-6">
+        <CardContent className="space-y-3 sm:space-y-6">
           {/* Información del turno */}
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2 sm:space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">Fecha</Label>
-                <p className="font-medium">
+                <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Fecha</Label>
+                <p className="font-medium text-xs sm:text-sm">
                   {new Date(turno.fecha).toLocaleDateString('es-ES', {
                     weekday: 'long',
                     year: 'numeric',
@@ -303,41 +306,26 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                 </p>
               </div>
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">Horario</Label>
-                <p className="font-medium">{turno.hora_inicio} - {turno.hora_fin}</p>
+                <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Horario</Label>
+                <p className="font-medium text-xs sm:text-sm">{turno.hora_inicio} - {turno.hora_fin}</p>
               </div>
             </div>
             
-            <div>
-              <Label className="text-sm font-medium text-muted-foreground">Estado</Label>
-              <Badge variant={
-                turno.estado === 'disponible' ? 'default' :
-                turno.estado === 'ocupado' ? 'secondary' : 'destructive'
-              }>
-                {turno.estado === 'disponible' ? 'Disponible' :
-                 turno.estado === 'ocupado' ? 'Ocupado' : 'Cancelado'}
-              </Badge>
-            </div>
-
             {turno.cliente_nombre && (
               <div>
-                <Label className="text-sm font-medium text-muted-foreground">Cliente</Label>
-                <p className="font-medium">{turno.cliente_nombre}</p>
+                <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Cliente</Label>
+                <p className="font-medium text-xs sm:text-sm">{turno.cliente_nombre}</p>
               </div>
             )}
-
-            <div>
-              <Label className="text-sm font-medium text-muted-foreground">Servicio</Label>
-              <p className="font-medium">{turno.servicio || 'Entrenamiento Personal'}</p>
-            </div>
           </div>
 
           {/* Acciones */}
-          <div className="flex justify-end space-x-2 pt-4 border-t">
+          <div className="flex flex-col sm:flex-row justify-end space-y-2 sm:space-y-0 sm:space-x-2 pt-3 sm:pt-4 border-t">
             <Button
               variant="outline"
               onClick={onClose}
               disabled={loading}
+              className="text-xs sm:text-sm w-full sm:w-auto"
             >
               Cerrar
             </Button>
@@ -347,20 +335,63 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                 console.log('🔘 Botón Eliminar Clase clickeado');
                 console.log('🔍 Estado loading:', loading);
                 console.log('🔍 Turno actual:', turno);
-                eliminarTurno();
+                mostrarConfirmacion();
               }}
               disabled={loading}
+              className="text-xs sm:text-sm w-full sm:w-auto"
               style={{ 
                 opacity: loading ? 0.5 : 1,
                 cursor: loading ? 'not-allowed' : 'pointer'
               }}
             >
-              <Trash2 className="h-4 w-4 mr-2" />
+              <Trash2 className="h-3 w-3 mr-1 sm:h-4 sm:w-4 sm:mr-2" />
               Eliminar Clase {loading ? '(Cargando...)' : ''}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {/* Alerta de confirmación */}
+      {showConfirmAlert && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-10 h-10 mx-auto bg-red-100 rounded-full flex items-center justify-center">
+                <Trash2 className="h-6 w-6 text-red-600" />
+              </div>
+            </div>
+            
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                Confirmar Cancelación
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                ¿Estás seguro de que quieres cancelar esta clase?<br/>
+                El usuario verá la clase como cancelada y aparecerá en vacantes.
+              </p>
+              
+              <div className="flex space-x-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConfirmAlert(false)}
+                  disabled={loading}
+                  className="flex-1 text-xs sm:text-sm"
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={eliminarTurno}
+                  disabled={loading}
+                  className="flex-1 text-xs sm:text-sm"
+                >
+                  {loading ? 'Cancelando...' : 'Confirmar'}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
