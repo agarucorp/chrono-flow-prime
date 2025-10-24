@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Eliminar Clase</title>
+</head>
+<body>
+    <h1>Test de Funcionalidad Eliminar Clase</h1>
+    <p>Este archivo es para probar la funcionalidad de eliminar clase.</p>
+    
+    <script>
+        // Simular la función eliminarTurno
+        function eliminarTurno() {
+            console.log('🚀 eliminarTurno llamada');
+            
+            if (!confirm('¿Estás seguro de que quieres eliminar esta clase?')) {
+                console.log('❌ Usuario canceló la eliminación');
+                return;
+            }
+            
+            console.log('✅ Usuario confirmó la eliminación');
+            alert('Clase eliminada exitosamente');
+        }
+        
+        // Botón de prueba
+        document.body.innerHTML += `
+            <button onclick="eliminarTurno()" style="padding: 10px 20px; background: red; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                Eliminar Clase (Test)
+            </button>
+        `;
+    </script>
+</body>
+</html>

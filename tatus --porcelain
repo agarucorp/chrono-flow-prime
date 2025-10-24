@@ -1,0 +1,419 @@
+[1mdiff --git a/src/components/AdminTurnoModal.tsx b/src/components/AdminTurnoModal.tsx[m
+[1mindex d1817be..bee7d96 100644[m
+[1m--- a/src/components/AdminTurnoModal.tsx[m
+[1m+++ b/src/components/AdminTurnoModal.tsx[m
+[36m@@ -81,7 +81,8 @@[m [mexport const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi[m
+     if (!turno) return;[m
+ [m
+     try {[m
+[31m-      const { data, error } = await supabase[m
+[32m+[m[32m      // 1. Buscar reservas normales en reservas_turnos[m
+[32m+[m[32m      const { data: reservasNormales, error: errorNormales } = await supabase[m
+         .from('reservas_turnos')[m
+         .select(`[m
+           cliente_id,[m
+[36m@@ -91,20 +92,51 @@[m [mexport const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi[m
+         .eq('turno_id', turno.id)[m
+         .eq('estado', 'confirmada');[m
+ [m
+[31m-      if (error) throw error;[m
+[32m+[m[32m      if (errorNormales) {[m
+[32m+[m[32m        console.error('Error cargando reservas normales:', errorNormales);[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      // 2. Buscar turnos variables que coincidan con este horario[m
+[32m+[m[32m      const { data: turnosVariables, error: errorVariables } = await supabase[m
+[32m+[m[32m        .from('turnos_variables')[m
+[32m+[m[32m        .select(`[m
+[32m+[m[32m          cliente_id,[m
+[32m+[m[32m          estado,[m
+[32m+[m[32m          clientes:cliente_id(id, full_name, email)[m
+[32m+[m[32m        `)[m
+[32m+[m[32m        .eq('turno_fecha', turno.fecha)[m
+[32m+[m[32m        .eq('turno_hora_inicio', turno.hora_inicio)[m
+[32m+[m[32m        .eq('turno_hora_fin', turno.hora_fin)[m
+[32m+[m[32m        .eq('estado', 'confirmada');[m
+ [m
+[31m-      const clientesReservados = data?.map((reserva: any) => ({[m
+[32m+[m[32m      if (errorVariables) {[m
+[32m+[m[32m        console.error('Error cargando turnos variables:', errorVariables);[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      // 3. Combinar ambas listas[m
+[32m+[m[32m      const clientesReservadosNormales = (reservasNormales || []).map((reserva: any) => ({[m
+         id: reserva.clientes.id,[m
+         full_name: reserva.clientes.full_name,[m
+         email: reserva.clientes.email,[m
+[31m-        role: 'client'[m
+[31m-      })) || [];[m
+[32m+[m[32m        role: 'client',[m
+[32m+[m[32m        tipo: 'normal'[m
+[32m+[m[32m      }));[m
+[32m+[m
+[32m+[m[32m      const clientesReservadosVariables = (turnosVariables || []).map((turno: any) => ({[m
+[32m+[m[32m        id: turno.clientes.id,[m
+[32m+[m[32m        full_name: turno.clientes.full_name,[m
+[32m+[m[32m        email: turno.clientes.email,[m
+[32m+[m[32m        role: 'client',[m
+[32m+[m[32m        tipo: 'variable'[m
+[32m+[m[32m      }));[m
+ [m
+[31m-      setClientesReservados(clientesReservados);[m
+[32m+[m[32m      const todosLosClientes = [...clientesReservadosNormales, ...clientesReservadosVariables];[m
+[32m+[m
+[32m+[m[32m      setClientesReservados(todosLosClientes);[m
+       [m
+       // Calcular capacidad disponible[m
+       const maxAlumnos = turno.max_alumnos || 1;[m
+[31m-      setCapacidadDisponible(Math.max(0, maxAlumnos - clientesReservados.length));[m
+[32m+[m[32m      setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));[m
+     } catch (error) {[m
+       console.error('Error cargando reservas:', error);[m
+     }[m
+[36m@@ -161,53 +193,130 @@[m [mexport const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi[m
+       setLoading(true);[m
+       const loadingToast = showLoading('Cancelando reserva...');[m
+ [m
+[31m-      // Buscar el turno específico de este cliente en este horario[m
+[31m-      const { data: turnoCliente, error: errorBuscar } = await supabase[m
+[31m-        .from('turnos')[m
+[31m-        .select('*')[m
+[31m-        .eq('fecha', turno.fecha)[m
+[31m-        .eq('hora_inicio', turno.hora_inicio)[m
+[31m-        .eq('cliente_id', clienteId)[m
+[31m-        .eq('estado', 'ocupado')[m
+[31m-        .single();[m
+[31m-[m
+[31m-      if (errorBuscar) {[m
+[31m-        showError('Error', 'No se pudo encontrar la reserva del cliente');[m
+[31m-        return;[m
+[31m-      }[m
+[31m-[m
+[31m-      // Cancelar la reserva[m
+[31m-      const { error: errorCancelar } = await supabase[m
+[31m-        .from('turnos')[m
+[31m-        .update({[m
+[31m-          estado: 'disponible',[m
+[31m-          cliente_id: null,[m
+[31m-          updated_at: new Date().toISOString()[m
+[31m-        })[m
+[31m-        .eq('id', turnoCliente.id);[m
+[31m-[m
+[31m-      if (errorCancelar) {[m
+[31m-        showError('Error', 'No se pudo cancelar la reserva');[m
+[31m-        return;[m
+[32m+[m[32m      // 1. Determinar el tipo de turno[m
+[32m+[m[32m      const esTurnoVariable = turno.id.startsWith('variable_');[m
+[32m+[m[32m      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';[m
+[32m+[m[41m      [m
+[32m+[m[32m      if (esTurnoVariable) {[m
+[32m+[m[32m        // CANCELAR TURNO VARIABLE[m
+[32m+[m[32m        const turnoVariableId = turno.id.replace('variable_', '');[m
+[32m+[m[32m        const { data: turnoVariable, error: errorVariable } = await supabase[m
+[32m+[m[32m          .from('turnos_variables')[m
+[32m+[m[32m          .select('id, creado_desde_disponible_id')[m
+[32m+[m[32m          .eq('id', turnoVariableId)[m
+[32m+[m[32m          .eq('cliente_id', clienteId)[m
+[32m+[m[32m          .eq('estado', 'confirmada')[m
+[32m+[m[32m          .single();[m
+[32m+[m[41m        [m
+[32m+[m[32m        if (errorVariable || !turnoVariable) {[m
+[32m+[m[32m          showError('Error', 'No se encontró el turno variable');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Eliminar el turno variable[m
+[32m+[m[32m        const { error: errorEliminar } = await supabase[m
+[32m+[m[32m          .from('turnos_variables')[m
+[32m+[m[32m          .delete()[m
+[32m+[m[32m          .eq('id', turnoVariable.id);[m
+[32m+[m
+[32m+[m[32m        if (errorEliminar) {[m
+[32m+[m[32m          showError('Error', 'No se pudo eliminar el turno variable');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Crear registro en turnos_cancelados (el trigger creará turnos_disponibles)[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: clienteId,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        if (errorCancelacion) {[m
+[32m+[m[32m          showError('Error', 'No se pudo crear la cancelación');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m      } else if (esTurnoRecurrente) {[m
+[32m+[m[32m        // CANCELAR TURNO RECURRENTE (solo crear cancelación, no eliminar horario fijo)[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: clienteId,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        if (errorCancelacion) {[m
+[32m+[m[32m          showError('Error', 'No se pudo crear la cancelación del turno recurrente');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        // 2. Buscar en turnos normales[m
+[32m+[m[32m        const { data: turnoCliente, error: errorBuscar } = await supabase[m
+[32m+[m[32m          .from('turnos')[m
+[32m+[m[32m          .select('*')[m
+[32m+[m[32m          .eq('fecha', turno.fecha)[m
+[32m+[m[32m          .eq('hora_inicio', turno.hora_inicio)[m
+[32m+[m[32m          .eq('cliente_id', clienteId)[m
+[32m+[m[32m          .eq('estado', 'ocupado')[m
+[32m+[m[32m          .single();[m
+[32m+[m
+[32m+[m[32m        if (errorBuscar) {[m
+[32m+[m[32m          showError('Error', 'No se pudo encontrar la reserva del cliente');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Cancelar la reserva normal[m
+[32m+[m[32m        const { error: errorCancelar } = await supabase[m
+[32m+[m[32m          .from('turnos')[m
+[32m+[m[32m          .update({[m
+[32m+[m[32m            estado: 'disponible',[m
+[32m+[m[32m            cliente_id: null,[m
+[32m+[m[32m            updated_at: new Date().toISOString()[m
+[32m+[m[32m          })[m
+[32m+[m[32m          .eq('id', turnoCliente.id);[m
+[32m+[m
+[32m+[m[32m        if (errorCancelar) {[m
+[32m+[m[32m          showError('Error', 'No se pudo cancelar la reserva');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Registrar disponibilidad en turnos_cancelados[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: clienteId,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        if (errorCancelacion) {[m
+[32m+[m[32m          showError('Error', 'No se pudo crear la cancelación');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+       }[m
+ [m
+[31m-      // Registrar disponibilidad en turnos_cancelados[m
+[31m-      await supabase[m
+[31m-        .from('turnos_cancelados')[m
+[31m-        .insert({[m
+[31m-          cliente_id: clienteId,[m
+[31m-          turno_fecha: turno.fecha,[m
+[31m-          turno_hora_inicio: turno.hora_inicio,[m
+[31m-          turno_hora_fin: turno.hora_fin,[m
+[31m-          tipo_cancelacion: 'admin'[m
+[31m-        });[m
+[31m-[m
+       showSuccess('Reserva cancelada', 'La reserva del cliente ha sido cancelada exitosamente');[m
+       [m
+[32m+[m[32m      // Disparar eventos para actualizar otras vistas[m
+[32m+[m[32m      window.dispatchEvent(new Event('turnosCancelados:updated'));[m
+[32m+[m[32m      window.dispatchEvent(new Event('turnosVariables:updated'));[m
+[32m+[m[32m      window.dispatchEvent(new Event('clasesDelMes:updated'));[m
+[32m+[m[41m      [m
+       // Recargar datos[m
+       await cargarReservasExistentes();[m
+       onTurnoUpdated();[m
+     } catch (error) {[m
+[32m+[m[32m      console.error('Error al cancelar reserva:', error);[m
+       showError('Error', 'No se pudo cancelar la reserva');[m
+     } finally {[m
+       setLoading(false);[m
+[36m@@ -226,17 +335,139 @@[m [mexport const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi[m
+       setLoading(true);[m
+       const loadingToast = showLoading('Eliminando turno...');[m
+ [m
+[31m-      const { error } = await supabase[m
+[31m-        .from('turnos')[m
+[31m-        .delete()[m
+[31m-        .eq('id', turno.id);[m
+[32m+[m[32m      // Determinar el tipo de turno[m
+[32m+[m[32m      const esTurnoVariable = turno.id.startsWith('variable_');[m
+[32m+[m[32m      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';[m
+[32m+[m[41m      [m
+[32m+[m[32m      console.log('🔍 DEBUG eliminarTurno:', {[m
+[32m+[m[32m        turnoId: turno.id,[m
+[32m+[m[32m        turnoServicio: turno.servicio,[m
+[32m+[m[32m        esTurnoVariable,[m
+[32m+[m[32m        esTurnoRecurrente,[m
+[32m+[m[32m        clienteId: turno.cliente_id,[m
+[32m+[m[32m        fecha: turno.fecha,[m
+[32m+[m[32m        horaInicio: turno.hora_inicio,[m
+[32m+[m[32m        horaFin: turno.hora_fin[m
+[32m+[m[32m      });[m
+[32m+[m
+[32m+[m[32m      if (esTurnoVariable) {[m
+[32m+[m[32m        // ELIMINAR TURNO VARIABLE - igual que en RecurringScheduleView[m
+[32m+[m[32m        const turnoVariableId = turno.id.replace('variable_', '');[m
+[32m+[m[41m        [m
+[32m+[m[32m        // 1. Eliminar el turno variable[m
+[32m+[m[32m        const { error: errorEliminar } = await supabase[m
+[32m+[m[32m          .from('turnos_variables')[m
+[32m+[m[32m          .delete()[m
+[32m+[m[32m          .eq('id', turnoVariableId);[m
+[32m+[m
+[32m+[m[32m        if (errorEliminar) throw errorEliminar;[m
+[32m+[m
+[32m+[m[32m        // 2. Crear registro en turnos_cancelados[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: turno.cliente_id,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        if (errorCancelacion) throw errorCancelacion;[m
+[32m+[m
+[32m+[m[32m      } else if (esTurnoRecurrente) {[m
+[32m+[m[32m        // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView[m
+[32m+[m[32m        // Solo crear cancelación, NO eliminar nada[m
+[32m+[m[41m        [m
+[32m+[m[32m        console.log('🔄 Procesando turno recurrente...');[m
+[32m+[m[41m        [m
+[32m+[m[32m        // Verificar si ya existe una cancelación para este turno[m
+[32m+[m[32m        const { data: cancelacionExistente, error: errorVerificar } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .select('id')[m
+[32m+[m[32m          .eq('cliente_id', turno.cliente_id)[m
+[32m+[m[32m          .eq('turno_fecha', turno.fecha)[m
+[32m+[m[32m          .eq('turno_hora_inicio', turno.hora_inicio)[m
+[32m+[m[32m          .eq('turno_hora_fin', turno.hora_fin);[m
+[32m+[m
+[32m+[m[32m        console.log('🔍 Verificación cancelación existente:', {[m
+[32m+[m[32m          cancelacionExistente,[m
+[32m+[m[32m          errorVerificar,[m
+[32m+[m[32m          count: cancelacionExistente?.length || 0[m
+[32m+[m[32m        });[m
+ [m
+[31m-      dismissToast(loadingToast);[m
+[32m+[m[32m        if (errorVerificar) {[m
+[32m+[m[32m          console.error('❌ Error verificando cancelación existente:', errorVerificar);[m
+[32m+[m[32m          throw errorVerificar;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        if (cancelacionExistente && cancelacionExistente.length > 0) {[m
+[32m+[m[32m          console.log('⚠️ Turno ya cancelado');[m
+[32m+[m[32m          showError('Error', 'Este turno ya está cancelado');[m
+[32m+[m[32m          return;[m
+[32m+[m[32m        }[m
+[32m+[m
+[32m+[m[32m        // Crear registro de cancelación[m
+[32m+[m[32m        console.log('➕ Creando cancelación...');[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: turno.cliente_id,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        console.log('🔍 Resultado insertar cancelación:', {[m
+[32m+[m[32m          errorCancelacion,[m
+[32m+[m[32m          success: !errorCancelacion[m
+[32m+[m[32m        });[m
+ [m
+[31m-      if (error) throw error;[m
+[32m+[m[32m        if (errorCancelacion) {[m
+[32m+[m[32m          console.error('❌ Error creando cancelación:', errorCancelacion);[m
+[32m+[m[32m          throw errorCancelacion;[m
+[32m+[m[32m        }[m
+[32m+[m[41m        [m
+[32m+[m[32m        console.log('✅ Cancelación creada exitosamente');[m
+[32m+[m
+[32m+[m[32m      } else {[m
+[32m+[m[32m        // ELIMINAR TURNO NORMAL[m
+[32m+[m[32m        const { error } = await supabase[m
+[32m+[m[32m          .from('turnos')[m
+[32m+[m[32m          .delete()[m
+[32m+[m[32m          .eq('id', turno.id);[m
+[32m+[m
+[32m+[m[32m        if (error) throw error;[m
+[32m+[m
+[32m+[m[32m        // Crear registro en turnos_cancelados[m
+[32m+[m[32m        const { error: errorCancelacion } = await supabase[m
+[32m+[m[32m          .from('turnos_cancelados')[m
+[32m+[m[32m          .insert({[m
+[32m+[m[32m            cliente_id: turno.cliente_id,[m
+[32m+[m[32m            turno_fecha: turno.fecha,[m
+[32m+[m[32m            turno_hora_inicio: turno.hora_inicio,[m
+[32m+[m[32m            turno_hora_fin: turno.hora_fin,[m
+[32m+[m[32m            tipo_cancelacion: 'admin'[m
+[32m+[m[32m          });[m
+[32m+[m
+[32m+[m[32m        if (errorCancelacion) throw errorCancelacion;[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      dismissToast(loadingToast);[m
+ [m
+       showSuccess('Turno eliminado', 'El turno ha sido eliminado exitosamente');[m
+[32m+[m[41m      [m
+[32m+[m[32m      console.log('🎉 Éxito! Disparando eventos de actualización...');[m
+[32m+[m[41m      [m
+[32m+[m[32m      // Disparar eventos para actualizar otras vistas[m
+[32m+[m[32m      window.dispatchEvent(new Event('turnosCancelados:updated'));[m
+[32m+[m[32m      window.dispatchEvent(new Event('turnosVariables:updated'));[m
+[32m+[m[32m      window.dispatchEvent(new Event('clasesDelMes:updated'));[m
+[32m+[m[41m      [m
+[32m+[m[32m      console.log('📡 Eventos disparados, llamando onTurnoUpdated...');[m
+       onTurnoUpdated();[m
+[32m+[m[32m      console.log('🚪 Cerrando modal...');[m
+       onClose();[m
+     } catch (error) {[m
+       console.error('Error eliminando turno:', error);[m
+[1mdiff --git a/src/components/CalendarView.tsx b/src/components/CalendarView.tsx[m
+[1mindex 6aea7d3..1fdbb58 100644[m
+[1m--- a/src/components/CalendarView.tsx[m
+[1m+++ b/src/components/CalendarView.tsx[m
+[36m@@ -212,6 +212,33 @@[m [mexport const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar[m
+     };[m
+   }, [isAdminView, currentDate]);[m
+ [m
+[32m+[m[32m  // Escuchar eventos de actualización desde AdminTurnoModal[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    const handleTurnosCanceladosUpdated = async () => {[m
+[32m+[m[32m      await fetchAlumnosHorarios();[m
+[32m+[m[32m    };[m
+[32m+[m[41m    [m
+[32m+[m[32m    const handleTurnosVariablesUpdated = async () => {[m
+[32m+[m[32m      await fetchTurnos();[m
+[32m+[m[32m      await fetchAlumnosHorarios();[m
+[32m+[m[32m    };[m
+[32m+[m[41m    [m
+[32m+[m[32m    const handleClasesDelMesUpdated = async () => {[m
+[32m+[m[32m      await fetchTurnos();[m
+[32m+[m[32m      await fetchAlumnosHorarios();[m
+[32m+[m[32m    };[m
+[32m+[m
+[32m+[m[32m    window.addEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);[m
+[32m+[m[32m    window.addEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);[m
+[32m+[m[32m    window.addEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);[m
+[32m+[m
+[32m+[m[32m    return () => {[m
+[32m+[m[32m      window.removeEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);[m
+[32m+[m[32m      window.removeEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);[m

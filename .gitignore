@@ -33,3 +33,5 @@ cline_mcp_settings.json
 *.njsproj
 *.sln
 *.sw?
+.cursor/
+bun.lockb

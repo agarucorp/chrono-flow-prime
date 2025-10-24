@@ -171,7 +171,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="w-8 h-8">
-                  <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+                  <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
                 </div>
                 <div>
                   <h1 className="text-xl font-bold text-foreground">Reservar Turno</h1>
@@ -276,7 +276,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center space-x-4">
               <div className="w-8 h-8">
-                <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
+                <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
               </div>
               <div>
                 <h1 className="text-xl font-bold text-foreground">Turnos Disponibles</h1>
@@ -297,95 +297,17 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Calendar */}
-          <div className="lg:col-span-2">
-            <Card className="shadow-card">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center space-x-2">
-                    <Calendar className="h-5 w-5" />
-                    <span>Calendario</span>
-                  </CardTitle>
-                  <div className="flex items-center space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigateMonth('prev')}
-                    >
-                      <ChevronLeft className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigateMonth('next')}
-                    >
-                      <ChevronRight className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-                <CardDescription>
-                  {format(currentMonth, "MMMM yyyy", { locale: es })}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-7 gap-1">
-                  {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map((day) => (
-                    <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                      {day}
-                    </div>
-                  ))}
-                  
-                  {monthDays.map((date) => {
-                    const isAvailable = isDateAvailable(date);
-                    const isSelected = isSameDay(date, selectedDate);
-                    const isCurrentDay = isToday(date);
-                    const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                    const appointmentCount = appointments.filter(apt => isSameDay(apt.date, date)).length;
-                    
-                    return (
-                      <button
-                        key={date.toISOString()}
-                        onClick={() => isAvailable && setSelectedDate(date)}
-                        disabled={!isAvailable}
-                        className={`
-                          p-2 text-sm rounded-lg transition-all duration-200 min-h-[60px] flex flex-col items-center justify-center
-                          ${!isCurrentMonth ? 'opacity-30' : ''}
-                          ${isAvailable 
-                            ? 'hover:bg-primary/10 cursor-pointer' 
-                            : 'opacity-50 cursor-not-allowed'
-                          }
-                          ${isSelected ? 'bg-primary text-primary-foreground' : ''}
-                          ${isCurrentDay && !isSelected ? 'ring-2 ring-primary/50 font-bold' : ''}
-                        `}
-                      >
-                        <div className={`font-medium ${isCurrentDay ? 'font-bold' : ''}`}>
-                          {getDate(date)}
-                        </div>
-                        {isAvailable && appointmentCount > 0 && (
-                          <div className="text-xs opacity-75 mt-1">
-                            <div className="w-2 h-2 bg-current rounded-full mx-auto"></div>
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+
 
           {/* Time Slots */}
           <div>
             <Card className="shadow-card">
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <Clock className="h-5 w-5" />
-                  <span>Horarios Disponibles</span>
-                </CardTitle>
-                <CardDescription>
-                  {format(selectedDate, "EEEE, d 'de' MMMM", { locale: es })}
-                </CardDescription>
-              </CardHeader>
+                             <CardHeader>
+                 <CardTitle className="flex items-center space-x-2">
+                   <Clock className="h-5 w-5" />
+                   <span>Horarios Disponibles</span>
+                 </CardTitle>
+               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
                   {timeSlots.length === 0 ? (

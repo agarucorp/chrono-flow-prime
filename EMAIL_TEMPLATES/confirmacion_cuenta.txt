@@ -1,0 +1,27 @@
+============================================
+    MALDAGYM
+    Sistema de gestión de clases y horarios
+============================================
+
+¡BIENVENIDO! 🎉
+
+Confirma tu cuenta
+-------------------------------------------
+
+Hola,
+
+Gracias por registrarte en MaldaGym. Para completar tu registro y acceder a todas las funcionalidades, necesitamos que confirmes tu dirección de correo electrónico.
+
+🔗 CONFIRMAR MI CUENTA:
+{{ .ConfirmationURL }}
+
+⏰ IMPORTANTE: Este enlace expirará en 24 horas por razones de seguridad.
+
+Si no creaste esta cuenta, puedes ignorar este correo de forma segura.
+
+-------------------------------------------
+
+¿Necesitas ayuda?
+Visita nuestro sitio web: {{ .SiteURL }}
+
+© 2025 MaldaGym. Todos los derechos reservados.

@@ -1,22 +1,24 @@
-import { useState } from "react";
-import { Lock, User, Mail, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Lock, User, Mail, ChevronLeft, ChevronRight, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useAuth } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
-
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useAdmin } from "@/hooks/useAdmin";
+import { supabase } from "@/lib/supabase";
+import { useNotifications } from "@/hooks/useNotifications";
+import { RecoverPasswordForm } from "./RecoverPasswordForm";
 
 interface LoginFormProps {
-  onLogin?: () => void;
+  onLogin: () => void;
 }
 
 export const LoginForm = ({ onLogin }: LoginFormProps) => {
-  const { signIn, signUp } = useAuth();
-  const { toast } = useToast();
-  
+  const { signIn, signUp, signOut, user } = useAuthContext();
+  const { showSuccess, showError, showInfo, showWarning, showLoading, dismissToast } = useNotifications();
+  // const { canBeAdmin } = useAdmin(); // ✅ Hook para verificar si un email puede ser admin - Temporalmente deshabilitado
   const [credentials, setCredentials] = useState({
     email: "",
     password: ""
@@ -25,8 +27,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     firstName: "",
     lastName: "",
     phone: "",
-    gender: "",
-    birthDate: undefined as Date | undefined,
     email: "",
     confirmEmail: "",
     password: "",
@@ -34,46 +34,57 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
+  const [isRecoverMode, setIsRecoverMode] = useState(false); // ✅ Estado para modo recuperación
   const [currentStep, setCurrentStep] = useState(1);
+  const [error, setError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false); // ✅ Estado para mostrar/ocultar contraseña
+
+  // Redirigir cuando el usuario esté autenticado
+  useEffect(() => {
+    if (user && user.email_confirmed_at) {
+      console.log('🔍 Usuario autenticado y confirmado');
+      // Redirigir al panel de usuario
+      window.location.href = '/dashboard';
+    }
+  }, [user]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
     
     if (!isRegisterMode) {
       // Login con Supabase
-      setIsLoading(true);
-      const { error } = await signIn(credentials.email, credentials.password);
-      setIsLoading(false);
-      
-      if (error) {
-        toast({
-          title: "Error de autenticación",
-          description: error.message === "Invalid login credentials" 
-            ? "Credenciales incorrectas. Verifique su email y contraseña." 
-            : error.message,
-          variant: "destructive"
-        });
-        return;
+      try {
+        setIsLoading(true);
+        const loadingToast = showLoading("Iniciando sesión...");
+        
+        const result = await signIn(credentials.email, credentials.password);
+        
+        dismissToast(loadingToast);
+        
+        if (result.success) {
+          showSuccess("¡Bienvenido!", "Sesión iniciada correctamente. El sistema está en desarrollo.");
+          onLogin();
+          // No redirigir, solo mostrar mensaje de éxito
+        } else {
+          showError("Error al iniciar sesión", result.error || "Credenciales incorrectas");
+          setError(result.error || 'Error al iniciar sesión');
+        }
+      } catch (err) {
+        showError("Error inesperado", "Ocurrió un problema al iniciar sesión");
+        setError('Error inesperado al iniciar sesión');
+      } finally {
+        setIsLoading(false);
       }
-      
-      toast({
-        title: "¡Bienvenido!",
-        description: "Sesión iniciada correctamente",
-      });
-      
-      if (onLogin) onLogin();
       return;
     }
 
     // Manejo del registro por pasos
     if (currentStep === 1) {
       // Validación paso 1
-      if (!registerData.firstName || !registerData.lastName || !registerData.phone || !registerData.gender || !registerData.birthDate) {
-        toast({
-          title: "Campos incompletos",
-          description: "Por favor complete todos los campos del paso 1",
-          variant: "destructive"
-        });
+      if (!registerData.firstName || !registerData.lastName || !registerData.phone) {
+        showWarning("Campos incompletos", "Por favor complete todos los campos del paso 1");
+        setError("Por favor complete todos los campos del paso 1");
         return;
       }
       setCurrentStep(2);
@@ -83,72 +94,75 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     if (currentStep === 2) {
       // Validación paso 2
       if (registerData.email !== registerData.confirmEmail) {
-        toast({
-          title: "Error de validación",
-          description: "Los emails no coinciden",
-          variant: "destructive"
-        });
+        showWarning("Emails no coinciden", "Los emails ingresados no son iguales");
+        setError("Los emails no coinciden");
         return;
       }
       if (registerData.password !== registerData.confirmPassword) {
-        toast({
-          title: "Error de validación",
-          description: "Las contraseñas no coinciden",
-          variant: "destructive"
-        });
-        return;
-      }
-      if (registerData.password.length < 6) {
-        toast({
-          title: "Contraseña débil",
-          description: "La contraseña debe tener al menos 6 caracteres",
-          variant: "destructive"
-        });
+        showWarning("Contraseñas no coinciden", "Las contraseñas ingresadas no son iguales");
+        setError("Las contraseñas no coinciden");
         return;
       }
       
-      setIsLoading(true);
-      
-      // Registrar usuario en Supabase con metadata
-      const { error } = await signUp(registerData.email, registerData.password, {
-        first_name: registerData.firstName,
-        last_name: registerData.lastName,
-        phone: registerData.phone,
-        gender: registerData.gender,
-        birth_date: registerData.birthDate?.toISOString()
-      });
-      
-      setIsLoading(false);
-      
-      if (error) {
-        toast({
-          title: "Error al crear cuenta",
-          description: error.message === "User already registered" 
-            ? "Ya existe una cuenta con este email" 
-            : error.message,
-          variant: "destructive"
+      try {
+        setIsLoading(true);
+        const loadingToast = showLoading("Creando cuenta...");
+        
+        // Crear usuario en Supabase con metadatos (para poblar perfiles automáticamente)
+        const result = await signUp(registerData.email, registerData.password, {
+          first_name: registerData.firstName,
+          last_name: registerData.lastName,
+          full_name: `${registerData.firstName} ${registerData.lastName}`,
+          phone: registerData.phone
         });
-        return;
+        
+        if (result.success && result.user) {
+          // ✅ Determinar el rol según el email - Temporalmente todos son clientes
+          const userRole = 'client'; // Temporalmente todos son clientes
+          
+          // Nota: En este flujo el email debe confirmarse, por lo que el perfil se completará
+          // con los metadatos del auth.user en el backend (trigger). Aquí solo mostramos feedback.
+          dismissToast(loadingToast);
+          {
+            // ✅ Usuario creado exitosamente - mostrar toast y volver al login
+            const roleMessage = userRole === 'admin' 
+              ? "¡Usuario ADMIN creado exitosamente! Revise su email y confirme la cuenta."
+              : "¡Usuario creado exitosamente! Revise su email y confirme la cuenta para poder iniciar sesión";
+            
+            showSuccess(
+              "¡Usuario creado exitosamente!", 
+              roleMessage
+            );
+            
+            // Limpiar formulario y volver al login
+            setIsRegisterMode(false);
+            setCurrentStep(1);
+            setRegisterData({
+              firstName: "",
+              lastName: "",
+              phone: "",
+              email: "",
+              confirmEmail: "",
+              password: "",
+              confirmPassword: ""
+            });
+            
+            // Limpiar errores
+            setError(null);
+            
+            // ✅ NO navegar a /turnos - el usuario debe confirmar email y hacer login primero
+          }
+        } else {
+          dismissToast(loadingToast);
+          showError("Error al crear cuenta", result.error || "No se pudo crear la cuenta");
+          setError(result.error || 'Error al crear la cuenta');
+        }
+      } catch (err) {
+        showError("Error inesperado", "Ocurrió un problema al crear la cuenta");
+        setError('Error inesperado al crear la cuenta');
+      } finally {
+        setIsLoading(false);
       }
-      
-      toast({
-        title: "¡Cuenta creada!",
-        description: "Por favor verifica tu email para activar tu cuenta. Luego podrás iniciar sesión.",
-      });
-      
-      setIsRegisterMode(false);
-      setCurrentStep(1);
-      setRegisterData({
-        firstName: "",
-        lastName: "",
-        phone: "",
-        gender: "",
-        birthDate: undefined,
-        email: "",
-        confirmEmail: "",
-        password: "",
-        confirmPassword: ""
-      });
     }
   };
 
@@ -158,28 +172,40 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     }
   };
 
+  // ✅ Función para manejar modo recuperación
+  const handleRecoverMode = () => {
+    setIsRecoverMode(true);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+  };
+
+  // ✅ Función para volver al login desde recuperación
+  const handleBackToLogin = () => {
+    setIsRecoverMode(false);
+    setIsRegisterMode(false);
+    setCurrentStep(1);
+    setError(null);
+    setCredentials({ email: "", password: "" });
+  };
+
+
+  // ✅ Si está en modo recuperación, mostrar formulario de recuperación
+  if (isRecoverMode) {
+    return (
+      <RecoverPasswordForm onBack={handleBackToLogin} />
+    );
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
-      {/* Admin CTA */}
-      <div className="absolute top-4 right-4">
-        <Button 
-          variant="ghost" 
-          size="sm"
-          className="text-muted-foreground hover:text-foreground transition-colors"
-        >
-          Admin
-        </Button>
-      </div>
-      
       <div className="w-full max-w-md space-y-8">
-        {/* Logo & Title */}
-        <div className="text-center animate-fade-in">
-          <div className="mx-auto w-20 h-20 mb-6">
-            <img src="/logogym.svg" alt="Logo Gym" className="w-full h-full object-contain" />
-          </div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">TurnoPro</h1>
-          <p className="text-muted-foreground">Sistema Premium de Gestión de Turnos</p>
-        </div>
+                 {/* Logo */}
+         <div className="text-center animate-fade-in">
+           <div className="mx-auto w-32 h-32 mb-6">
+             <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
+           </div>
+         </div>
 
         {/* Login/Register Card */}
         <Card className="shadow-elegant animate-slide-up">
@@ -187,14 +213,14 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             <CardTitle className="text-2xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
-            <CardDescription className="text-center">
-              {isRegisterMode 
-                ? currentStep === 1 
-                  ? "Complete su información personal" 
-                  : "Configure su acceso al sistema"
-                : "Ingrese sus credenciales para acceder al sistema"
-              }
-            </CardDescription>
+                         <CardDescription className="text-center">
+               {isRegisterMode 
+                 ? currentStep === 1 
+                   ? "Complete su información personal" 
+                   : "Configure su acceso al sistema"
+                 : "Ingresá a la plataforma para visualizar y gestionar tus clases."
+               }
+             </CardDescription>
             {isRegisterMode && (
               <div className="flex justify-center mt-4">
                 <div className="flex space-x-2">
@@ -205,6 +231,23 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             )}
           </CardHeader>
           <CardContent>
+            {error && (
+              <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
+                {error}
+              </div>
+            )}
+            
+            {/* Mensaje para usuarios recién registrados que no han confirmado email */}
+            {user && !user.email_confirmed_at && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-700">
+                  📧 <strong>¡Cuenta creada exitosamente!</strong> 
+                  Hemos enviado un email de confirmación a <strong>{user.email}</strong>. 
+                  Por favor, revisa tu bandeja y haz clic en el enlace para activar tu cuenta.
+                </p>
+              </div>
+            )}
+            
             <form onSubmit={handleSubmit} className="space-y-4">
               {!isRegisterMode ? (
                 // Login Form
@@ -231,13 +274,24 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
                         id="password"
-                        type="password"
+                        type={showPassword ? "text" : "password"}
                         placeholder="Ingrese su contraseña"
                         value={credentials.password}
                         onChange={(e) => setCredentials(prev => ({ ...prev, password: e.target.value }))}
                         className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 h-5 w-5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </>
@@ -283,31 +337,6 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                       required
                     />
                   </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="gender">Género</Label>
-                    <Select value={registerData.gender} onValueChange={(value) => setRegisterData(prev => ({ ...prev, gender: value }))}>
-                      <SelectTrigger className="transition-all duration-300 focus:ring-2 focus:ring-primary/50">
-                        <SelectValue placeholder="Seleccione su género" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="masculino">Masculino</SelectItem>
-                        <SelectItem value="femenino">Femenino</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="birthDate">Fecha de Nacimiento</Label>
-                    <Input
-                      id="birthDate"
-                      type="date"
-                      value={registerData.birthDate ? registerData.birthDate.toISOString().split('T')[0] : ""}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, birthDate: e.target.value ? new Date(e.target.value) : undefined }))}
-                      className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                      required
-                    />
-                  </div>
                 </>
               ) : (
                 // Step 2: Account Setup
@@ -321,11 +350,31 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="email"
                         placeholder="Ingrese su email"
                         value={registerData.email}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, email: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      {/* ✅ Indicador de email admin - Temporalmente deshabilitado */}
+                      {/* {registerData.email && canBeAdmin(registerData.email) && (
+                        <div className="absolute right-3 top-3">
+                          <div className="w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+                            <svg 
+                              className="w-3 h-3 text-white" 
+                              fill="currentColor" 
+                              viewBox="0 0 20 20"
+                            >
+                              <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                            </svg>
+                          </div>
+                        </div>
+                      )} */}
                     </div>
+                    {/* ✅ Mensaje informativo para emails admin - Temporalmente deshabilitado */}
+                    {/* {registerData.email && canBeAdmin(registerData.email) && (
+                      <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded-md border border-yellow-200">
+                        ✨ Este email puede ser configurado como administrador del sistema
+                      </p>
+                    )} */}
                   </div>
 
                   <div className="space-y-2">
@@ -361,18 +410,29 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="registerConfirmPassword">Confirmar Contraseña</Label>
+                    <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
-                        id="registerConfirmPassword"
-                        type="password"
+                        id="confirmPassword"
+                        type={showPassword ? "text" : "password"}
                         placeholder="Confirme su contraseña"
                         value={registerData.confirmPassword}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                        onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                         required
                       />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-3 h-5 w-5 text-muted-foreground hover:text-foreground"
+                      >
+                        {showPassword ? (
+                          <EyeOff className="h-4 w-4" />
+                        ) : (
+                          <Eye className="h-4 w-4" />
+                        )}
+                      </button>
                     </div>
                   </div>
                 </>
@@ -429,24 +489,26 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               <p className="text-sm text-muted-foreground">
                 {isRegisterMode ? (
                   <>
-                    ¿Ya tienes cuenta?{" "}
+                    ¿Ya tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(false);
                         setCurrentStep(1);
+                        setError(null);
                       }}
-                      className="text-primary hover:underline font-medium"
+                      className="text-gray-300 hover:underline font-medium"
                     >
                       Iniciar sesión
                     </button>
                   </>
                 ) : (
                   <>
-                    ¿No tienes cuenta?{" "}
+                    ¿No tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
+                        setError(null);
                       }}
                       className="text-primary hover:underline font-medium"
                     >
@@ -457,12 +519,27 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
               </p>
               
               {!isRegisterMode && (
-                <p className="text-sm text-muted-foreground">
-                  ¿Olvidaste tu contraseña?{" "}
-                  <a href="#" className="text-primary hover:underline font-medium">
-                    Recuperar acceso
-                  </a>
-                </p>
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    ¿Olvidaste tu contraseña?{" "}
+                    <button 
+                      onClick={handleRecoverMode}
+                      className="text-primary hover:underline font-medium"
+                    >
+                      Recuperar acceso
+                    </button>
+                  </p>
+                  
+                  
+                  {/* Mensaje informativo para usuarios recién registrados */}
+                  {/* ELIMINADO: <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      💡 <strong>¿Primera vez aquí?</strong> Después de crear tu cuenta, 
+                      revisa tu email y haz clic en el enlace de confirmación. 
+                      Una vez confirmado, podrás iniciar sesión normalmente.
+                    </p>
+                  </div> */}
+                </>
               )}
             </div>
           </CardContent>
@@ -474,6 +551,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         </div>
 
       </div>
+
     </div>
   );
 };

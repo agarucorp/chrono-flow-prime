@@ -1,20 +1,45 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+// Configuración de Supabase - Proyecto real
+const supabaseUrl = 'https://bihqdptdkgdfztufrmlm.supabase.co'
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJpaHFkcHRka2dkZnp0dWZybWxtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY5MjQzODAsImV4cCI6MjA3MjUwMDM4MH0.MK6KTQmWLT60qNMoik4Em7KmeaOA3efoUb2rJtNoH7I'
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error(
-    'Faltan las variables de entorno de Supabase. ' +
-    'Por favor crea un archivo .env con VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY'
-  );
-}
+// Verificar configuración
+console.log('🔗 Conectando a Supabase:', supabaseUrl)
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    flowType: 'pkce',
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: true
-  }
-});
+    detectSessionInUrl: true,
+    storageKey: 'cfp_supabase_auth',
+  },
+  global: {
+    headers: {
+      'x-application-name': 'chrono-flow-prime',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
+})
 
+// Tipos para la autenticación
+export interface User {
+  id: string
+  email: string
+  created_at: string
+  updated_at: string
+}
+
+export interface AuthState {
+  user: User | null
+  loading: boolean
+  error: string | null
+}

@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Detallado de Fechas</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-case { border: 1px solid #ccc; padding: 15px; margin: 10px 0; background: #f9f9f9; }
+        .error { color: red; font-weight: bold; }
+        .success { color: green; font-weight: bold; }
+        .info { color: blue; }
+    </style>
+</head>
+<body>
+    <h1>Test Detallado de Fechas - Vacantes</h1>
+    <p>Verificando el comportamiento exacto de las fechas:</p>
+    
+    <div id="resultados"></div>
+    
+    <script>
+        // Datos de prueba basados en la base de datos real
+        const turnosDisponibles = [
+            {
+                id: '1',
+                turno_fecha: '2025-10-24', // Hoy
+                turno_hora_inicio: '15:00:00',
+                turno_hora_fin: '16:00:00'
+            },
+            {
+                id: '2',
+                turno_fecha: '2025-10-25', // Mañana
+                turno_hora_inicio: '10:00:00',
+                turno_hora_fin: '11:00:00'
+            },
+            {
+                id: '3',
+                turno_fecha: '2025-10-31', // Próxima semana
+                turno_hora_inicio: '20:00:00',
+                turno_hora_fin: '21:00:00'
+            }
+        ];
+        
+        const resultados = document.getElementById('resultados');
+        
+        // Información del sistema
+        const infoDiv = document.createElement('div');
+        infoDiv.className = 'test-case';
+        infoDiv.innerHTML = `
+            <h3>Información del Sistema</h3>
+            <p><strong>Zona horaria:</strong> ${Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+            <p><strong>Offset UTC:</strong> ${new Date().getTimezoneOffset()} minutos</p>
+            <p><strong>Fecha actual del navegador:</strong> ${new Date().toLocaleDateString('es-ES')}</p>
+            <p><strong>Hora actual:</strong> ${new Date().toLocaleTimeString('es-ES')}</p>
+        `;
+        resultados.appendChild(infoDiv);
+        
+        // Probar cada turno
+        turnosDisponibles.forEach((turno, index) => {
+            const div = document.createElement('div');
+            div.className = 'test-case';
+            
+            // Métodos de conversión
+            const fechaOriginal = turno.turno_fecha;
+            const fechaProblematica = new Date(turno.turno_fecha);
+            const fechaCorregida = new Date(turno.turno_fecha + 'T00:00:00');
+            
+            // Comparaciones
+            const esHoy = turno.turno_fecha === new Date().toISOString().split('T')[0];
+            const fechaProblematicaStr = fechaProblematica.toLocaleDateString('es-ES');
+            const fechaCorregidaStr = fechaCorregida.toLocaleDateString('es-ES');
+            
+            // Verificar si hay diferencia
+            const hayDiferencia = fechaProblematicaStr !== fechaCorregidaStr;
+            
+            div.innerHTML = `
+                <h3>Turno ${index + 1} - ${turno.turno_hora_inicio} a ${turno.turno_hora_fin}</h3>
+                <p><strong>Fecha original (DB):</strong> ${fechaOriginal}</p>
+                <p><strong>Es hoy:</strong> ${esHoy ? 'SÍ' : 'NO'}</p>
+                <p><strong>Método problemático:</strong> <span class="${hayDiferencia ? 'error' : 'success'}">${fechaProblematicaStr}</span></p>
+                <p><strong>Método corregido:</strong> <span class="success">${fechaCorregidaStr}</span></p>
+                <p><strong>Diferencia:</strong> ${hayDiferencia ? 'SÍ HAY DIFERENCIA' : 'NO HAY DIFERENCIA'}</p>
+                <p><strong>Timestamp problemático:</strong> ${fechaProblematica.getTime()}</p>
+                <p><strong>Timestamp corregido:</strong> ${fechaCorregida.getTime()}</p>
+            `;
+            
+            resultados.appendChild(div);
+        });
+        
+        // Test específico para Argentina (UTC-3)
+        const testArgentina = document.createElement('div');
+        testArgentina.className = 'test-case';
+        testArgentina.innerHTML = `
+            <h3>Test Específico para Argentina (UTC-3)</h3>
+            <p>En Argentina, cuando es 2025-10-24 00:00 UTC, localmente es 2025-10-23 21:00</p>
+            <p><strong>new Date('2025-10-24'):</strong> ${new Date('2025-10-24').toString()}</p>
+            <p><strong>new Date('2025-10-24T00:00:00'):</strong> ${new Date('2025-10-24T00:00:00').toString()}</p>
+            <p><strong>Diferencia en días:</strong> ${Math.floor((new Date('2025-10-24T00:00:00').getTime() - new Date('2025-10-24').getTime()) / (1000 * 60 * 60 * 24))}</p>
+        `;
+        resultados.appendChild(testArgentina);
+    </script>
+</body>
+</html>
