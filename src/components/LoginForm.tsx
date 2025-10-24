@@ -530,6 +530,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                     </button>
                   </p>
                   
+                  
                   {/* Mensaje informativo para usuarios recién registrados */}
                   {/* ELIMINADO: <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     <p className="text-xs text-blue-700">
@@ -550,6 +551,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         </div>
 
       </div>
+
     </div>
   );
 };

@@ -104,7 +104,16 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
           return;
         }
 
-        // 3. Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
+        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(turno.fecha);
+        const [hora, minuto] = turno.hora_inicio.split(':');
+        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+        
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
+        // 4. Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -112,7 +121,8 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -146,6 +156,15 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
           return;
         }
 
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(turno.fecha);
+        const [hora, minuto] = turno.hora_inicio.split(':');
+        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+        
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         // Crear registro de cancelación
         console.log('➕ Creando cancelación...');
         const { error: errorCancelacion } = await supabase
@@ -155,7 +174,8 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -198,7 +218,16 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
           return;
         }
 
-        // 3. Crear registro en turnos_cancelados
+        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(turno.fecha);
+        const [hora, minuto] = turno.hora_inicio.split(':');
+        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+        
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
+        // 4. Crear registro en turnos_cancelados
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -206,7 +235,8 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {

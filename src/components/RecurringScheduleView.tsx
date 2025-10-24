@@ -696,7 +696,16 @@ export const RecurringScheduleView = () => {
           return;
         }
 
-        // 3. Crear registro en turnos_cancelados (el trigger automáticamente creará turnos_disponibles)
+        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(clase.dia);
+        const [hora, minuto] = clase.horario.hora_inicio.split(':');
+        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+        
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
+        // 4. Crear registro en turnos_cancelados (el trigger automáticamente creará turnos_disponibles)
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -704,7 +713,8 @@ export const RecurringScheduleView = () => {
             turno_fecha: format(clase.dia, 'yyyy-MM-dd'),
             turno_hora_inicio: clase.horario.hora_inicio,
             turno_hora_fin: clase.horario.hora_fin,
-            tipo_cancelacion: 'usuario'
+            tipo_cancelacion: 'usuario',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -738,6 +748,15 @@ export const RecurringScheduleView = () => {
           return;
         }
 
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(clase.dia);
+        const [hora, minuto] = clase.horario.hora_inicio.split(':');
+        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+        
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         // Crear registro de cancelación
         const { error } = await supabase
           .from('turnos_cancelados')
@@ -746,7 +765,8 @@ export const RecurringScheduleView = () => {
             turno_fecha: format(clase.dia, 'yyyy-MM-dd'),
             turno_hora_inicio: clase.horario.hora_inicio,
             turno_hora_fin: clase.horario.hora_fin,
-            tipo_cancelacion: 'usuario'
+            tipo_cancelacion: 'usuario',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (error) {
@@ -1385,7 +1405,45 @@ export const RecurringScheduleView = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar cancelación</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que quieres cancelar esta clase? Esta acción no se puede deshacer.
+              {selectedClase && (() => {
+                const fechaHoraTurno = new Date(selectedClase.dia);
+                const [hora, minuto] = selectedClase.horario.hora_inicio.split(':');
+                fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
+                
+                const ahora = new Date();
+                const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+                const esCancelacionTardia = diferenciaHoras < 24;
+                
+                if (esCancelacionTardia) {
+                  return (
+                    <div className="space-y-2">
+                      <p>¿Estás seguro de que quieres cancelar esta clase?</p>
+                      <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
+                        <p className="text-yellow-800 dark:text-yellow-200 font-medium">
+                          ⚠️ Cancelación tardía
+                        </p>
+                        <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+                          Al cancelar dentro de las 24hs previas al inicio de la clase, se te cobrará el valor completo de la misma.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div className="space-y-2">
+                      <p>¿Estás seguro de que quieres cancelar esta clase?</p>
+                      <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+                        <p className="text-green-800 dark:text-green-200 font-medium">
+                          ✅ Cancelación con anticipación
+                        </p>
+                        <p className="text-green-700 dark:text-green-300 text-sm">
+                          Al cancelar con más de 24hs de anticipación, no se te cobrará por esta clase.
+                        </p>
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

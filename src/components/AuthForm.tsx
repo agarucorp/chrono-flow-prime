@@ -123,6 +123,7 @@ export const AuthForm: React.FC = () => {
                 >
                   ¿Olvidaste tu contraseña?
                 </Button>
+
               </form>
             </TabsContent>
 
@@ -198,6 +199,7 @@ export const AuthForm: React.FC = () => {
           </Tabs>
         </CardContent>
       </Card>
+
     </div>
   )
 }
