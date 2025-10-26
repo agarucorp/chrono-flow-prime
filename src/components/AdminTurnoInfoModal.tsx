@@ -266,14 +266,22 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
               <div>
                 <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Fecha</Label>
-                <p className="font-medium text-xs sm:text-sm">
-                  {new Date(turno.fecha).toLocaleDateString('es-ES', {
-                    weekday: 'long',
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}
-                </p>
+                                 <p className="font-medium text-xs sm:text-sm">
+                   {(() => {
+                     if (!turno.fecha) return 'Fecha no disponible';
+                     
+                     const [year, month, day] = turno.fecha.split('-').map(Number);
+                     
+                     const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+                     const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                     
+                     // Calcular día de la semana usando el mismo método que formatLocalDate
+                     const d = new Date(year, month - 1, day);
+                     const diaSemana = diasSemana[d.getDay()];
+                     
+                     return `${diaSemana}, ${day} de ${meses[month - 1]} de ${year}`;
+                   })()}
+                 </p>
               </div>
               <div>
                 <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Horario</Label>

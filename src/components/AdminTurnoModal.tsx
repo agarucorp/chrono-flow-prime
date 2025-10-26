@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CancelacionConfirmationModal } from './CancelacionConfirmationModal';
+import { format, parse } from 'date-fns';
+import { es } from 'date-fns/locale';
 
 interface Turno {
   id: string;
@@ -226,6 +228,12 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           return;
         }
 
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         // Crear registro en turnos_cancelados (el trigger creará turnos_disponibles)
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
@@ -234,7 +242,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -244,6 +253,13 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       } else if (esTurnoRecurrente) {
         // CANCELAR TURNO RECURRENTE (solo crear cancelación, no eliminar horario fijo)
+        
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -251,7 +267,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -290,6 +307,12 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           return;
         }
 
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         // Registrar disponibilidad en turnos_cancelados
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
@@ -298,7 +321,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -317,9 +341,15 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       // Recargar datos
       await cargarReservasExistentes();
       onTurnoUpdated();
+
+      // Cerrar modal de cancelación
+      setShowCancelacionModal(false);
+      setTurnoToCancel(null);
+      setCancelingTurno(false);
     } catch (error) {
       console.error('Error al cancelar reserva:', error);
       showError('Error', 'No se pudo cancelar la reserva');
+      setCancelingTurno(false);
     } finally {
       setLoading(false);
     }
@@ -380,7 +410,13 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           return;
         }
 
-        // 3. Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
+        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
+        // Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -388,7 +424,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -421,6 +458,12 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           return;
         }
 
+        // Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
         // Crear registro de cancelación
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
@@ -429,7 +472,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -469,7 +513,13 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           return;
         }
 
-        // 3. Crear registro en turnos_cancelados
+        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
+        const fechaHoraTurno = new Date(`${turno.fecha}T${turno.hora_inicio}`);
+        const ahora = new Date();
+        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
+        const esCancelacionTardia = diferenciaHoras < 24;
+
+        // Crear registro en turnos_cancelados
         const { error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
@@ -477,7 +527,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             turno_fecha: turno.fecha,
             turno_hora_inicio: turno.hora_inicio,
             turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin'
+            tipo_cancelacion: 'admin',
+            cancelacion_tardia: esCancelacionTardia
           });
 
         if (errorCancelacion) {
@@ -532,18 +583,22 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     if (!turnoToCancel) return;
 
     setCancelingTurno(true);
-    await cancelarReserva(turnoToCancel.clienteId);
-    setCancelingTurno(false);
-    setShowCancelacionModal(false);
-    setTurnoToCancel(null);
+    try {
+      await cancelarReserva(turnoToCancel.clienteId);
+      // El cierre del modal ya se maneja dentro de cancelarReserva
+    } catch (error) {
+      console.error('Error en handleConfirmCancelacion:', error);
+    } finally {
+      setCancelingTurno(false);
+    }
   };
 
   if (!isOpen || !turno) return null;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <CardHeader>
+      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="flex-shrink-0 p-6 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5" />
@@ -553,22 +608,40 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               <X className="h-4 w-4" />
             </Button>
           </div>
-        </CardHeader>
+        </div>
 
-        <CardContent className="space-y-6">
-          {/* Información del Turno */}
-          <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
-            <div>
-              <Label className="text-sm font-medium text-muted-foreground">Fecha</Label>
-              <p className="font-medium">
-                {new Date(turno.fecha).toLocaleDateString('es-ES', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
-              </p>
-            </div>
+        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Información del Turno */}
+            <div className="grid grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
+                                                   <div>
+                                 <Label className="text-sm font-medium text-muted-foreground">Fecha</Label>
+                                  <p className="font-medium">
+                                         {(() => {
+                       if (!turno.fecha) return 'Fecha no disponible';
+                       
+                       // Dividir la fecha para obtener año, mes y día
+                       const [year, month, day] = turno.fecha.split('-').map(Number);
+                       
+                       // Arrays de nombres
+                       const diasSemana = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+                       const meses = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+                       
+                       // Calcular día de la semana manualmente usando el algoritmo de Zeller
+                       let y = year;
+                       let m = month;
+                       if (m < 3) {
+                         m += 12;
+                         y -= 1;
+                       }
+                       const k = y % 100;
+                       const j = Math.floor(y / 100);
+                       const diaSemanaIdx = (day + Math.floor((13 * (m - 2)) / 5) + k + Math.floor(k / 4) + Math.floor(j / 4) - 2 * j) % 7;
+                       const diaSemana = diasSemana[(diaSemanaIdx + 6) % 7];
+                       
+                       return `${diaSemana}, ${day} de ${meses[month - 1]} de ${year}`;
+                     })()}
+                  </p>
+              </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Horario</Label>
               <p className="font-medium">{turno.hora_inicio} - {turno.hora_fin}</p>
@@ -654,32 +727,32 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
                 {/* Lista de clientes */}
                 <div className="max-h-40 overflow-y-auto border rounded-lg">
                   {clientesFiltrados.length === 0 ? (
-                    <div className="p-4 text-center text-muted-foreground">
+                    <div className="p-4 text-center text-muted-foreground text-sm">
                       {searchTerm ? 'No se encontraron clientes' : 'No hay clientes disponibles'}
                     </div>
                   ) : (
-                    <div className="divide-y">
+                    <ul className="divide-y">
                       {clientesFiltrados.map((cliente) => (
-                        <div
+                        <li
                           key={cliente.id}
-                          className={`p-3 cursor-pointer hover:bg-muted/50 transition-colors ${clienteSeleccionado === cliente.id ? 'bg-primary/10 border-l-2 border-primary' : ''
+                          className={`p-2 cursor-pointer hover:bg-muted/50 transition-colors ${clienteSeleccionado === cliente.id ? 'bg-primary/10 border-l-2 border-primary' : ''
                             }`}
                           onClick={() => setClienteSeleccionado(cliente.id)}
                         >
                           <div className="flex items-center justify-between">
                             <div>
-                              <p className="font-medium">{cliente.full_name}</p>
-                              <p className="text-sm text-muted-foreground">{cliente.email}</p>
+                              <p className="text-sm font-normal">{cliente.full_name}</p>
+                              <p className="text-xs text-muted-foreground">{cliente.email}</p>
                             </div>
                             {clienteSeleccionado === cliente.id && (
-                              <div className="w-5 h-5 bg-primary rounded-full flex items-center justify-center">
-                                <div className="w-2 h-2 bg-white rounded-full"></div>
+                              <div className="w-4 h-4 bg-primary rounded-full flex items-center justify-center">
+                                <div className="w-1.5 h-1.5 bg-white rounded-full"></div>
                               </div>
                             )}
                           </div>
-                        </div>
+                        </li>
                       ))}
-                    </div>
+                    </ul>
                   )}
                 </div>
               </div>
@@ -695,9 +768,11 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               </Button>
             </div>
           )}
+        </div>
 
-          {/* Acciones adicionales */}
-          <div className="flex justify-end space-x-2 pt-4 border-t">
+        {/* Acciones adicionales - Footer fijo */}
+        <div className="flex-shrink-0 border-t p-6">
+          <div className="flex justify-end space-x-2">
             <Button
               variant="outline"
               onClick={onClose}
@@ -720,7 +795,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               Eliminar Clase {loading ? '(Cargando...)' : ''}
             </Button>
           </div>
-        </CardContent>
+        </div>
       </Card>
 
       {/* Modal de Confirmación de Cancelación */}
@@ -742,3 +817,5 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     </div>
   );
 };
+
+

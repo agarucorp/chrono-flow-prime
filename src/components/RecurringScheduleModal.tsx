@@ -217,14 +217,17 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         return;
       }
 
-      // Actualizar combo asignado en el perfil del usuario
+      // Actualizar combo asignado y tarifa en el perfil del usuario
       const { error: profileUpdateError } = await supabase
         .from('profiles')
-        .update({ combo_asignado: paqueteSeleccionado })
+        .update({ 
+          combo_asignado: paqueteSeleccionado,
+          tarifa_personalizada: tarifaPorClase.toString()
+        })
         .eq('id', user?.id);
 
       if (profileUpdateError) {
-        console.warn('⚠️ No se pudo actualizar el combo en el perfil:', profileUpdateError);
+        console.warn('⚠️ No se pudo actualizar el perfil:', profileUpdateError);
         // No es crítico, continuamos
       }
 

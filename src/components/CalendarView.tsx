@@ -542,10 +542,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const handleAlumnoClick = (alumno: AlumnoHorario) => {
     if (alumno.tipo === 'cancelado' || !isAdminView) return;
 
+    // Usar siempre la fecha del día seleccionado en el calendario
+    const fechaTurno = formatLocalDate(currentDate);
+    console.log('📍 Modal fecha:', fechaTurno, 'alumno.fecha:', alumno.fecha, 'currentDate:', currentDate);
+
     // Crear un objeto Turno para el AdminTurnoModal
     const turnoParaModal: Turno = {
       id: alumno.tipo === 'variable' ? `variable_${alumno.id}` : alumno.id,
-      fecha: alumno.fecha || formatLocalDate(currentDate),
+      fecha: fechaTurno,
       hora_inicio: alumno.hora_inicio || '',
       hora_fin: alumno.hora_fin || '',
       estado: 'ocupado',
@@ -1145,11 +1149,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                               <div
                                 key={alumnoIndex}
                                 onClick={() => !estaBloqueado && esClaseFuturaParaAlumno && handleAlumnoClick(alumno)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border text-white transition-all ${estaBloqueado
-                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60'
-                                    : alumno.tipo === 'recurrente' ? 'border-green-200' :
-                                      alumno.tipo === 'variable' ? 'border-blue-200' :
-                                        'border-red-200'
+                                className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${estaBloqueado
+                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60 text-yellow-200'
+                                    : alumno.tipo === 'recurrente' ? 'border-green-200 text-green-700' :
+                                      alumno.tipo === 'variable' ? 'border-blue-200 text-blue-700' :
+                                        'border-red-200 text-red-700'
                                   } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView && esClaseFuturaParaAlumno ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado || !esClaseFuturaParaAlumno ? 'cursor-not-allowed' : ''}`}
                               >
                                 <div className="font-light text-[10px] sm:text-[12px]">

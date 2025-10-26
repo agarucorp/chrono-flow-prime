@@ -827,22 +827,8 @@ export const RecurringScheduleView = () => {
         return;
       }
 
-      // Eliminar de turnos_disponibles
-      const { error: deleteError } = await supabase
-        .from('turnos_disponibles')
-        .delete()
-        .eq('id', turnoToReserve.id);
-
-      if (deleteError) {
-        console.error('Error al eliminar turno disponible:', deleteError);
-        toast({
-          title: "Error",
-          description: `Error al eliminar el turno disponible: ${deleteError.message}`,
-          variant: "destructive",
-        });
-        return;
-      }
-
+      // NO eliminar de turnos_disponibles para mantener historial
+      // El filtro en el frontend ocultará los turnos ya reservados
 
       // Disparar evento para actualizar balance del admin
       window.dispatchEvent(new Event('turnosVariables:updated'));
