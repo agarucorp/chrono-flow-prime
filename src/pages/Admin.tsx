@@ -787,6 +787,7 @@ export default function Admin() {
       <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
         <AlertDialogContent className="w-[85vw] sm:w-[360px] max-w-sm">
           <AlertDialogHeader>
+            <AlertDialogTitle className="sr-only">Confirmar cierre de sesión</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
               ¿Estás seguro de que quieres cerrar sesión?
             </AlertDialogDescription>

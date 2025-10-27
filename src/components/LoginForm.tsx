@@ -517,7 +517,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                     ¿Olvidaste tu contraseña?{" "}
                     <button 
                       onClick={handleRecoverMode}
-                      className="text-primary hover:underline font-medium"
+                      className="text-gray-500 hover:text-gray-700 hover:underline font-medium"
                     >
                       Recuperar acceso
                     </button>

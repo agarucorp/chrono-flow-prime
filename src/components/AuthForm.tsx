@@ -59,7 +59,7 @@ export const AuthForm: React.FC = () => {
           <Tabs value={isLogin ? 'login' : 'register'} onValueChange={(value) => setIsLogin(value === 'login')}>
             <TabsList className="grid w-full grid-cols-2 bg-muted">
               <TabsTrigger value="login" className="text-gray-500 data-[state=active]:text-gray-700">Iniciar Sesión</TabsTrigger>
-              <TabsTrigger value="register" className="text-gray-300 data-[state=active]:text-gray-700">¿Ya tenés cuenta? Iniciar sesión</TabsTrigger>
+              <TabsTrigger value="register" className="text-gray-300 data-[state=active]:text-gray-700">¿No tenés cuenta? Crear cuenta</TabsTrigger>
             </TabsList>
             
             <TabsContent value="login" className="space-y-4">
@@ -117,7 +117,7 @@ export const AuthForm: React.FC = () => {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="w-full text-gray-500 hover:text-gray-700"
+                  className="w-full text-white hover:text-gray-200"
                   onClick={handlePasswordReset}
                   disabled={!email || isLoading}
                 >

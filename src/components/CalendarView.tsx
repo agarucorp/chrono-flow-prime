@@ -465,7 +465,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             // Crear clave única para verificar si está cancelado
             const claveRecurrente = `${horario.usuario_id}-${horario.hora_inicio}-${horario.hora_fin}`;
 
-            // Solo agregar si NO está cancelado para esta fecha
+            // Agregar siempre, pero marcar como cancelado si existe en turnosCanceladosHoy
             if (!turnosCanceladosHoy.has(claveRecurrente)) {
               todosAlumnos.push({
                 id: horario.id,
@@ -473,6 +473,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 email: profile.email || '',
                 telefono: profile.phone,
                 tipo: 'recurrente',
+                hora_inicio: (horario.hora_inicio || '').substring(0, 5),
+                hora_fin: (horario.hora_fin || '').substring(0, 5),
+                fecha: fechaActual,
+                activo: horario.activo,
+                usuario_id: horario.usuario_id
+              });
+            } else {
+              // Mostrar también pero marcado como cancelado para que quede visible en rojo
+              todosAlumnos.push({
+                id: horario.id,
+                nombre: getProfileFullName(profile),
+                email: profile.email || '',
+                telefono: profile.phone,
+                tipo: 'cancelado',
                 hora_inicio: (horario.hora_inicio || '').substring(0, 5),
                 hora_fin: (horario.hora_fin || '').substring(0, 5),
                 fecha: fechaActual,
@@ -1575,8 +1589,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       {/* Modal de confirmación para agregar usuario */}
       <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
         <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-none">
-          <DialogHeader className="pb-3 flex-shrink-0">
-            <DialogTitle className="text-sm sm:text-base">Confirmar Agregar Usuario</DialogTitle>
+          <DialogHeader className="pb-2 sm:pb-3 flex-shrink-0">
+            <DialogTitle className="text-sm sm:text-base">Confirmar agregar usuario</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
               ¿Estás seguro de que quieres agregar a <strong>{selectedUser?.full_name}</strong> a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}?
             </DialogDescription>
@@ -1586,17 +1600,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             {/* Contenido de confirmación */}
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
-                <div className="w-16 h-16 mx-auto mb-4 bg-blue-100 rounded-full flex items-center justify-center">
-                  <User className="h-8 w-8 text-blue-600" />
-                </div>
-                <p className="text-sm text-muted-foreground">
+                <p className="text-xs sm:text-sm text-muted-foreground">
                   El usuario será agregado a la clase y aparecerá en la agenda
                 </p>
               </div>
             </div>
           </div>
 
-          <DialogFooter className="pt-3 flex-shrink-0">
+          <DialogFooter className="pt-2 sm:pt-3 flex-shrink-0">
             <div className="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2 w-full">
               <Button
                 variant="outline"
@@ -1609,7 +1620,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               <Button
                 onClick={confirmAddUserToSlot}
                 disabled={addingUser}
-                className="text-xs sm:text-sm w-full sm:w-auto"
+                className="text-xs sm:text-sm w-full sm:w-auto bg-white text-gray-900 hover:bg-gray-100"
               >
                 {addingUser ? 'Agregando...' : 'Confirmar'}
               </Button>

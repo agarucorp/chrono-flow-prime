@@ -1068,16 +1068,16 @@ export const RecurringScheduleView = () => {
                             key={`${dia.getTime()}-${claseIndex}`} 
                             className={`border-b last:border-b-0 transition-colors ${
                               clase.horario.cancelada 
-                                ? 'bg-red-50 dark:bg-red-950/20 opacity-60' 
+                                ? 'bg-red-50 dark:bg-red-950/20 opacity-60 cursor-default' 
                                 : clase.horario.bloqueada
-                                  ? 'bg-yellow-50 dark:bg-yellow-950/20 opacity-70'
+                                  ? 'bg-yellow-50 dark:bg-yellow-950/20 opacity-70 cursor-default'
                                   : clase.horario.esVariable
                                     ? 'bg-green-50 dark:bg-green-950/20'
                                     : isFechaPasada(clase.dia)
-                                      ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50'
+                                      ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50 cursor-default'
                                       : 'hover:bg-muted/30 cursor-pointer'
                             }`}
-                            onClick={() => handleClaseClick(clase)}
+                            onClick={() => clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia) ? null : handleClaseClick(clase)}
                           >
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <div className="text-xs sm:text-sm font-medium">
@@ -1489,6 +1489,7 @@ export const RecurringScheduleView = () => {
       <AlertDialog open={showLogoutConfirm} onOpenChange={setShowLogoutConfirm}>
         <AlertDialogContent className="w-[85vw] sm:w-[360px] max-w-sm">
           <AlertDialogHeader>
+            <AlertDialogTitle className="sr-only">Confirmar cierre de sesión</AlertDialogTitle>
             <AlertDialogDescription className="text-center">
               ¿Estás seguro de que quieres cerrar sesión?
             </AlertDialogDescription>

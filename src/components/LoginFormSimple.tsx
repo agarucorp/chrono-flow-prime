@@ -448,14 +448,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   </>
                 ) : (
                   <>
-                    ¿Ya tenés cuenta? Iniciar sesión{" "}
+                    ¿No tenés cuenta?{" "}
                     <button 
                       onClick={() => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-gray-300 hover:text-gray-700 font-medium"
+                      className="text-white hover:text-gray-200 hover:underline font-medium"
                     >
                       Crear cuenta
                     </button>
@@ -468,7 +468,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   ¿Olvidaste tu contraseña?{" "}
                   <button 
                     onClick={handleRecoverMode}
-                    className="text-gray-500 hover:text-gray-700 font-medium"
+                    className="text-white hover:text-gray-200 hover:underline font-medium"
                   >
                     Recuperar acceso
                   </button>

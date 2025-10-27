@@ -60,13 +60,6 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background p-4">
         <div className="w-full max-w-md space-y-8">
-          {/* Logo */}
-          <div className="text-center animate-fade-in">
-            <div className="mx-auto w-32 h-32 mb-6">
-              <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
-            </div>
-          </div>
-
           {/* Success Card */}
           <Card className="shadow-elegant animate-slide-up">
             <CardHeader className="text-center space-y-1">
@@ -116,7 +109,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
 
           {/* Footer */}
           <div className="text-center">
-            <p className="text-sm text-muted-foreground">© Powered by AgaruCorp</p>
+            <p className="text-xs text-muted-foreground">© Powered by AgaruCorp</p>
           </div>
         </div>
       </div>
@@ -126,27 +119,20 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
-                 {/* Logo */}
-         <div className="text-center animate-fade-in">
-           <div className="mx-auto w-32 h-32 mb-6">
-             <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
-           </div>
-         </div>
-
         {/* Recover Password Card */}
         <Card className="shadow-elegant animate-slide-up">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
+            <CardTitle className="text-lg md:text-xl text-center">
               Recuperar Acceso
             </CardTitle>
-            <CardDescription className="text-center">
+            <CardDescription className="text-xs md:text-sm text-center">
               Ingrese su email para recibir instrucciones de recuperación
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="recoverEmail">Email</Label>
+                <Label htmlFor="recoverEmail" className="text-xs">Email</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -155,7 +141,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
                     placeholder="Ingrese su email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
+                    className="pl-10 text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50"
                     required
                   />
                 </div>
@@ -163,16 +149,16 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-primary hover:shadow-md transition-all duration-300 h-11"
+                className="w-full bg-white text-gray-900 hover:bg-gray-100 transition-all duration-300 h-11"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>Enviando...</span>
                   </div>
                 ) : (
-                  "Enviar Instrucciones"
+                  "Enviar"
                 )}
               </Button>
             </form>
@@ -193,7 +179,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
 
         {/* Footer */}
         <div className="text-center">
-          <p className="text-sm text-muted-foreground">© Powered by AgaruCorp</p>
+          <p className="text-xs text-muted-foreground">© Powered by AgaruCorp</p>
         </div>
       </div>
     </div>

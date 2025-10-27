@@ -226,15 +226,12 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       dismissToast(loadingToast);
       showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
 
-
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
 
+      onClose();
       onTurnoUpdated();
-      setTimeout(() => {
-        onClose();
-      }, 1000);
 
     } catch (error) {
       console.error('Error eliminando clase:', error);
