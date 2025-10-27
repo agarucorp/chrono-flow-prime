@@ -17,22 +17,56 @@ export const ResetPasswordForm = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordReset, setPasswordReset] = useState(false);
+  const [isValidSession, setIsValidSession] = useState<boolean | null>(null);
 
   // Verificar si el usuario está en modo reset password
   useEffect(() => {
     const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      // Si no hay sesión o no está en modo reset, redirigir al login
-      if (!session) {
-        showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
+      try {
+        // Verificar si hay un hash en la URL con el token de recuperación
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const type = hashParams.get('type');
+        
+        // Si hay un token de acceso y es tipo recovery, establecer la sesión
+        if (accessToken && type === 'recovery') {
+          const { error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: hashParams.get('refresh_token') || ''
+          });
+          
+          if (error) {
+            console.error('Error setting session:', error);
+            showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
+            setTimeout(() => navigate('/login'), 3000);
+            setIsValidSession(false);
+            return;
+          }
+          
+          setIsValidSession(true);
+        } else {
+          // Verificar si ya hay una sesión válida
+          const { data: { session } } = await supabase.auth.getSession();
+          
+          if (!session) {
+            showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
+            setTimeout(() => navigate('/login'), 3000);
+            setIsValidSession(false);
+            return;
+          }
+          
+          setIsValidSession(true);
+        }
+      } catch (err) {
+        console.error('Error checking session:', err);
+        showError("Error", "Hubo un problema al verificar su sesión");
         setTimeout(() => navigate('/login'), 3000);
-        return;
+        setIsValidSession(false);
       }
     };
 
     checkSession();
-  }, [navigate]);
+  }, [navigate, showError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -88,6 +122,23 @@ export const ResetPasswordForm = () => {
       setIsLoading(false);
     }
   };
+
+  // Mostrar loading mientras se verifica la sesión
+  if (isValidSession === null) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando enlace...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si la sesión no es válida, no mostrar nada (ya se redirige o muestra error)
+  if (isValidSession === false) {
+    return null;
+  }
 
   // Pantalla de confirmación después de resetear contraseña
   if (passwordReset) {

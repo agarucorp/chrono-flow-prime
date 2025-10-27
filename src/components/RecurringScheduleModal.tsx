@@ -118,6 +118,24 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const toggleHorario = (horarioId: string, diaSemana: number) => {
     setHorariosSeleccionados(prev => {
       const newSelection = new Set(prev);
+      
+      // Si el horario ya está seleccionado, deseleccionar
+      if (newSelection.has(horarioId)) {
+        newSelection.delete(horarioId);
+        return newSelection;
+      }
+      
+      // Si no hay paquete seleccionado, no permitir seleccionar
+      if (!paqueteSeleccionado) {
+        return prev;
+      }
+      
+      // Si ya se alcanzó el límite del paquete, no permitir seleccionar más
+      if (newSelection.size >= paqueteSeleccionado) {
+        return prev;
+      }
+      
+      // Permitir seleccionar el horario
       newSelection.add(horarioId);
       return newSelection;
     });
@@ -272,6 +290,21 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     return horariosSeleccionados.has(horarioId);
   };
 
+  const puedeSeleccionarHorario = (horarioId: string) => {
+    // Si ya está seleccionado, puede deseleccionar
+    if (isHorarioSeleccionado(horarioId)) {
+      return true;
+    }
+    
+    // Si no hay paquete seleccionado, no puede seleccionar
+    if (!paqueteSeleccionado) {
+      return false;
+    }
+    
+    // Si ya se alcanzó el límite, no puede seleccionar más
+    return horariosSeleccionados.size < paqueteSeleccionado;
+  };
+
   const tieneHorarioEnDia = (diaSemana: number) => {
     const horariosDelDia = getHorariosPorDia(diaSemana);
     return horariosDelDia.some(h => horariosSeleccionados.has(h.id));
@@ -393,20 +426,28 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                             <p className="text-sm text-muted-foreground text-center py-2">No hay horarios disponibles</p>
                           ) : (
                             <div className="grid grid-cols-2 gap-2">
-                              {horariosDelDia.map(horario => (
-                                <Button
-                                  key={horario.id}
-                                  variant="outline"
-                                  size="sm"
-                                  className={`w-full justify-center text-sm h-10 ${isHorarioSeleccionado(horario.id)
-                                      ? 'bg-white text-gray-900 border-white shadow-md'
-                                      : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                              {horariosDelDia.map(horario => {
+                                const estaSeleccionado = isHorarioSeleccionado(horario.id);
+                                const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                                return (
+                                  <Button
+                                    key={horario.id}
+                                    variant="outline"
+                                    size="sm"
+                                    className={`w-full justify-center text-sm h-10 ${
+                                      estaSeleccionado
+                                        ? 'bg-white text-gray-900 border-white shadow-md'
+                                        : puedeSeleccionar
+                                        ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                                        : 'bg-gray-900 text-gray-600 border-gray-700 opacity-50 cursor-not-allowed'
                                     }`}
-                                  onClick={() => toggleHorario(horario.id, dia.numero)}
-                                >
-                                  {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
-                                </Button>
-                              ))}
+                                    onClick={() => toggleHorario(horario.id, dia.numero)}
+                                    disabled={!puedeSeleccionar}
+                                  >
+                                    {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                  </Button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
@@ -431,20 +472,28 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                           {horariosDelDia.length === 0 ? (
                             <p className="text-xs text-muted-foreground text-center py-2">No hay horarios disponibles</p>
                           ) : (
-                            horariosDelDia.map(horario => (
-                              <Button
-                                key={horario.id}
-                                variant="outline"
-                                size="sm"
-                                className={`w-full justify-start text-xs h-8 ${isHorarioSeleccionado(horario.id)
-                                    ? 'bg-white text-gray-900 border-white shadow-md'
-                                    : 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                            horariosDelDia.map(horario => {
+                              const estaSeleccionado = isHorarioSeleccionado(horario.id);
+                              const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                              return (
+                                <Button
+                                  key={horario.id}
+                                  variant="outline"
+                                  size="sm"
+                                  className={`w-full justify-start text-xs h-8 ${
+                                    estaSeleccionado
+                                      ? 'bg-white text-gray-900 border-white shadow-md'
+                                      : puedeSeleccionar
+                                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
+                                      : 'bg-gray-900 text-gray-600 border-gray-700 opacity-50 cursor-not-allowed'
                                   }`}
-                                onClick={() => toggleHorario(horario.id, dia.numero)}
-                              >
-                                {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
-                              </Button>
-                            ))
+                                  onClick={() => toggleHorario(horario.id, dia.numero)}
+                                  disabled={!puedeSeleccionar}
+                                >
+                                  {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                </Button>
+                              );
+                            })
                           )}
                         </div>
                       </CardContent>

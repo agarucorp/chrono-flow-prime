@@ -31,7 +31,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
 
       // Enviar email de recuperación de contraseña
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'http://localhost:8080/reset-password'
+        redirectTo: `${window.location.origin}/reset-password`
       });
 
       dismissToast(loadingToast);

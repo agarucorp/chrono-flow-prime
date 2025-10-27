@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/lib/supabase";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useNotifications } from "@/hooks/useNotifications";
 import { RecoverPasswordForm } from "./RecoverPasswordForm";
 
 interface LoginFormProps {
@@ -16,6 +17,7 @@ interface LoginFormProps {
 
 export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const { signIn, signUp } = useAuthContext();
+  const { showSuccess, showError } = useNotifications();
   const navigate = useNavigate();
   
   const [credentials, setCredentials] = useState({
@@ -143,7 +145,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         });
         
         // Mostrar mensaje de éxito
-        alert('¡Cuenta creada exitosamente! Revisa tu email para confirmar tu cuenta.');
+        showSuccess('¡Cuenta creada exitosamente!', 'Revisa tu email para confirmar tu cuenta.');
         
       } catch (err) {
         console.error('Error inesperado en registro:', err);
