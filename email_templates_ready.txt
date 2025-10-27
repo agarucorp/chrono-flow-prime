@@ -1,0 +1,248 @@
+========================================
+TEMPLATE 1: CONFIRMACIÓN DE EMAIL
+Template: "Confirm your signup"
+Subject: "Confirmá tu cuenta en MaldaGym"
+========================================
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 600px;" cellpadding="0" cellspacing="0">
+          
+          <!-- CTA Principal -->
+          <tr>
+            <td style="padding: 50px 30px !important; background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%) !important; border: 3px solid #444444 !important; border-radius: 16px !important; text-align: center !important; box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;">
+              
+              <p style="color: #e0e0e0; font-size: 16px; line-height: 24px; margin: 0 0 35px 0;">
+                Gracias por registrarte en MaldaGym. Confirmá tu cuenta para poder iniciar sesión en la plataforma.
+              </p>
+              
+              <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ .ConfirmationURL }}" 
+                   style="background: #ffffff !important; color: #000000 !important; text-decoration: none !important; display: inline-block !important; padding: 18px 40px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 700 !important; letter-spacing: 0.5px !important; line-height: 1.5 !important; max-width: 80% !important; box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;">
+                  Confirmar email
+                </a>
+              </div>
+              
+            </td>
+          </tr>
+          
+          <!-- Link alternativo -->
+          <tr>
+            <td style="padding: 25px 20px; text-align: center;">
+              <p style="color: #888; font-size: 12px; line-height: 18px; margin: 0;">
+                Si no funciona el botón, copiá y pegá este enlace en tu navegador:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #b0b0b0; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 40px 0; text-align: center; border-top: 1px solid #333;">
+              <p style="color: #666; font-size: 11px; line-height: 16px; margin: 0;">
+                Si no intentaste registrarte, ignorá este mensaje.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+========================================
+TEMPLATE 3: CAMBIO DE EMAIL
+Template: "Change Email Address"
+Subject: "Confirmá tu cambio de email en MaldaGym"
+========================================
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 600px;" cellpadding="0" cellspacing="0">
+          
+          <!-- CTA Principal -->
+          <tr>
+            <td style="padding: 50px 30px !important; background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%) !important; border: 3px solid #444444 !important; border-radius: 16px !important; text-align: center !important; box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;">
+              
+              <p style="color: #e0e0e0; font-size: 16px; line-height: 24px; margin: 0 0 35px 0;">
+                Recibimos una solicitud para cambiar tu dirección de email en MaldaGym. Tocá el botón para confirmar el cambio.
+              </p>
+              
+              <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ .ConfirmationURL }}" 
+                   style="background: #ffffff !important; color: #000000 !important; text-decoration: none !important; display: inline-block !important; padding: 18px 40px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 700 !important; letter-spacing: 0.5px !important; line-height: 1.5 !important; max-width: 80% !important; box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;">
+                  Confirmar cambio
+                </a>
+              </div>
+              
+            </td>
+          </tr>
+          
+          <!-- Link alternativo -->
+          <tr>
+            <td style="padding: 25px 20px; text-align: center;">
+              <p style="color: #888; font-size: 12px; line-height: 18px; margin: 0;">
+                Si no funciona el botón, copiá y pegá este enlace en tu navegador:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #b0b0b0; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 40px 0; text-align: center; border-top: 1px solid #333;">
+              <p style="color: #666; font-size: 11px; line-height: 16px; margin: 0;">
+                Si no solicitaste este cambio, ignorá este mensaje.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+========================================
+TEMPLATE 2: RECUPERACIÓN DE CONTRASEÑA
+Template: "Reset password"
+Subject: "Restablecé tu contraseña en MaldaGym"
+========================================
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 600px;" cellpadding="0" cellspacing="0">
+          
+          <!-- CTA Principal -->
+          <tr>
+            <td style="padding: 50px 30px !important; background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%) !important; border: 3px solid #444444 !important; border-radius: 16px !important; text-align: center !important; box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;">
+              
+              <p style="color: #e0e0e0; font-size: 16px; line-height: 24px; margin: 0 0 35px 0;">
+                Recibimos una solicitud para restablecer tu contraseña de MaldaGym. Tocá el botón para crear una nueva.
+              </p>
+              
+              <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ .ConfirmationURL }}" 
+                   style="background: #ffffff !important; color: #000000 !important; text-decoration: none !important; display: inline-block !important; padding: 18px 40px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 700 !important; letter-spacing: 0.5px !important; line-height: 1.5 !important; max-width: 80% !important; box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;">
+                  Recuperar contraseña
+                </a>
+              </div>
+              
+            </td>
+          </tr>
+          
+          <!-- Link alternativo -->
+          <tr>
+            <td style="padding: 25px 20px; text-align: center;">
+              <p style="color: #888; font-size: 12px; line-height: 18px; margin: 0;">
+                Si no funciona el botón, copiá y pegá este enlace en tu navegador:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #b0b0b0; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 40px 0; text-align: center; border-top: 1px solid #333;">
+              <p style="color: #666; font-size: 11px; line-height: 16px; margin: 0;">
+                Si no solicitaste este cambio, ignorá este mensaje.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
+========================================
+TEMPLATE 3: CAMBIO DE EMAIL
+Template: "Change Email Address"
+Subject: "Confirmá tu cambio de email en MaldaGym"
+========================================
+
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
+<body style="margin: 0; padding: 0; background-color: #1a1a1a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #1a1a1a; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table width="100%" style="max-width: 600px;" cellpadding="0" cellspacing="0">
+          
+          <!-- CTA Principal -->
+          <tr>
+            <td style="padding: 50px 30px !important; background: linear-gradient(135deg, #2a2a2a 0%, #1f1f1f 100%) !important; border: 3px solid #444444 !important; border-radius: 16px !important; text-align: center !important; box-shadow: 0 12px 40px rgba(0,0,0,0.5) !important;">
+              
+              <p style="color: #e0e0e0; font-size: 16px; line-height: 24px; margin: 0 0 35px 0;">
+                Recibimos una solicitud para cambiar tu dirección de email en MaldaGym. Tocá el botón para confirmar el cambio.
+              </p>
+              
+              <div style="text-align: center; margin-top: 20px;">
+                <a href="{{ .ConfirmationURL }}" 
+                   style="background: #ffffff !important; color: #000000 !important; text-decoration: none !important; display: inline-block !important; padding: 18px 40px !important; border-radius: 10px !important; font-size: 14px !important; font-weight: 700 !important; letter-spacing: 0.5px !important; line-height: 1.5 !important; max-width: 80% !important; box-shadow: 0 6px 20px rgba(0,0,0,0.2) !important;">
+                  Confirmar cambio
+                </a>
+              </div>
+              
+            </td>
+          </tr>
+          
+          <!-- Link alternativo -->
+          <tr>
+            <td style="padding: 25px 20px; text-align: center;">
+              <p style="color: #888; font-size: 12px; line-height: 18px; margin: 0;">
+                Si no funciona el botón, copiá y pegá este enlace en tu navegador:<br>
+                <a href="{{ .ConfirmationURL }}" style="color: #b0b0b0; word-break: break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 20px 40px 0; text-align: center; border-top: 1px solid #333;">
+              <p style="color: #666; font-size: 11px; line-height: 16px; margin: 0;">
+                Si no solicitaste este cambio, ignorá este mensaje.
+              </p>
+            </td>
+          </tr>
+          
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
