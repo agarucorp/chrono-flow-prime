@@ -420,7 +420,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                 ) : (
                   <>
                     {!isRegisterMode 
-                      ? "Iniciar Sesión" 
+                      ? "Iniciar sesión" 
                       : currentStep === 1 
                         ? "Continuar"
                         : "Crear Cuenta"

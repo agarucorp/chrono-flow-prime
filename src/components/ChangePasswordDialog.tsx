@@ -115,7 +115,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
         {/* Botón X para mobile */}
         <Button
           variant="ghost"
@@ -127,10 +127,10 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
         </Button>
         
         <DialogHeader className="pb-3 sm:block hidden">
-          <DialogTitle className="text-center text-sm">
+          <DialogTitle className="text-center text-xs sm:text-sm">
             Cambiar Contraseña
           </DialogTitle>
-          <DialogDescription className="text-center text-sm">
+          <DialogDescription className="text-center text-xs sm:text-sm">
             Ingrese su contraseña actual y la nueva contraseña
           </DialogDescription>
         </DialogHeader>
@@ -141,10 +141,10 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
               <CheckCircle className="w-8 h-8 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-green-600">
+              <h3 className="text-sm sm:text-lg font-semibold text-green-600">
                 ¡Contraseña Cambiada!
               </h3>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-xs sm:text-sm text-muted-foreground">
                 Su contraseña ha sido actualizada exitosamente
               </p>
             </div>
@@ -152,7 +152,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-2">
-              <Label htmlFor="currentPassword" className="text-sm">Contraseña Actual</Label>
+              <Label htmlFor="currentPassword" className="text-xs sm:text-sm">Contraseña Actual</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -161,7 +161,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
                   placeholder="Ingrese su contraseña actual"
                   value={currentPassword}
                   onChange={(e) => setCurrentPassword(e.target.value)}
-                  className="pl-10 pr-10 text-sm h-9"
+                  className="pl-10 pr-10 text-xs sm:text-sm h-9"
                   required
                 />
                 <Button
@@ -181,7 +181,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="newPassword" className="text-sm">Nueva Contraseña</Label>
+              <Label htmlFor="newPassword" className="text-xs sm:text-sm">Nueva Contraseña</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -190,7 +190,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
                   placeholder="Ingrese su nueva contraseña"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
-                  className="pl-10 pr-10 text-sm h-9"
+                  className="pl-10 pr-10 text-xs sm:text-sm h-9"
                   required
                 />
                 <Button
@@ -213,7 +213,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword" className="text-sm">Confirmar Nueva Contraseña</Label>
+              <Label htmlFor="confirmPassword" className="text-xs sm:text-sm">Confirmar Nueva Contraseña</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
@@ -222,7 +222,7 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
                   placeholder="Confirme su nueva contraseña"
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="pl-10 pr-10 text-sm h-9"
+                  className="pl-10 pr-10 text-xs sm:text-sm h-9"
                   required
                 />
                 <Button
@@ -245,16 +245,16 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
             <div className="sm:hidden pt-4">
               <Button
                 type="submit"
-                className="w-full text-sm h-10"
+                className="w-full text-xs sm:text-sm h-10 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>Cambiando...</span>
                   </div>
                 ) : (
-                  "Cambiar Contraseña"
+                  "Confirmar cambio"
                 )}
               </Button>
             </div>
@@ -272,16 +272,16 @@ export const ChangePasswordDialog = ({ open, onClose }: ChangePasswordDialogProp
               </Button>
               <Button
                 type="submit"
-                className="flex-1 text-sm h-9"
+                className="flex-1 text-sm h-9 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>Cambiando...</span>
                   </div>
                 ) : (
-                  "Cambiar Contraseña"
+                  "Confirmar cambio"
                 )}
               </Button>
             </div>

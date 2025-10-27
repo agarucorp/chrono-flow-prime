@@ -463,7 +463,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                 ) : (
                   <>
                     {!isRegisterMode 
-                      ? "Iniciar Sesión" 
+                      ? "Iniciar sesión" 
                       : currentStep === 1 
                         ? (
                           <>

@@ -1113,7 +1113,7 @@ export const RecurringScheduleView = () => {
                               </span>
                               {clase.horario.esVariable && (
                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                  NUEVO TURNO
+                                  Nueva clase
                                 </div>
                               )}
                             </td>
@@ -1179,8 +1179,7 @@ export const RecurringScheduleView = () => {
 
                 {/* Botón Editar Perfil */}
                 <Button
-                  variant="default"
-                  className="w-full text-xs sm:text-sm"
+                  className="w-full text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
                   onClick={() => setShowProfileSettings(true)}
                 >
                   <UserIcon className="h-4 w-4 mr-2" />

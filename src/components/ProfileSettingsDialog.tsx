@@ -146,6 +146,9 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
               type="button"
               onClick={() => setShowChangePassword(true)}
               className="w-full text-xs h-9"
+              style={{ backgroundColor: '#6b7280', color: '#ffffff', borderColor: '#4b5563' }}
+              onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#4b5563'; }}
+              onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#6b7280'; }}
               disabled={loading}
             >
               <Lock className="w-3.5 h-3.5 mr-2" />
@@ -154,7 +157,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
             {/* Botón Guardar */}
             <Button 
-              className="w-full text-xs h-9" 
+              className="w-full text-xs h-9 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300" 
               onClick={handleSave} 
               disabled={saving}
             >
@@ -215,5 +218,4 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
     </Dialog>
   );
 };
-
 

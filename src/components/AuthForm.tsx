@@ -46,7 +46,7 @@ export const AuthForm: React.FC = () => {
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg text-center">
-            {isLogin ? 'Iniciar Sesión' : 'Crear Cuenta'}
+            {isLogin ? 'Iniciar sesión' : 'Crear cuenta'}
           </CardTitle>
           <CardDescription className="text-xs text-center">
             {isLogin 
@@ -58,7 +58,7 @@ export const AuthForm: React.FC = () => {
         <CardContent>
           <Tabs value={isLogin ? 'login' : 'register'} onValueChange={(value) => setIsLogin(value === 'login')}>
             <TabsList className="grid w-full grid-cols-2 bg-muted">
-              <TabsTrigger value="login" className="text-gray-500 data-[state=active]:text-gray-700">Iniciar Sesión</TabsTrigger>
+              <TabsTrigger value="login" className="text-gray-500 data-[state=active]:text-gray-700">Iniciar sesión</TabsTrigger>
               <TabsTrigger value="register" className="text-gray-300 data-[state=active]:text-gray-700">¿No tenés cuenta? Crear cuenta</TabsTrigger>
             </TabsList>
             
@@ -110,7 +110,7 @@ export const AuthForm: React.FC = () => {
                       Iniciando sesión...
                     </>
                   ) : (
-                    'Iniciar Sesión'
+                    'Iniciar sesión'
                   )}
                 </Button>
 
