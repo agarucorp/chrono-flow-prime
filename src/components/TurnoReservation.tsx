@@ -247,6 +247,11 @@ export const TurnoReservation = () => {
 
   const cancelarTurno = async (turno: TurnoReservado) => {
     try {
+      if (!user?.id) {
+        showError('Error', 'Debes estar autenticado para cancelar un turno');
+        return;
+      }
+
       const loadingToast = showLoading('Cancelando turno...');
       
       // 1) Marcar turno como cancelado y liberar cliente
@@ -267,15 +272,21 @@ export const TurnoReservation = () => {
       }
 
       // 2) Registrar disponibilidad en turnos_cancelados para CTA "turnos disponibles"
-      await supabase
+      const { error: errorCancelacion } = await supabase
         .from('turnos_cancelados')
         .insert({
-          cliente_id: user?.id as string,
+          cliente_id: user.id,
           turno_fecha: turno.fecha,
           turno_hora_inicio: turno.hora_inicio,
           turno_hora_fin: turno.hora_fin,
           tipo_cancelacion: 'usuario'
         });
+
+      if (errorCancelacion) {
+        console.error('Error insertando cancelación:', errorCancelacion);
+        showError('Error al registrar cancelación', errorCancelacion.message);
+        return;
+      }
 
       showSuccess('Turno cancelado', 'Tu turno ha sido cancelado exitosamente');
       
