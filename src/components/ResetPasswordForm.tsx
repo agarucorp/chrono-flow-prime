@@ -197,18 +197,11 @@ export const ResetPasswordForm = () => {
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md space-y-8">
-        {/* Logo */}
-        <div className="text-center animate-fade-in">
-          <div className="mx-auto w-32 h-32 mb-6">
-            <img src="/maldagym1.png" alt="Logo Malda Gym" className="w-full h-full object-contain" />
-          </div>
-        </div>
-
         {/* Reset Password Card */}
         <Card className="shadow-elegant animate-slide-up">
           <CardHeader className="space-y-1">
             <CardTitle className="text-2xl text-center">
-              Establecer Nueva Contraseña
+              Establecer nueva contraseña
             </CardTitle>
             <CardDescription className="text-center">
               Ingrese su nueva contraseña para recuperar el acceso
@@ -279,16 +272,16 @@ export const ResetPasswordForm = () => {
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-primary hover:shadow-md transition-all duration-300 h-11"
+                className="w-full bg-white text-gray-900 hover:bg-gray-100 border border-gray-300 transition-all duration-300 h-11"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>Actualizando...</span>
                   </div>
                 ) : (
-                  "Actualizar Contraseña"
+                  "Actualizar contraseña"
                 )}
               </Button>
             </form>

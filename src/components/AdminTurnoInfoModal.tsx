@@ -47,6 +47,13 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
         return;
       }
 
+      // No permitir eliminar turnos ya cancelados
+      if (turno.estado === 'cancelado') {
+        showError('Error', 'Esta clase ya está cancelada');
+        setShowConfirmAlert(false);
+        return;
+      }
+
       setShowConfirmAlert(false);
 
     } catch (error) {
@@ -245,7 +252,14 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-2 sm:p-4">
       <Card className="w-full max-w-md max-h-[90vh] sm:max-h-none overflow-y-auto">
         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-3">
-          <CardTitle className="text-sm sm:text-lg font-semibold">Información de la Clase</CardTitle>
+          <div className="flex items-center gap-2">
+            <CardTitle className="text-sm sm:text-lg font-semibold">Información de la Clase</CardTitle>
+            {turno.estado === 'cancelado' && (
+              <Badge variant="destructive" className="text-xs">
+                Cancelada
+              </Badge>
+            )}
+          </div>
           <Button
             variant="ghost"
             size="sm"
@@ -304,21 +318,24 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
             >
               Cerrar
             </Button>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                mostrarConfirmacion();
-              }}
-              disabled={loading}
-              className="text-xs sm:text-sm w-full sm:w-auto"
-              style={{
-                opacity: loading ? 0.5 : 1,
-                cursor: loading ? 'not-allowed' : 'pointer'
-              }}
-            >
-              <Trash2 className="h-3 w-3 mr-1 sm:h-4 sm:w-4 sm:mr-2" />
-              Eliminar Clase {loading ? '(Cargando...)' : ''}
-            </Button>
+            {/* Solo mostrar botón de eliminar si el turno no está cancelado */}
+            {turno.estado !== 'cancelado' && (
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  mostrarConfirmacion();
+                }}
+                disabled={loading}
+                className="text-xs sm:text-sm w-full sm:w-auto"
+                style={{
+                  opacity: loading ? 0.5 : 1,
+                  cursor: loading ? 'not-allowed' : 'pointer'
+                }}
+              >
+                <Trash2 className="h-3 w-3 mr-1 sm:h-4 sm:w-4 sm:mr-2" />
+                Eliminar Clase {loading ? '(Cargando...)' : ''}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>

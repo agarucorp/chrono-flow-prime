@@ -554,7 +554,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
   // Función para abrir modal de gestión de turno
   const handleAlumnoClick = (alumno: AlumnoHorario) => {
-    if (alumno.tipo === 'cancelado' || !isAdminView) return;
+    if (!isAdminView) return;
 
     // Usar siempre la fecha del día seleccionado en el calendario
     const fechaTurno = formatLocalDate(currentDate);
@@ -566,7 +566,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       fecha: fechaTurno,
       hora_inicio: alumno.hora_inicio || '',
       hora_fin: alumno.hora_fin || '',
-      estado: 'ocupado',
+      estado: alumno.tipo === 'cancelado' ? 'cancelado' : 'ocupado',
       cliente_id: alumno.usuario_id,
       cliente_nombre: alumno.nombre,
       profesional_id: null,
@@ -1049,11 +1049,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     // Generar horarios dinámicos definidos por admin (horarios_semanales)
     const timeSlots = adminSlots.map(slot => {
-      // Filtrar solo alumnos activos (no cancelados) y eliminar duplicados por usuario
-      const alumnosActivos = alumnosHorarios
+      // Filtrar alumnos por horario (incluidos cancelados para mostrar con stroke rojo)
+      const alumnosEnHorario = alumnosHorarios
         .filter(alumno =>
-          (alumno.hora_inicio || '').substring(0, 5) === slot.horaInicio &&
-          alumno.tipo !== 'cancelado'
+          (alumno.hora_inicio || '').substring(0, 5) === slot.horaInicio
         )
         .reduce((acc, alumno) => {
           // Evitar duplicados por usuario_id
@@ -1064,10 +1063,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           return acc;
         }, [] as AlumnoHorario[]);
 
+      // Contar solo alumnos activos para el cupo disponible
+      const alumnosActivos = alumnosEnHorario.filter(a => a.tipo !== 'cancelado');
+      
       return {
         horaInicio: slot.horaInicio,
         horaFin: slot.horaFin,
-        alumnos: alumnosActivos,
+        alumnos: alumnosEnHorario, // Incluir cancelados para mostrar con stroke rojo
         capacidad: slot.capacidad,
         cupoDisponible: Math.max(0, (slot.capacidad || 0) - alumnosActivos.length),
       };
@@ -1162,13 +1164,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                             return (
                               <div
                                 key={alumnoIndex}
-                                onClick={() => !estaBloqueado && esClaseFuturaParaAlumno && handleAlumnoClick(alumno)}
+                                onClick={() => !estaBloqueado && isAdminView && handleAlumnoClick(alumno)}
                                 className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${estaBloqueado
                                     ? 'border-yellow-400 bg-yellow-900/30 opacity-60 text-yellow-200'
-                                    : alumno.tipo === 'recurrente' ? 'border-green-200 text-green-700' :
-                                      alumno.tipo === 'variable' ? 'border-blue-200 text-blue-700' :
-                                        'border-red-200 text-red-700'
-                                  } ${!estaBloqueado && alumno.tipo !== 'cancelado' && isAdminView && esClaseFuturaParaAlumno ? 'cursor-pointer hover:shadow-md hover:scale-105' : estaBloqueado || !esClaseFuturaParaAlumno ? 'cursor-not-allowed' : ''}`}
+                                    : alumno.tipo === 'cancelado' ? 'border-red-500 text-red-700 bg-red-50' :
+                                      alumno.tipo === 'recurrente' ? 'border-green-500 text-green-700 bg-green-50' :
+                                        'border-blue-500 text-blue-700 bg-blue-50'
+                                  } ${!estaBloqueado && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'}`}
                               >
                                 <div className="font-light text-[10px] sm:text-[12px]">
                                   {nombre} {apellido}
