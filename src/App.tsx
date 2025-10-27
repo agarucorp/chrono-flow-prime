@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useNavigate } from "react-route
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Toaster } from "@/components/ui/toaster";
+import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { LoginFormSimple } from "./components/LoginFormSimple";
 import { ResetPasswordForm } from "./components/ResetPasswordForm";
 import { TurnoReservation } from "./components/TurnoReservation";
@@ -223,6 +224,7 @@ const App = () => {
     >
       <TooltipProvider>
         <Toaster />
+        <SonnerToaster />
         <BrowserRouter>
           <Routes>
               <Route path="/" element={<Navigate to="/login" replace />} />

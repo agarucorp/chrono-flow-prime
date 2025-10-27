@@ -271,6 +271,12 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
         
+        // Mostrar mensaje de éxito ANTES de cambiar el estado
+        showSuccess('¡Cuenta creada exitosamente!', 'Revisa tu email para confirmar tu cuenta.');
+        
+        // Pequeño delay para que el toast se muestre
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         setError(null);
         setIsRegisterMode(false);
         setCurrentStep(1);
@@ -283,9 +289,19 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           password: "",
           confirmPassword: ""
         });
+        setFieldErrors({
+          firstName: "",
+          lastName: "",
+          phone: "",
+          email: "",
+          confirmEmail: "",
+          password: "",
+          confirmPassword: ""
+        });
         
-        // Mostrar mensaje de éxito
-        showSuccess('¡Cuenta creada exitosamente!', 'Revisa tu email para confirmar tu cuenta.');
+        // Limpiar estados de visibilidad de contraseñas
+        setShowPassword(false);
+        setShowConfirmPassword(false);
         
       } catch (err) {
         console.error('Error inesperado en registro:', err);
