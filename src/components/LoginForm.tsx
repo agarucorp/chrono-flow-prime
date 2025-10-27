@@ -32,6 +32,15 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     password: "",
     confirmPassword: ""
   });
+  const [fieldErrors, setFieldErrors] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    confirmEmail: "",
+    password: "",
+    confirmPassword: ""
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [isRecoverMode, setIsRecoverMode] = useState(false); // ✅ Estado para modo recuperación
@@ -45,6 +54,95 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
       window.location.href = '/dashboard';
     }
   }, [user]);
+
+  // Handler para nombre y apellido: solo letras y espacios
+  const handleNameChange = (field: 'firstName' | 'lastName', value: string) => {
+    const sanitized = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '');
+    setRegisterData(prev => ({ ...prev, [field]: sanitized }));
+    setFieldErrors(prev => ({ ...prev, [field]: "" }));
+  };
+
+  // Handler para teléfono: solo números, máximo 10 caracteres
+  const handlePhoneChange = (value: string) => {
+    const sanitized = value.replace(/[^0-9]/g, '').slice(0, 10);
+    setRegisterData(prev => ({ ...prev, phone: sanitized }));
+    setFieldErrors(prev => ({ ...prev, phone: "" }));
+  };
+
+  // Validar campo al perder el foco (blur)
+  const validateField = (field: string, value: string) => {
+    switch(field) {
+      case 'firstName':
+      case 'lastName':
+        if (!value.trim()) {
+          setFieldErrors(prev => ({ ...prev, [field]: "Campo obligatorio" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, [field]: "" }));
+        }
+        break;
+      case 'phone':
+        if (!value.trim()) {
+          setFieldErrors(prev => ({ ...prev, phone: "Campo obligatorio" }));
+        } else if (value.length !== 10) {
+          setFieldErrors(prev => ({ ...prev, phone: "Debe tener 10 dígitos" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, phone: "" }));
+        }
+        break;
+      case 'email':
+        if (!value.trim()) {
+          setFieldErrors(prev => ({ ...prev, email: "Campo obligatorio" }));
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          setFieldErrors(prev => ({ ...prev, email: "Email inválido" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, email: "" }));
+        }
+        break;
+      case 'confirmEmail':
+        if (!value.trim()) {
+          setFieldErrors(prev => ({ ...prev, confirmEmail: "Campo obligatorio" }));
+        } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
+          setFieldErrors(prev => ({ ...prev, confirmEmail: "Email inválido" }));
+        } else if (value !== registerData.email) {
+          setFieldErrors(prev => ({ ...prev, confirmEmail: "Los emails no coinciden" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, confirmEmail: "" }));
+        }
+        break;
+      case 'password':
+        if (!value) {
+          setFieldErrors(prev => ({ ...prev, password: "Campo obligatorio" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, password: "" }));
+        }
+        break;
+      case 'confirmPassword':
+        if (!value) {
+          setFieldErrors(prev => ({ ...prev, confirmPassword: "Campo obligatorio" }));
+        } else if (value !== registerData.password) {
+          setFieldErrors(prev => ({ ...prev, confirmPassword: "Las contraseñas no coinciden" }));
+        } else {
+          setFieldErrors(prev => ({ ...prev, confirmPassword: "" }));
+        }
+        break;
+    }
+  };
+
+  // Limpiar errores cuando se empiece a escribir
+  const handleFieldChange = (field: string, value: string) => {
+    setRegisterData(prev => ({ ...prev, [field]: value }));
+    if (fieldErrors[field as keyof typeof fieldErrors]) {
+      setFieldErrors(prev => ({ ...prev, [field]: "" }));
+    }
+    // Si cambia el email, limpiar error de confirmEmail
+    if (field === 'email' && fieldErrors.confirmEmail) {
+      setFieldErrors(prev => ({ ...prev, confirmEmail: "" }));
+    }
+    // Si cambia la contraseña, limpiar error de confirmPassword
+    if (field === 'password' && fieldErrors.confirmPassword) {
+      setFieldErrors(prev => ({ ...prev, confirmPassword: "" }));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -79,10 +177,16 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
 
     // Manejo del registro por pasos
     if (currentStep === 1) {
-      // Validación paso 1
-      if (!registerData.firstName || !registerData.lastName || !registerData.phone) {
+      // Validación paso 1: verificar que todos los campos estén completos
+      if (!registerData.firstName.trim() || !registerData.lastName.trim() || !registerData.phone.trim()) {
         showWarning("Campos incompletos", "Por favor complete todos los campos del paso 1");
         setError("Por favor complete todos los campos del paso 1");
+        return;
+      }
+      // Verificar que el teléfono tenga 10 dígitos
+      if (registerData.phone.length !== 10) {
+        showWarning("Teléfono inválido", "El número de teléfono debe tener exactamente 10 dígitos");
+        setError("El número de teléfono debe tener exactamente 10 dígitos");
         return;
       }
       setCurrentStep(2);
@@ -90,7 +194,13 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
     }
 
     if (currentStep === 2) {
-      // Validación paso 2
+      // Validación paso 2: verificar que todos los campos estén completos
+      if (!registerData.email.trim() || !registerData.confirmEmail.trim() || !registerData.password || !registerData.confirmPassword) {
+        showWarning("Campos incompletos", "Por favor complete todos los campos del paso 2");
+        setError("Por favor complete todos los campos del paso 2");
+        return;
+      }
+      // Validación de coincidencias
       if (registerData.email !== registerData.confirmEmail) {
         showWarning("Emails no coinciden", "Los emails ingresados no son iguales");
         setError("Los emails no coinciden");
@@ -131,6 +241,15 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
             setIsRegisterMode(false);
             setCurrentStep(1);
             setRegisterData({
+              firstName: "",
+              lastName: "",
+              phone: "",
+              email: "",
+              confirmEmail: "",
+              password: "",
+              confirmPassword: ""
+            });
+            setFieldErrors({
               firstName: "",
               lastName: "",
               phone: "",
@@ -299,10 +418,11 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="text"
                         placeholder="Nombre"
                         value={registerData.firstName}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, firstName: e.target.value }))}
-                        className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleNameChange('firstName', e.target.value)}
+                        onBlur={(e) => validateField('firstName', e.target.value)}
+                        className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.firstName ? 'border-red-500' : ''}`}
                       />
+                      {fieldErrors.firstName && <p className="text-xs text-red-500">{fieldErrors.firstName}</p>}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="lastName">Apellido</Label>
@@ -311,24 +431,27 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="text"
                         placeholder="Apellido"
                         value={registerData.lastName}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, lastName: e.target.value }))}
-                        className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleNameChange('lastName', e.target.value)}
+                        onBlur={(e) => validateField('lastName', e.target.value)}
+                        className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.lastName ? 'border-red-500' : ''}`}
                       />
+                      {fieldErrors.lastName && <p className="text-xs text-red-500">{fieldErrors.lastName}</p>}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Número de Teléfono</Label>
+                    <Label htmlFor="phone">Número de Teléfono (10 dígitos)</Label>
                     <Input
                       id="phone"
                       type="tel"
-                      placeholder="+54 11 1234-5678"
+                      placeholder="1123456789"
                       value={registerData.phone}
-                      onChange={(e) => setRegisterData(prev => ({ ...prev, phone: e.target.value }))}
-                      className="transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                      required
+                      onChange={(e) => handlePhoneChange(e.target.value)}
+                      onBlur={(e) => validateField('phone', e.target.value)}
+                      className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.phone ? 'border-red-500' : ''}`}
+                      maxLength={10}
                     />
+                    {fieldErrors.phone && <p className="text-xs text-red-500">{fieldErrors.phone}</p>}
                   </div>
                 </>
               ) : (
@@ -343,9 +466,9 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="email"
                         placeholder="Ingrese su email"
                         value={registerData.email}
-                        onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
-                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleFieldChange('email', e.target.value)}
+                        onBlur={(e) => validateField('email', e.target.value)}
+                        className={`pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.email ? 'border-red-500' : ''}`}
                       />
                       {/* ✅ Indicador de email admin - Temporalmente deshabilitado */}
                       {/* {registerData.email && canBeAdmin(registerData.email) && (
@@ -362,6 +485,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         </div>
                       )} */}
                     </div>
+                    {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
                     {/* ✅ Mensaje informativo para emails admin - Temporalmente deshabilitado */}
                     {/* {registerData.email && canBeAdmin(registerData.email) && (
                       <p className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded-md border border-yellow-200">
@@ -379,11 +503,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="email"
                         placeholder="Confirme su email"
                         value={registerData.confirmEmail}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, confirmEmail: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleFieldChange('confirmEmail', e.target.value)}
+                        onBlur={(e) => validateField('confirmEmail', e.target.value)}
+                        className={`pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmEmail ? 'border-red-500' : ''}`}
                       />
                     </div>
+                    {fieldErrors.confirmEmail && <p className="text-xs text-red-500">{fieldErrors.confirmEmail}</p>}
                   </div>
                   
                   <div className="space-y-2">
@@ -395,11 +520,12 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type="password"
                         placeholder="Ingrese su contraseña"
                         value={registerData.password}
-                        onChange={(e) => setRegisterData(prev => ({ ...prev, password: e.target.value }))}
-                        className="pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleFieldChange('password', e.target.value)}
+                        onBlur={(e) => validateField('password', e.target.value)}
+                        className={`pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.password ? 'border-red-500' : ''}`}
                       />
                     </div>
+                    {fieldErrors.password && <p className="text-xs text-red-500">{fieldErrors.password}</p>}
                   </div>
                   
                   <div className="space-y-2">
@@ -411,9 +537,9 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         type={showPassword ? "text" : "password"}
                         placeholder="Confirme su contraseña"
                         value={registerData.confirmPassword}
-                        onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
-                        className="pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50"
-                        required
+                        onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
+                        onBlur={(e) => validateField('confirmPassword', e.target.value)}
+                        className={`pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmPassword ? 'border-red-500' : ''}`}
                       />
                       <button
                         type="button"
@@ -427,6 +553,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         )}
                       </button>
                     </div>
+                    {fieldErrors.confirmPassword && <p className="text-xs text-red-500">{fieldErrors.confirmPassword}</p>}
                   </div>
                 </>
               )}
@@ -488,6 +615,24 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         setIsRegisterMode(false);
                         setCurrentStep(1);
                         setError(null);
+                        setRegisterData({
+                          firstName: "",
+                          lastName: "",
+                          phone: "",
+                          email: "",
+                          confirmEmail: "",
+                          password: "",
+                          confirmPassword: ""
+                        });
+                        setFieldErrors({
+                          firstName: "",
+                          lastName: "",
+                          phone: "",
+                          email: "",
+                          confirmEmail: "",
+                          password: "",
+                          confirmPassword: ""
+                        });
                       }}
                       className="text-gray-300 hover:underline font-medium"
                     >
@@ -502,6 +647,24 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                         setIsRegisterMode(true);
                         setCurrentStep(1);
                         setError(null);
+                        setRegisterData({
+                          firstName: "",
+                          lastName: "",
+                          phone: "",
+                          email: "",
+                          confirmEmail: "",
+                          password: "",
+                          confirmPassword: ""
+                        });
+                        setFieldErrors({
+                          firstName: "",
+                          lastName: "",
+                          phone: "",
+                          email: "",
+                          confirmEmail: "",
+                          password: "",
+                          confirmPassword: ""
+                        });
                       }}
                       className="text-primary hover:underline font-medium"
                     >
