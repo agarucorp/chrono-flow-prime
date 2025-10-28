@@ -1,0 +1,43 @@
+name: Envíos mensuales
+
+on:
+  schedule:
+    # 24 a las 09:00 America/Buenos_Aires → generar cuotas del mes siguiente
+    - cron: '0 12 24 * *' # 09:00 ART = 12:00 UTC
+    # 25 a las 09:00 America/Buenos_Aires → enviar emails
+    - cron: '0 12 25 * *' # 09:00 ART = 12:00 UTC
+  workflow_dispatch:
+
+env:
+  SUPABASE_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+  SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+
+jobs:
+  mensual:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Seleccionar acción según día del mes
+        id: select
+        run: |
+          DIA=$(date -u +%d)
+          if [ "$DIA" = "24" ]; then echo "accion=generar" >> $GITHUB_OUTPUT; else echo "accion=enviar" >> $GITHUB_OUTPUT; fi
+
+      - name: Generar cuotas (24)
+        if: steps.select.outputs.accion == 'generar'
+        run: |
+          curl -sS -X POST "$SUPABASE_URL/functions/v1/generar-cuotas" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+      - name: Enviar cobros (25)
+        if: steps.select.outputs.accion == 'enviar'
+        run: |
+          curl -sS -X POST "$SUPABASE_URL/functions/v1/enviar-cobros-mensuales" \
+            -H "Authorization: Bearer $SUPABASE_ANON_KEY" \
+            -H "apikey: $SUPABASE_ANON_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{}'
+
+
