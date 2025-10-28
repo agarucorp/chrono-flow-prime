@@ -3,7 +3,12 @@
 
 import { Resend } from 'resend';
 
-const resend = new Resend('re_123456789'); // Reemplazar con tu API key de Resend
+const apiKey = process.env.RESEND_API_KEY;
+if (!apiKey) {
+  console.error('Falta RESEND_API_KEY en el entorno');
+  process.exit(1);
+}
+const resend = new Resend(apiKey);
 
 const emailData = {
   from: 'Chrono Flow <noreply@chronoflow.com>',
