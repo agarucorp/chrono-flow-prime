@@ -10,10 +10,13 @@ type CuotaMensual = {
   anio: number;
   mes: number;
   clases_previstas: number | null;
+  clases_a_cobrar: number | null;
   tarifa_unitaria: number | null;
   monto_total: number | null;
   monto_con_descuento: number | null;
   descuento_porcentaje: number | null;
+  clases_canceladas_anticipacion: number | null;
+  clases_canceladas_tardia: number | null;
   email: string | null;
   first_name: string | null;
   last_name: string | null;
@@ -40,6 +43,9 @@ function renderEmailHTML(data: {
   anio: number;
   valorClase?: number | null;
   clasesReservadas?: number | null;
+  clasesACobrar?: number | null;
+  cancelacionesAnticipacion?: number | null;
+  cancelacionesTardia?: number | null;
   descuentoPorcentaje?: number | null;
   descuentoMonto?: number | null;
   montoTotal: number;
@@ -52,6 +58,9 @@ function renderEmailHTML(data: {
     anio,
     valorClase,
     clasesReservadas,
+    clasesACobrar,
+    cancelacionesAnticipacion,
+    cancelacionesTardia,
     descuentoPorcentaje,
     descuentoMonto,
     montoTotal,
@@ -99,7 +108,10 @@ function renderEmailHTML(data: {
         <div class="summary-box">
           <div class="summary-title">Detalle de tu cuota mensual:</div>
           ${valorClase ? `<div class=\"summary-item\"><span class=\"summary-label\">Valor por clase:</span><span class=\"summary-value\">$${Number(valorClase).toLocaleString('es-AR')}</span></div>` : ``}
-          ${clasesReservadas != null ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases programadas:</span><span class=\"summary-value\">${clasesReservadas} clase(s)</span></div>` : ``}
+          ${clasesReservadas != null && clasesReservadas > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases previstas:</span><span class=\"summary-value\">${clasesReservadas} clase(s)</span></div>` : ``}
+          ${cancelacionesAnticipacion != null && cancelacionesAnticipacion > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Cancelaciones anticipadas:</span><span class=\"summary-value\">-${cancelacionesAnticipacion} clase(s)</span></div>` : ``}
+          ${cancelacionesTardia != null && cancelacionesTardia > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Cancelaciones tardías:</span><span class=\"summary-value\">${cancelacionesTardia} clase(s) (se cobran)</span></div>` : ``}
+          ${clasesACobrar != null ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases a cobrar:</span><span class=\"summary-value\">${clasesACobrar} clase(s)</span></div>` : ``}
           ${descuentoPorcentaje ? `<div class=\"summary-item\"><span class=\"summary-label\">Descuento (${descuentoPorcentaje}%):</span><span class=\"summary-value\">-$${Number(descuentoMonto || 0).toLocaleString('es-AR')}</span></div>` : ``}
           <div class="summary-item"><span class="summary-label">Total a abonar:</span><span class="summary-value total-amount">$${Number(montoTotal).toLocaleString('es-AR')}</span></div>
         </div>
@@ -126,7 +138,7 @@ function buildSubject(mesNombre: string, anio: number) {
 async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, anio: number, mes: number) {
   const { data, error } = await supabase
     .from("cuotas_mensuales")
-    .select("usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje")
+    .select("usuario_id, anio, mes, clases_a_cobrar, clases_previstas, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, clases_canceladas_anticipacion, clases_canceladas_tardia")
     .eq("anio", anio)
     .eq("mes", mes);
   if (error) throw error;
@@ -148,10 +160,13 @@ async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, an
       anio: row.anio,
       mes: row.mes,
       clases_previstas: row.clases_previstas,
+      clases_a_cobrar: row.clases_a_cobrar,
       tarifa_unitaria: row.tarifa_unitaria,
       monto_total: monto,
       monto_con_descuento: row.monto_con_descuento,
       descuento_porcentaje: row.descuento_porcentaje,
+      clases_canceladas_anticipacion: row.clases_canceladas_anticipacion,
+      clases_canceladas_tardia: row.clases_canceladas_tardia,
       email,
       first_name: prof?.first_name ?? null,
       last_name: prof?.last_name ?? null,
@@ -179,7 +194,7 @@ async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: n
     const nombreCompleto = [row.first_name, row.last_name].filter(Boolean).join(" ") || "Alumno";
     const montoBase = Number(row.monto_con_descuento ?? row.monto_total ?? 0);
     const descuentoMonto = row.descuento_porcentaje
-      ? Number(((row.tarifa_unitaria || 0) * (row.clases_previstas || 0)) * (row.descuento_porcentaje / 100))
+      ? Number(((row.tarifa_unitaria || 0) * (row.clases_a_cobrar || row.clases_previstas || 0)) * (row.descuento_porcentaje / 100))
       : 0;
 
     const html = renderEmailHTML({
@@ -188,6 +203,9 @@ async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: n
       anio: period.anio,
       valorClase: row.tarifa_unitaria,
       clasesReservadas: row.clases_previstas,
+      clasesACobrar: row.clases_a_cobrar,
+      cancelacionesAnticipacion: row.clases_canceladas_anticipacion,
+      cancelacionesTardia: row.clases_canceladas_tardia,
       descuentoPorcentaje: row.descuento_porcentaje || undefined,
       descuentoMonto,
       montoTotal: montoBase,

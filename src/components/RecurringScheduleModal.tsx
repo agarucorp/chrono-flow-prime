@@ -270,6 +270,22 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       } else {
       }
 
+      // Enviar email de bienvenida con cuota del mes actual
+      try {
+        const { error: emailError } = await supabase.functions.invoke('enviar-email-bienvenida', {
+          body: {
+            usuario_id: user?.id,
+            mes: mesActual,
+            anio: anioActual
+          }
+        });
+        if (emailError) {
+          console.warn('⚠️ No se pudo enviar email de bienvenida:', emailError);
+        }
+      } catch (err) {
+        console.warn('⚠️ Error enviando email de bienvenida:', err);
+      }
+
       // Notificar al panel para recargar "Mis Clases"
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
 
