@@ -111,23 +111,36 @@ export const useAdmin = () => {
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
         .select(`
-          turno_id,
-          dias_semana,
-          turnos (
-            nombre
-          )
+          id,
+          dia_semana,
+          hora_inicio,
+          hora_fin
         `)
-        .eq('usuario_id', userId);
+        .eq('usuario_id', userId)
+        .eq('activo', true);
 
       if (error) {
         console.warn('Error obteniendo horarios:', error.message);
         return [];
       }
 
-      return data?.map(hr => ({
-        turno_nombre: (hr.turnos as any)?.nombre || 'Turno sin nombre',
-        dias_semana: hr.dias_semana || []
-      })) || [];
+      // Mapear números de día a nombres
+      const diasMap: Record<number, string> = {
+        1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves',
+        5: 'Viernes', 6: 'Sábado', 7: 'Domingo'
+      };
+
+      // Agrupar por día
+      const diasUnicos = new Set<string>();
+      data?.forEach(hr => {
+        const diaNombre = diasMap[hr.dia_semana] || '';
+        if (diaNombre) diasUnicos.add(diaNombre);
+      });
+
+      return [{
+        turno_nombre: 'Horarios recurrentes',
+        dias_semana: Array.from(diasUnicos)
+      }];
     } catch (err) {
       console.error('Error inesperado obteniendo horarios:', err);
       return [];

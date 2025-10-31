@@ -10,18 +10,13 @@ import {
   Search,
   Filter,
   MoreHorizontal,
-  Edit,
   Trash2,
   Eye,
-  EyeOff,
   Settings,
   Clock,
   LogOut,
   X,
-  Wallet,
-  DollarSign,
-  Save,
-  XCircle
+  Wallet
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -79,8 +74,6 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
-  const [horariosRecurrentes, setHorariosRecurrentes] = useState<any[]>([]);
-  const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'pendiente_first' | 'pagado_first'>('default');
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
   const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number }>>([]);
@@ -88,10 +81,6 @@ export default function Admin() {
   const [isUpdatingPayment, setIsUpdatingPayment] = useState(false);
   const skipNextReload = useRef(false);
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
-  const [editingTarifa, setEditingTarifa] = useState(false);
-  const [nuevaTarifa, setNuevaTarifa] = useState<string>('');
-  const [tarifaActual, setTarifaActual] = useState<number | null>(null);
-  const [loadingTarifa, setLoadingTarifa] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [selectedUserForHistory, setSelectedUserForHistory] = useState<string | null>(null);
   const [userHistory, setUserHistory] = useState<Array<{ anio: number; mes: string; monto: number; estado: string }>>([]);
@@ -201,127 +190,6 @@ export default function Admin() {
     });
   };
 
-  // Función para cargar tarifa del usuario
-  const cargarTarifaUsuario = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .rpc('obtener_tarifa_usuario', { p_usuario_id: userId });
-      
-      if (error) {
-        return;
-      }
-      
-      if (data && data.length > 0) {
-        setTarifaActual(data[0].tarifa_efectiva);
-        setNuevaTarifa(data[0].tarifa_efectiva.toString());
-      }
-    } catch (error) {
-      // Error silencioso
-    }
-  };
-
-  // Función para guardar tarifa personalizada
-  const guardarTarifaUsuario = async () => {
-    if (!selectedUser) return;
-    
-    const tarifaNumero = parseFloat(nuevaTarifa);
-    
-    if (isNaN(tarifaNumero) || tarifaNumero < 0) {
-      showError('Error', 'Por favor ingresa una tarifa válida');
-      return;
-    }
-    
-    setLoadingTarifa(true);
-    const loadingToast = showLoading('Actualizando tarifa...');
-    
-    try {
-      const { data, error } = await supabase
-        .rpc('cambiar_tarifa_usuario', {
-          p_usuario_afectado: selectedUser.id,
-          p_nueva_tarifa: tarifaNumero,
-          p_motivo_cambio: 'Actualización desde panel admin',
-          p_usuario_modificador: user?.id
-        });
-      
-      dismissToast(loadingToast);
-      
-      if (error) {
-        showError('Error', 'No se pudo actualizar la tarifa');
-        return;
-      }
-      
-      if (data && data.length > 0 && data[0].exito) {
-        showSuccess('Tarifa actualizada', data[0].mensaje);
-        setTarifaActual(tarifaNumero);
-        setEditingTarifa(false);
-        
-        // Recargar datos del usuario
-        await fetchAllUsers();
-      } else {
-        showError('Error', data?.[0]?.mensaje || 'No se pudo actualizar la tarifa');
-      }
-    } catch (error) {
-      dismissToast(loadingToast);
-      showError('Error', 'Ocurrió un error al actualizar la tarifa');
-    } finally {
-      setLoadingTarifa(false);
-    }
-  };
-
-  // Función para cargar horarios recurrentes del usuario
-  const cargarHorariosRecurrentes = async (userId: string) => {
-    setLoadingHorarios(true);
-    try {
-      const { data, error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .select(`
-          id,
-          dia_semana,
-          hora_inicio,
-          hora_fin,
-          activo,
-          fecha_inicio,
-          fecha_fin,
-          created_at,
-          updated_at
-        `)
-        .eq('usuario_id', userId)
-        .order('dia_semana', { ascending: true })
-        .order('hora_inicio', { ascending: true });
-
-      if (error) {
-        showError('Error', 'No se pudieron cargar los horarios recurrentes');
-        return;
-      }
-
-      setHorariosRecurrentes(data || []);
-    } catch (error) {
-      showError('Error', 'Error inesperado al cargar horarios');
-    } finally {
-      setLoadingHorarios(false);
-    }
-  };
-
-  // Función para cargar datos actualizados del usuario
-  const cargarDatosUsuario = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name, phone')
-        .eq('id', userId)
-        .single();
-
-      if (error) {
-        return;
-      }
-
-      // Establecer directamente el usuario seleccionado con los datos más recientes
-      setSelectedUser(data);
-    } catch (error) {
-      // Error silencioso
-    }
-  };
-
   // Función para obtener el nombre del día (BD usa 1=Lun..7=Dom)
   const getDiaNombre = (diaSemana: number) => {
     const dias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
@@ -338,18 +206,31 @@ export default function Admin() {
 
   // Función para obtener días de asistencia del usuario
   const getDiasAsistencia = (userId: string) => {
-    const horariosUsuario = horariosRecurrentes.filter(h => h.usuario_id === userId && h.activo);
-    if (horariosUsuario.length === 0) return '—';
-    
-    // Días únicos normalizados (BD: 1=Lun..7=Dom). Queremos orden Lun..Dom
-    const diasSet = new Set<number>();
-    for (const h of horariosUsuario) {
-      const d = typeof h.dia_semana === 'number' ? h.dia_semana : parseInt(String(h.dia_semana));
-      if (!Number.isNaN(d)) diasSet.add(d);
+    const user = allUsers.find(u => u.id === userId);
+    if (!user || !user.horarios_recurrentes || user.horarios_recurrentes.length === 0) {
+      return '—';
     }
-    const diasUnicos = Array.from(diasSet);
-    const orderKey = (d: number) => (d === 7 ? 7 : d); // ya queda 1..7 (Lun..Dom)
-    diasUnicos.sort((a, b) => orderKey(a) - orderKey(b));
+    
+    // Extraer todos los días únicos de todos los horarios
+    const diasSet = new Set<string>();
+    for (const h of user.horarios_recurrentes) {
+      if (h.dias_semana && Array.isArray(h.dias_semana)) {
+        h.dias_semana.forEach(dia => diasSet.add(dia));
+      }
+    }
+    
+    if (diasSet.size === 0) return '—';
+    
+    // Mapear días de texto a números para ordenar
+    const diaMap: Record<string, number> = {
+      'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 
+      'Viernes': 5, 'Sábado': 6, 'Domingo': 7
+    };
+    
+    const diasUnicos = Array.from(diasSet)
+      .map(dia => diaMap[dia] || 0)
+      .filter(d => d !== 0)
+      .sort((a, b) => a - b);
 
     return diasUnicos.map(d => getDiaCorto(d)).join(', ');
   };
@@ -417,12 +298,32 @@ export default function Admin() {
   };
   
 
+  // Sincronizar phones desde auth.users al cargar Admin
+  useEffect(() => {
+    const syncPhones = async () => {
+      if (!isAdmin) return;
+      
+      try {
+        const { data, error } = await supabase.rpc('sync_phones_from_auth');
+        if (error) {
+          console.warn('No se pudo sincronizar phones automáticamente:', error.message);
+        } else if (data && data.success && data.updated_count > 0) {
+          console.log(`✅ ${data.updated_count} teléfonos sincronizados`);
+          fetchAllUsers(); // Recargar usuarios para mostrar los cambios
+        }
+      } catch (err) {
+        console.warn('Error ejecutando sync de phones:', err);
+      }
+    };
+    
+    syncPhones();
+  }, [isAdmin, fetchAllUsers]);
+
   // Cargar datos al montar el componente y refrescar verificación de admin
   useEffect(() => {
     if (isAdmin) {
       fetchAllUsers();
       fetchAdminUsers();
-      cargarTodosLosHorariosRecurrentes();
     }
   }, [isAdmin, fetchAllUsers, fetchAdminUsers]);
 
@@ -437,7 +338,10 @@ export default function Admin() {
     };
 
     const handleClasesUpdate = () => {
-      // El useEffect principal se encargará del recálculo
+      // Recargar usuarios cuando cambien clases o turnos para obtener datos actualizados
+      if (isAdmin) {
+        fetchAllUsers();
+      }
     };
 
     window.addEventListener('ausenciasAdmin:updated', handleAusenciasUpdate);
@@ -451,25 +355,7 @@ export default function Admin() {
       window.removeEventListener('turnosCancelados:updated', handleClasesUpdate);
       window.removeEventListener('turnosVariables:updated', handleClasesUpdate);
     };
-  }, [selectedYear, selectedMonth]);
-
-  // Función para cargar todos los horarios recurrentes de todos los usuarios
-  const cargarTodosLosHorariosRecurrentes = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .select('*')
-        .eq('activo', true);
-
-      if (error) {
-        return;
-      }
-
-      setHorariosRecurrentes(data || []);
-    } catch (error) {
-      // Error silencioso
-    }
-  };
+  }, [selectedYear, selectedMonth, isAdmin, fetchAllUsers]);
 
   // Refrescar verificación de admin cuando el componente se monta
   useEffect(() => {
@@ -878,7 +764,6 @@ export default function Admin() {
                                   <DropdownMenuItem onClick={() => { 
                                     setSelectedUser(user); 
                                     setShowUserDetails(true); 
-                                    cargarTarifaUsuario(user.id);
                                   }}>
                                     <Eye className="w-4 h-4 mr-2" />
                                     Ver Detalles
@@ -926,11 +811,9 @@ export default function Admin() {
                         <div 
                           key={user.id} 
                           className="flex items-center justify-between py-3 px-4 hover:bg-muted/50 transition-colors cursor-pointer"
-                          onClick={async () => { 
+                          onClick={() => { 
+                            setSelectedUser(user);
                             setShowUserDetails(true);
-                            await cargarDatosUsuario(user.id);
-                            cargarHorariosRecurrentes(user.id);
-                            cargarTarifaUsuario(user.id);
                           }}
                         >
                           <div className="min-w-0 flex-1">
@@ -1225,10 +1108,6 @@ export default function Admin() {
               type="button"
               onClick={() => { 
                 setShowUserDetails(false); 
-                setHorariosRecurrentes([]); 
-                setEditingTarifa(false);
-                setNuevaTarifa('');
-                setTarifaActual(null);
               }}
               aria-label="Cerrar"
               className="absolute right-2 top-2 text-muted-foreground hover:text-foreground"
@@ -1254,115 +1133,48 @@ export default function Admin() {
                 </p>
               </div>
               
-              {/* Sección de Tarifa */}
-              <div className="border-t pt-4">
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-sm font-medium flex items-center gap-2">
-                    <DollarSign className="h-4 w-4" />
-                    Tarifa Personalizada
-                  </label>
-                  {!editingTarifa && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setEditingTarifa(true)}
-                      className="h-8 text-xs"
-                    >
-                      <Edit className="h-3 w-3 mr-1" />
-                      Editar
-                    </Button>
-                  )}
-                </div>
-                
-                {editingTarifa ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm text-muted-foreground">$</span>
-                      <Input
-                        type="number"
-                        value={nuevaTarifa}
-                        onChange={(e) => setNuevaTarifa(e.target.value)}
-                        placeholder="0.00"
-                        step="0.01"
-                        min="0"
-                        className="flex-1"
-                        disabled={loadingTarifa}
-                      />
-                      <span className="text-sm text-muted-foreground">ARS</span>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        onClick={guardarTarifaUsuario}
-                        disabled={loadingTarifa}
-                        className="flex-1"
-                      >
-                        {loadingTarifa ? (
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        ) : (
-                          <>
-                            <Save className="h-3 w-3 mr-1" />
-                            Guardar
-                          </>
-                        )}
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setEditingTarifa(false);
-                          setNuevaTarifa(tarifaActual?.toString() || '');
-                        }}
-                        disabled={loadingTarifa}
-                      >
-                        <XCircle className="h-3 w-3 mr-1" />
-                        Cancelar
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    <p className="text-lg font-semibold text-primary">
-                      ${tarifaActual?.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) || '0.00'}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {tarifaActual ? 'Tarifa personalizada activa' : 'Usando tarifa del sistema'}
-                    </p>
-                  </div>
-                )}
-              </div>
+
               
               <div>
                 <label className="text-sm font-medium">Días de Asistencia</label>
-                {loadingHorarios ? (
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-                    <span className="text-sm text-muted-foreground">Cargando horarios...</span>
-                  </div>
-                ) : (
-                  (() => {
-                    const userId = selectedUser?.id;
-                    const userHorarios = (horariosRecurrentes || []).filter(h => h.usuario_id === userId && h.activo);
-                    if (userHorarios.length === 0) {
+                {(() => {
+                    if (!selectedUser || !selectedUser.horarios_recurrentes || selectedUser.horarios_recurrentes.length === 0) {
                       return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
                     }
-                    const diasSet = new Set<number>();
-                    for (const h of userHorarios) {
-                      const d = typeof h.dia_semana === 'number' ? h.dia_semana : parseInt(String(h.dia_semana));
-                      if (!Number.isNaN(d)) diasSet.add(d);
+                    
+                    // Extraer todos los días únicos de todos los horarios
+                    const diasSet = new Set<string>();
+                    for (const h of selectedUser.horarios_recurrentes) {
+                      if (h.dias_semana && Array.isArray(h.dias_semana)) {
+                        h.dias_semana.forEach(dia => diasSet.add(dia));
+                      }
                     }
-                    const dias = Array.from(diasSet).sort((a,b) => (a===7?7:a) - (b===7?7:b));
+                    
+                    if (diasSet.size === 0) {
+                      return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
+                    }
+                    
+                    // Mapear días de texto a números para ordenar
+                    const diaMap: Record<string, number> = {
+                      'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 
+                      'Viernes': 5, 'Sábado': 6, 'Domingo': 7
+                    };
+                    
+                    const dias = Array.from(diasSet)
+                      .map(dia => diaMap[dia] || 0)
+                      .filter(d => d !== 0)
+                      .sort((a, b) => a - b);
+                    
                     return (
                       <div className="flex flex-wrap gap-2">
                         {dias.map(d => (
                           <span key={d} className="px-2 py-1 rounded bg-muted text-sm">
                             {getDiaCorto(d)}
                           </span>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
                     );
-                  })()
-                )}
+                  })()}
               </div>
             </CardContent>
           </Card>
