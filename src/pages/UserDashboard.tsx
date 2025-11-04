@@ -36,6 +36,7 @@ const UserDashboard = () => {
                 <TabsList>
                   <TabsTrigger value="reservar">Reservar</TabsTrigger>
                   <TabsTrigger value="mis-turnos">Ver</TabsTrigger>
+                  <TabsTrigger value="balance">Balance</TabsTrigger>
                 </TabsList>
                 <TabsContent value="reservar" className="mt-4">
                   <div className="p-4 text-center text-muted-foreground">
@@ -45,6 +46,59 @@ const UserDashboard = () => {
                 <TabsContent value="mis-turnos" className="mt-4">
                   <div className="p-4 text-center text-muted-foreground">
                     Mis turnos reservados (próximamente)
+                  </div>
+                </TabsContent>
+                <TabsContent value="balance" className="mt-4">
+                  <div className="space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Mes Actual</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valor por clase</span>
+                          <span>$2.500</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Clases programadas</span>
+                          <span>8</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Descuento</span>
+                          <span>10% (-$2.000)</span>
+                        </div>
+                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                          <span>Total</span>
+                          <span className="text-green-600">$18.000</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">Cobro: 01/11/2025</div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-base">Mes Siguiente</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valor por clase</span>
+                          <span>$2.500</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Clases previstas</span>
+                          <span>10</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Descuento</span>
+                          <span>0% (-$0)</span>
+                        </div>
+                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                          <span>Total</span>
+                          <span className="text-green-600">$25.000</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">Se actualiza en tiempo real ante cambios.</div>
+                      </CardContent>
+                    </Card>
                   </div>
                 </TabsContent>
               </Tabs>

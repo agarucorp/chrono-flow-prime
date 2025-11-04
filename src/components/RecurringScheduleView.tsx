@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -934,67 +934,16 @@ export const RecurringScheduleView = () => {
               );
             })()}
           </button>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('nav:balance'))}
+            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors text-muted-foreground hover:text-foreground`}
+          >
+            Balance
+          </button>
         </div>
         </div>
 
-        {/* Mobile bottom floating navbar (unified like desktop) */}
-        <div className="block sm:hidden">
-          <nav className="fixed bottom-4 left-0 right-0 z-40 pointer-events-none">
-            <div className="max-w-7xl mx-auto px-6 flex justify-center">
-              <div className="flex items-center gap-2 bg-black/40 backdrop-blur-lg rounded-full shadow-lg pointer-events-auto px-3 py-1.5">
-                {/* Mis Clases */}
-                <button
-                  onClick={() => handleViewChange('mis-clases')}
-                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'mis-clases' ? 'text-white' : 'text-muted-foreground'
-                  }`}
-                  aria-current={activeView === 'mis-clases'}
-                >
-                  <Dumbbell className={`h-5 w-5 ${activeView === 'mis-clases' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                  {activeView === 'mis-clases' && <span className="leading-none">Mis Clases</span>}
-                  {activeView === 'mis-clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                </button>
-                {/* Vacantes */}
-                <button
-                  onClick={() => handleViewChange('turnos-disponibles')}
-                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'turnos-disponibles' ? 'text-white' : 'text-muted-foreground'
-                  }`}
-                  aria-current={activeView === 'turnos-disponibles'}
-                >
-                  <div className="relative">
-                    <Zap className={`h-5 w-5 ${activeView === 'turnos-disponibles' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                    {(() => {
-                      const turnosDisponibles = turnosCancelados.filter(turno => {
-                        const fecha = new Date(turno.turno_fecha);
-                        return !turno.reservado && !estaClaseBloqueada(fecha, turno.clase_numero);
-                      });
-                      return turnosDisponibles.length > 0 && (
-                        <Badge variant="default" className="absolute -top-1 -right-2 h-4 w-4 p-0 flex items-center justify-center text-[8px] font-bold">
-                          {turnosDisponibles.length}
-                        </Badge>
-                      );
-                    })()}
-                  </div>
-                  {activeView === 'turnos-disponibles' && <span className="leading-none">Vacantes</span>}
-                  {activeView === 'turnos-disponibles' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                </button>
-                {/* Perfil */}
-                <button
-                  onClick={() => handleViewChange('perfil')}
-                  className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                    activeView === 'perfil' ? 'text-white' : 'text-muted-foreground'
-                  }`}
-                  aria-current={activeView === 'perfil'}
-                >
-                  <UserIcon className={`h-5 w-5 ${activeView === 'perfil' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                  {activeView === 'perfil' && <span className="leading-none">Perfil</span>}
-                  {activeView === 'perfil' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                </button>
-              </div>
-            </div>
-          </nav>
-        </div>
+        {/* Navbar móvil flotante se muestra globalmente en Dashboard */}
       </div>
 
       {/* Contenido basado en la vista activa */}

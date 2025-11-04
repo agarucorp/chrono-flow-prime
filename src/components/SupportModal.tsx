@@ -55,7 +55,7 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-xs sm:text-sm font-mono truncate">{contactEmail}</p>
+                    <p className="text-xs sm:text-sm truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>{contactEmail}</p>
                   </div>
                 </div>
                 <Button
