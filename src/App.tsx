@@ -22,6 +22,7 @@ import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
+import { useUserBalance } from "./hooks/useUserBalance";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -120,6 +121,7 @@ const Dashboard = () => {
   const mesSiguienteNombre = getMonthNameEs(mesSiguiente);
   const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
+  const { currentMonth: balanceCurrent, nextMonth: balanceNext, loading: balanceLoading } = useUserBalance();
 
   // Sincronizar pestaña con query param ?tab=
   useEffect(() => {
@@ -309,55 +311,110 @@ const Dashboard = () => {
 
                 {balanceSubView === 'balance' && (
                   <div className="space-y-4">
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold capitalize">Cuota {mesActualNombre}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Valor por clase</span>
-                          <span className="font-medium">$2.500</span>
+                    {balanceLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <div className="text-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                          <p className="text-muted-foreground">Cargando balance...</p>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Cantidad de clases</span>
-                          <span className="font-medium">8</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Descuento</span>
-                          <span className="font-medium">10% (-$2.000)</span>
-                        </div>
-                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                          <span>Total</span>
-                          <span className="text-green-600">$18.000</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">Cobro: 01/11/2025</div>
-                      </CardContent>
-                    </Card>
+                      </div>
+                    ) : (
+                      <>
+                        {/* Mes Actual */}
+                        {balanceCurrent && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-lg font-semibold capitalize">
+                                Cuota {balanceCurrent.mes} {balanceCurrent.anio}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Valor por clase</span>
+                                <span className="font-medium">
+                                  ${balanceCurrent.precioUnitario.toLocaleString('es-AR')}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Cantidad de clases</span>
+                                <span className="font-medium">{balanceCurrent.clases}</span>
+                              </div>
+                              {balanceCurrent.descuentoPorcentaje > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Descuento</span>
+                                  <span className="font-medium text-green-600">
+                                    {balanceCurrent.descuentoPorcentaje}% (-${balanceCurrent.descuento.toLocaleString('es-AR')})
+                                  </span>
+                                </div>
+                              )}
+                              <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                                <span>Total</span>
+                                <span className="text-green-600">
+                                  ${balanceCurrent.totalConDescuento.toLocaleString('es-AR')}
+                                </span>
+                              </div>
+                              {balanceCurrent.estadoPago && (
+                                <div className="text-xs text-muted-foreground">
+                                  Estado: {balanceCurrent.estadoPago === 'pagado' ? '✅ Pagado' : balanceCurrent.estadoPago === 'abonada' ? '💰 Abonada' : '⏳ Pendiente'}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
 
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="text-lg font-semibold capitalize">Cuota {mesSiguienteNombre}</CardTitle>
-                      </CardHeader>
-                      <CardContent className="space-y-3 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Valor por clase</span>
-                          <span className="font-medium">$2.500</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Cantidad de clases</span>
-                          <span className="font-medium">10</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Descuento</span>
-                          <span className="font-medium">0% (-$0)</span>
-                        </div>
-                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                          <span>Total</span>
-                          <span className="text-green-600">$25.000</span>
-                        </div>
-                        <div className="text-xs text-muted-foreground">Se actualiza en tiempo real ante cambios.</div>
-                      </CardContent>
-                    </Card>
+                        {/* Próximo Mes */}
+                        {balanceNext && (
+                          <Card>
+                            <CardHeader>
+                              <CardTitle className="text-lg font-semibold capitalize">
+                                Cuota {balanceNext.mes} {balanceNext.anio}
+                              </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Valor por clase</span>
+                                <span className="font-medium">
+                                  ${balanceNext.precioUnitario.toLocaleString('es-AR')}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Cantidad de clases</span>
+                                <span className="font-medium">{balanceNext.clases}</span>
+                              </div>
+                              {balanceNext.descuentoPorcentaje > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Descuento</span>
+                                  <span className="font-medium text-green-600">
+                                    {balanceNext.descuentoPorcentaje}% (-${balanceNext.descuento.toLocaleString('es-AR')})
+                                  </span>
+                                </div>
+                              )}
+                              <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                                <span>Total</span>
+                                <span className="text-green-600">
+                                  ${balanceNext.totalConDescuento.toLocaleString('es-AR')}
+                                </span>
+                              </div>
+                              {balanceNext.clases === 0 && !balanceNext.estadoPago && (
+                                <div className="text-xs text-muted-foreground">
+                                  Se actualiza en tiempo real ante cambios.
+                                </div>
+                              )}
+                              {balanceNext.clases > 0 && !balanceNext.estadoPago && (
+                                <div className="text-xs text-muted-foreground">
+                                  Estimación basada en horarios recurrentes y turnos variables.
+                                </div>
+                              )}
+                              {balanceNext.estadoPago && (
+                                <div className="text-xs text-muted-foreground">
+                                  Estado: {balanceNext.estadoPago === 'pagado' ? '✅ Pagado' : balanceNext.estadoPago === 'abonada' ? '💰 Abonada' : '⏳ Pendiente'}
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </>
+                    )}
                   </div>
                 )}
               </div>
