@@ -119,6 +119,7 @@ const Dashboard = () => {
   const mesSiguiente = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const mesSiguienteNombre = getMonthNameEs(mesSiguiente);
   const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
+  const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
 
   // Sincronizar pestaña con query param ?tab=
   useEffect(() => {
@@ -257,57 +258,108 @@ const Dashboard = () => {
 
             {activeTab === 'balance' && (
               <div className="mt-4">
-                <div className="space-y-4">
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold capitalize">Cuota {mesActualNombre}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Valor por clase</span>
-                        <span className="font-medium">$2.500</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Cantidad de clases</span>
-                        <span className="font-medium">8</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Descuento</span>
-                        <span className="font-medium">10% (-$2.000)</span>
-                      </div>
-                      <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                        <span>Total</span>
-                        <span className="text-green-600">$18.000</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">Cobro: 01/11/2025</div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-lg font-semibold capitalize">Cuota {mesSiguienteNombre}</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-3 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Valor por clase</span>
-                        <span className="font-medium">$2.500</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Cantidad de clases</span>
-                        <span className="font-medium">10</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">Descuento</span>
-                        <span className="font-medium">0% (-$0)</span>
-                      </div>
-                      <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                        <span>Total</span>
-                        <span className="text-green-600">$25.000</span>
-                      </div>
-                      <div className="text-xs text-muted-foreground">Se actualiza en tiempo real ante cambios.</div>
-                    </CardContent>
-                  </Card>
+                {/* Subnavbar igual que en RecurringScheduleView */}
+                <div className="hidden sm:flex justify-center mb-4">
+                  <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
+                    <button
+                      onClick={() => setBalanceSubView('mis-clases')}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        balanceSubView === 'mis-clases'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Mis Clases
+                    </button>
+                    <button
+                      onClick={() => setBalanceSubView('vacantes')}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        balanceSubView === 'vacantes'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Vacantes
+                    </button>
+                    <button
+                      onClick={() => setBalanceSubView('balance')}
+                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                        balanceSubView === 'balance'
+                          ? 'bg-background text-foreground shadow-sm'
+                          : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      Balance
+                    </button>
+                  </div>
                 </div>
+
+                {/* Contenido según sub-vista */}
+                {balanceSubView === 'mis-clases' && (
+                  <div className="mt-4">
+                    <RecurringScheduleView initialView="mis-clases" hideSubNav={true} />
+                  </div>
+                )}
+
+                {balanceSubView === 'vacantes' && (
+                  <div className="mt-4">
+                    <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
+                  </div>
+                )}
+
+                {balanceSubView === 'balance' && (
+                  <div className="space-y-4">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold capitalize">Cuota {mesActualNombre}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valor por clase</span>
+                          <span className="font-medium">$2.500</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Cantidad de clases</span>
+                          <span className="font-medium">8</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Descuento</span>
+                          <span className="font-medium">10% (-$2.000)</span>
+                        </div>
+                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                          <span>Total</span>
+                          <span className="text-green-600">$18.000</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">Cobro: 01/11/2025</div>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="text-lg font-semibold capitalize">Cuota {mesSiguienteNombre}</CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-3 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Valor por clase</span>
+                          <span className="font-medium">$2.500</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Cantidad de clases</span>
+                          <span className="font-medium">10</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground">Descuento</span>
+                          <span className="font-medium">0% (-$0)</span>
+                        </div>
+                        <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                          <span>Total</span>
+                          <span className="text-green-600">$25.000</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground">Se actualiza en tiempo real ante cambios.</div>
+                      </CardContent>
+                    </Card>
+                  </div>
+                )}
               </div>
             )}
 

@@ -41,7 +41,12 @@ interface ClaseDelDia {
   horario: HorarioRecurrente;
 }
 
-export const RecurringScheduleView = () => {
+interface RecurringScheduleViewProps {
+  initialView?: 'mis-clases' | 'turnos-disponibles' | 'perfil';
+  hideSubNav?: boolean;
+}
+
+export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false }: RecurringScheduleViewProps = {}) => {
   const { user } = useAuthContext();
   const { isAdmin } = useAdmin();
   const { toast } = useToast();
@@ -62,7 +67,12 @@ export const RecurringScheduleView = () => {
   const [confirmingReserva, setConfirmingReserva] = useState(false);
   const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>('mis-clases');
+  const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>(initialView);
+  
+  // Actualizar vista cuando cambie initialView desde fuera
+  useEffect(() => {
+    setActiveView(initialView);
+  }, [initialView]);
   const [clasesDelMes, setClasesDelMes] = useState<any[]>([]);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   const [loadingMonth, setLoadingMonth] = useState(false);
@@ -898,53 +908,55 @@ export const RecurringScheduleView = () => {
 
   return (
     <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2 pb-20 sm:pb-2">
-      {/* Subnavbar */}
-      <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
-        {/* Desktop navbar (centered pills) */}
-        <div className="hidden sm:flex justify-center">
-        <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
-          <button
-            onClick={() => handleViewChange('mis-clases')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-              activeView === 'mis-clases'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Mis Clases
-          </button>
-          <button
-            onClick={() => handleViewChange('turnos-disponibles')}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-              activeView === 'turnos-disponibles'
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            Vacantes
-            {(() => {
-              const turnosDisponibles = turnosCancelados.filter(turno => {
-                const fecha = new Date(turno.turno_fecha);
-                return !turno.reservado && !estaClaseBloqueada(fecha, turno.clase_numero);
-              });
-              return turnosDisponibles.length > 0 && (
-                <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
-                  {turnosDisponibles.length}
-                </Badge>
-              );
-            })()}
-          </button>
-          <button
-            onClick={() => window.dispatchEvent(new CustomEvent('nav:balance'))}
-            className={`px-4 py-2 rounded-full text-sm font-medium transition-colors text-muted-foreground hover:text-foreground`}
-          >
-            Balance
-          </button>
-        </div>
-        </div>
+      {/* Subnavbar - solo mostrar si no está oculta */}
+      {!hideSubNav && (
+        <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
+          {/* Desktop navbar (centered pills) */}
+          <div className="hidden sm:flex justify-center">
+          <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
+            <button
+              onClick={() => handleViewChange('mis-clases')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                activeView === 'mis-clases'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Mis Clases
+            </button>
+            <button
+              onClick={() => handleViewChange('turnos-disponibles')}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+                activeView === 'turnos-disponibles'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              Vacantes
+              {(() => {
+                const turnosDisponibles = turnosCancelados.filter(turno => {
+                  const fecha = new Date(turno.turno_fecha);
+                  return !turno.reservado && !estaClaseBloqueada(fecha, turno.clase_numero);
+                });
+                return turnosDisponibles.length > 0 && (
+                  <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
+                    {turnosDisponibles.length}
+                  </Badge>
+                );
+              })()}
+            </button>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('nav:balance'))}
+              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors text-muted-foreground hover:text-foreground`}
+            >
+              Balance
+            </button>
+          </div>
+          </div>
 
-        {/* Navbar móvil flotante se muestra globalmente en Dashboard */}
-      </div>
+          {/* Navbar móvil flotante se muestra globalmente en Dashboard */}
+        </div>
+      )}
 
       {/* Contenido basado en la vista activa */}
       {activeView === 'mis-clases' && (
