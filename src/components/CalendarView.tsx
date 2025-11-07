@@ -1528,7 +1528,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
       {/* Modal para agregar usuario a slot */}
       <Dialog open={showAddUserModal} onOpenChange={setShowAddUserModal}>
-        <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-none">
+        <DialogContent className="w-[95vw] max-w-none sm:max-w-lg h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-[80vh] sm:flex sm:flex-col">
           <DialogHeader className="pb-3 flex-shrink-0">
             <DialogTitle className="text-sm sm:text-base">Agregar Usuario a Clase</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
@@ -1546,8 +1546,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             />
 
             {/* Lista de usuarios */}
-            <ScrollArea className="flex-1 min-h-0">
-              <div className="space-y-2 pr-2">
+            <div className="flex-1 min-h-0 overflow-y-auto sm:max-h-[45vh] pr-2">
+              <div className="space-y-2">
                 {availableUsers
                   .filter(user =>
                     user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1566,7 +1566,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                     </div>
                   ))}
               </div>
-            </ScrollArea>
+            </div>
 
             {availableUsers.length === 0 && (
               <p className="text-center text-muted-foreground py-4 text-xs sm:text-sm flex-shrink-0">
@@ -1590,7 +1590,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
       {/* Modal de confirmación para agregar usuario */}
       <Dialog open={showConfirmModal} onOpenChange={setShowConfirmModal}>
-        <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-none">
+        <DialogContent className="w-[95vw] max-w-none sm:max-w-md h-[85vh] sm:h-auto max-h-[85vh] sm:max-h-[70vh] sm:flex sm:flex-col">
           <DialogHeader className="pb-2 sm:pb-3 flex-shrink-0">
             <DialogTitle className="text-sm sm:text-base">Confirmar agregar usuario</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">

@@ -596,8 +596,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
   if (!isOpen || !turno) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50 md:h-screen md:p-10">
+      <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden md:max-h-[80vh] md:shadow-xl">
         <div className="flex-shrink-0 p-6 border-b">
           <div className="flex items-center justify-between">
             <CardTitle className="flex items-center space-x-2">
