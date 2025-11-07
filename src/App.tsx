@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -11,7 +11,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,6 +25,7 @@ import NotFound from "./pages/NotFound";
 import { useUserBalance } from "./hooks/useUserBalance";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { supabase } from "./lib/supabase";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from "@/components/ui/dialog";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -142,13 +143,56 @@ const Dashboard = () => {
   };
 
   const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonthNum = now.getMonth() + 1;
+  const nextMonthNum = currentMonthNum === 12 ? 1 : currentMonthNum + 1;
+  const nextYear = currentMonthNum === 12 ? currentYear + 1 : currentYear;
   const mesActualNombre = getMonthNameEs(now);
   const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const {
     history: balanceHistory,
     loading: balanceLoading,
   } = useUserBalance();
+  const sortByDateDesc = useMemo(
+    () => (a: { anio: number; mesNumero: number }, b: { anio: number; mesNumero: number }) => {
+      if (a.anio === b.anio) {
+        return b.mesNumero - a.mesNumero;
+      }
+      return b.anio - a.anio;
+    },
+    []
+  );
+  const visibleBalanceEntries = useMemo(() => {
+    return balanceHistory
+      .filter((entry) => entry.isCurrent || entry.isNext)
+      .sort((a, b) => {
+        if (a.isCurrent && !b.isCurrent) return -1;
+        if (b.isCurrent && !a.isCurrent) return 1;
+        if (a.isNext && !b.isNext) return -1;
+        if (b.isNext && !a.isNext) return 1;
+        return sortByDateDesc(a, b);
+      });
+  }, [balanceHistory, sortByDateDesc]);
+  const fullHistoryEntries = useMemo(
+    () =>
+      balanceHistory
+        .filter((entry) => {
+          const entryDate = new Date(Number(entry.anio), Number(entry.mesNumero) - 1, 1);
+          const nextAllowedDate = new Date(nextYear, nextMonthNum - 1, 1);
+          const monthDiff =
+            (Number(entry.anio) - currentYear) * 12 + (Number(entry.mesNumero) - currentMonthNum);
+          if (monthDiff > 1) return false;
+          return entryDate <= nextAllowedDate;
+        })
+        .sort(sortByDateDesc),
+    [balanceHistory, sortByDateDesc, nextMonthNum, nextYear]
+  );
+  const hasAdditionalBalanceHistory = useMemo(
+    () => balanceHistory.some((entry) => !entry.isCurrent && !entry.isNext),
+    [balanceHistory]
+  );
 
   const tutorialSlides = [
     {
@@ -395,17 +439,17 @@ const Dashboard = () => {
                         </CardContent>
                       </Card>
                     ) : (
-                      balanceHistory.map((entry) => (
+                      visibleBalanceEntries.map((entry) => (
                         <Card key={`${entry.anio}-${entry.mesNumero}`}>
                           <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                             <CardTitle className="text-lg font-semibold capitalize">
                               Cuota {entry.mesNombre} {entry.anio}
                             </CardTitle>
-                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                              {entry.isCurrent && <span>Mes actual</span>}
-                              {entry.isNext && <span>Próximo mes</span>}
-                              {entry.isEstimate && <span>Estimación</span>}
-                            </div>
+                                   {entry.isEstimate && (
+                                     <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                                       <span>Estimación</span>
+                                     </div>
+                                   )}
                           </CardHeader>
                           <CardContent className="space-y-3 text-sm">
                             <div className="flex items-center justify-between">
@@ -465,7 +509,7 @@ const Dashboard = () => {
                                 ${formatCurrency(entry.totalConDescuento)}
                               </span>
                             </div>
-                            {entry.estadoPago && (
+                            {entry.estadoPago && !entry.isCurrent && (
                               <div className="text-xs text-muted-foreground">
                                 Estado:{' '}
                                 {entry.estadoPago === 'pagado'
@@ -483,6 +527,13 @@ const Dashboard = () => {
                           </CardContent>
                         </Card>
                       ))
+                    )}
+                    {hasAdditionalBalanceHistory && (
+                      <div className="flex justify-center pt-2">
+                        <Button variant="outline" size="sm" onClick={() => setHistoryModalOpen(true)}>
+                          Ver histórico
+                        </Button>
+                      </div>
                     )}
                   </div>
                 )}
@@ -568,6 +619,95 @@ const Dashboard = () => {
         slides={tutorialSlides}
         onClose={handleTutorialClose}
       />
+
+      <Dialog open={historyModalOpen} onOpenChange={setHistoryModalOpen}>
+        <DialogContent className="w-full max-w-[92vw] sm:max-w-2xl">
+          <DialogHeader className="flex flex-row items-center justify-between">
+            <DialogTitle className="text-[12px] font-semibold sm:text-lg">Histórico de cuotas</DialogTitle>
+            <DialogClose className="text-muted-foreground transition-colors hover:text-foreground">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Cerrar</span>
+            </DialogClose>
+          </DialogHeader>
+          <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+            {fullHistoryEntries.map((entry) => (
+              <Card key={`history-${entry.anio}-${entry.mesNumero}`}>
+                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <CardTitle className="text-[12px] font-semibold capitalize sm:text-base">
+                    Cuota {entry.mesNombre} {entry.anio}
+                  </CardTitle>
+                         {entry.isEstimate && (
+                           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                             <span>Estimación</span>
+                           </div>
+                         )}
+                </CardHeader>
+                <CardContent className="space-y-3 text-[12px] sm:text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Valor por clase</span>
+                    <span className="font-medium">${formatCurrency(entry.precioUnitario)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Cantidad de clases</span>
+                    <span className="font-medium">{entry.clases}</span>
+                  </div>
+                  {entry.descuentoPorcentaje > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Descuento</span>
+                      <span className="font-medium text-green-500">
+                        {entry.descuentoPorcentaje.toLocaleString('es-AR', {
+                          minimumFractionDigits: 0,
+                          maximumFractionDigits: 2,
+                        })}% (-${formatCurrency(entry.descuento)})
+                      </span>
+                    </div>
+                  )}
+                  {entry.ajustes && (
+                    <>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          Clases canceladas {mesActualNombre}
+                        </span>
+                        <div className="text-right">
+                          <p className="font-medium text-green-500">
+                            -${formatCurrency(entry.ajustes.cancelaciones.monto)}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">
+                          Vacantes reservadas {mesActualNombre}
+                        </span>
+                        <div className="text-right">
+                          <p className="font-medium text-amber-400">
+                            +${formatCurrency(entry.ajustes.vacantes.monto)}
+                          </p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
+                          </p>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                  <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                    <span>Total</span>
+                    <span className="text-green-600">${formatCurrency(entry.totalConDescuento)}</span>
+                  </div>
+                  {/* Se quita el estado para historial */}
+                  {entry.isEstimate && (
+                    <div className="text-xs text-muted-foreground">
+                      Se actualiza en tiempo real ante cambios.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
