@@ -440,7 +440,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Número de Teléfono (10 dígitos)</Label>
+                  <Label htmlFor="phone">Número de Teléfono</Label>
                     <Input
                       id="phone"
                       type="tel"

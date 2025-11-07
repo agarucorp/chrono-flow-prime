@@ -57,9 +57,9 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     setFieldErrors(prev => ({ ...prev, [field]: "" }));
   };
 
-  // Handler para teléfono: solo números, máximo 10 caracteres
+  // Handler para teléfono: solo números
   const handlePhoneChange = (value: string) => {
-    const sanitized = value.replace(/[^0-9]/g, '').slice(0, 10);
+    const sanitized = value.replace(/[^0-9]/g, '');
     setRegisterData(prev => ({ ...prev, phone: sanitized }));
     setFieldErrors(prev => ({ ...prev, phone: "" }));
   };
@@ -67,11 +67,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   // Verificar requisitos de contraseña
   const checkPasswordRequirements = (password: string) => {
     return {
-      hasUppercase: /[A-Z]/.test(password),
-      hasLowercase: /[a-z]/.test(password),
-      hasNumber: /[0-9]/.test(password),
-      minLength: password.length >= 8,
-      noSpecialChars: /^[a-zA-Z0-9]*$/.test(password)
+      minLength: password.length >= 6,
     };
   };
 
@@ -89,8 +85,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       case 'phone':
         if (!value.trim()) {
           setFieldErrors(prev => ({ ...prev, phone: "Campo obligatorio" }));
-        } else if (value.length !== 10) {
-          setFieldErrors(prev => ({ ...prev, phone: "Debe tener 10 dígitos" }));
         } else {
           setFieldErrors(prev => ({ ...prev, phone: "" }));
         }
@@ -120,12 +114,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           setFieldErrors(prev => ({ ...prev, password: "Campo obligatorio" }));
         } else {
           const requirements = checkPasswordRequirements(value);
-          if (!requirements.noSpecialChars) {
-            setFieldErrors(prev => ({ ...prev, password: "No se permiten caracteres especiales" }));
-          } else if (!requirements.minLength) {
-            setFieldErrors(prev => ({ ...prev, password: "La contraseña debe tener al menos 8 caracteres" }));
-          } else if (!requirements.hasUppercase || !requirements.hasLowercase || !requirements.hasNumber) {
-            setFieldErrors(prev => ({ ...prev, password: "Debe contener mayúsculas, minúsculas y números" }));
+          if (!requirements.minLength) {
+            setFieldErrors(prev => ({ ...prev, password: "La contraseña debe tener al menos 6 caracteres" }));
           } else {
             setFieldErrors(prev => ({ ...prev, password: "" }));
           }
@@ -216,10 +206,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         setError("Por favor complete todos los campos del paso 1");
         return;
       }
-      if (registerData.phone.length !== 10) {
-        setError("El número de teléfono debe tener exactamente 10 dígitos");
-        return;
-      }
       setCurrentStep(2);
       return;
     }
@@ -230,16 +216,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         return;
       }
       const requirements = checkPasswordRequirements(registerData.password);
-      if (!requirements.noSpecialChars) {
-        setError("No se permiten caracteres especiales en la contraseña");
-        return;
-      }
       if (!requirements.minLength) {
-        setError("La contraseña debe tener al menos 8 caracteres");
-        return;
-      }
-      if (!requirements.hasUppercase || !requirements.hasLowercase || !requirements.hasNumber) {
-        setError("La contraseña debe contener mayúsculas, minúsculas y números");
+        setError("La contraseña debe tener al menos 6 caracteres");
         return;
       }
       if (registerData.email !== registerData.confirmEmail) {
@@ -457,7 +435,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Número de Teléfono (10 dígitos)</Label>
+                    <Label htmlFor="phone">Número de Teléfono</Label>
                     <Input
                       id="phone"
                       type="tel"
@@ -538,63 +516,18 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                     {/* Indicador de requisitos de contraseña */}
                     {registerData.password && (
                       <div className="mt-2 space-y-1">
-                        {(() => {
-                          const req = checkPasswordRequirements(registerData.password);
-                          return (
-                            <div className="space-y-1 text-xs">
-                              <div className={`flex items-center gap-1 ${req.hasUppercase ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                {req.hasUppercase ? (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <span className="w-4 h-4 flex items-center justify-center">○</span>
-                                )}
-                                <span>Al menos una mayúscula</span>
-                              </div>
-                              <div className={`flex items-center gap-1 ${req.hasLowercase ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                {req.hasLowercase ? (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <span className="w-4 h-4 flex items-center justify-center">○</span>
-                                )}
-                                <span>Al menos una minúscula</span>
-                              </div>
-                              <div className={`flex items-center gap-1 ${req.hasNumber ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                {req.hasNumber ? (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <span className="w-4 h-4 flex items-center justify-center">○</span>
-                                )}
-                                <span>Al menos un número</span>
-                              </div>
-                              <div className={`flex items-center gap-1 ${req.minLength ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                {req.minLength ? (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <span className="w-4 h-4 flex items-center justify-center">○</span>
-                                )}
-                                <span>Mínimo 8 caracteres</span>
-                              </div>
-                              <div className={`flex items-center gap-1 ${req.noSpecialChars ? 'text-green-500' : 'text-muted-foreground'}`}>
-                                {req.noSpecialChars ? (
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                                  </svg>
-                                ) : (
-                                  <span className="w-4 h-4 flex items-center justify-center">○</span>
-                                )}
-                                <span>Sin caracteres especiales</span>
-                              </div>
-                            </div>
-                          );
-                        })()}
+                        <div className="space-y-1 text-xs">
+                          <div className={`flex items-center gap-1 ${registerData.password.length >= 6 ? 'text-green-500' : 'text-muted-foreground'}`}>
+                            {registerData.password.length >= 6 ? (
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <span className="w-4 h-4 flex items-center justify-center">○</span>
+                            )}
+                            <span>Mínimo 6 caracteres</span>
+                          </div>
+                        </div>
                       </div>
                     )}
                   </div>

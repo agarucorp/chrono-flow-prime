@@ -23,6 +23,8 @@ import { useAdmin } from "./hooks/useAdmin";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
 import { useUserBalance } from "./hooks/useUserBalance";
+import { OnboardingTutorial } from "./components/OnboardingTutorial";
+import { supabase } from "./lib/supabase";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -30,6 +32,8 @@ const Dashboard = () => {
   const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [tutorialProcessed, setTutorialProcessed] = useState(false);
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -65,6 +69,9 @@ const Dashboard = () => {
     return base.charAt(0).toUpperCase() + base.slice(1);
   };
 
+  const formatCurrency = (value: number) =>
+    value.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
   const handleSignOut = async () => {
     try {
       await signOut();
@@ -79,12 +86,31 @@ const Dashboard = () => {
     setHasCompletedSetup(true);
   };
 
-  // Mostrar modal de configuración si es la primera vez
-  useEffect(() => {
-    if (!firstTimeLoading && isFirstTime && !hasCompletedSetup) {
+  const handleTutorialClose = async (dontShowAgain: boolean) => {
+    if (dontShowAgain && user) {
+      try {
+        await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
+      } catch (error) {
+        console.error('Error actualizando preferencia de tutorial:', error);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(`onboarding-tutorial-${user.id}`, 'true');
+      }
+    }
+
+    setShowTutorial(false);
+    setTutorialProcessed(true);
+    if (isFirstTime && !hasCompletedSetup) {
       setShowRecurringModal(true);
     }
-  }, [isFirstTime, firstTimeLoading, hasCompletedSetup]);
+  };
+
+  // Mostrar modal de configuración si es la primera vez
+  useEffect(() => {
+    if (!firstTimeLoading && isFirstTime && !hasCompletedSetup && !showTutorial && tutorialProcessed) {
+      setShowRecurringModal(true);
+    }
+  }, [isFirstTime, firstTimeLoading, hasCompletedSetup, showTutorial, tutorialProcessed]);
 
   // Escuchar evento de apertura de perfil desde la navbar mobile
   useEffect(() => {
@@ -117,11 +143,55 @@ const Dashboard = () => {
 
   const now = new Date();
   const mesActualNombre = getMonthNameEs(now);
-  const mesSiguiente = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const mesSiguienteNombre = getMonthNameEs(mesSiguiente);
   const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
-  const { currentMonth: balanceCurrent, nextMonth: balanceNext, loading: balanceLoading } = useUserBalance();
+  const {
+    history: balanceHistory,
+    loading: balanceLoading,
+  } = useUserBalance();
+
+  const tutorialSlides = [
+    {
+      title: 'Sistema de autogestión de clases',
+      description: 'En esta plataforma vas a poder setear tus clases en MaldaGym de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.'
+    },
+    {
+      title: 'Selección de horarios',
+      description: 'Una vez que selecciones tus horarios, no podrán ser modificados (etapa en desarrollo). Por favor elegirlos cuidadosamente.'
+    },
+    {
+      title: 'Balance',
+      description: 'Vista de tu cuota actual, siguiente e historial. El pago es por adelantado y todos los cambios que afecten el mes actual impactarán en el próximo.'
+    },
+    {
+      title: 'Vacantes',
+      description: 'Las clases canceladas aparecerán en este panel para que puedan ser reservadas por otros alumnos si así lo desean.'
+    },
+    {
+      title: 'Información',
+      description: 'Si tenés alguna duda podés ver una guía de la plataforma ingresando a “Información” desde el ícono de perfil.'
+    }
+  ];
+
+  useEffect(() => {
+    if (!user || firstTimeLoading || isFirstTime === null) return;
+
+    const metadataDismissed = Boolean(user.user_metadata?.onboarding_tutorial_dismissed);
+    const localDismissed = typeof window !== 'undefined'
+      ? localStorage.getItem(`onboarding-tutorial-${user.id}`) === 'true'
+      : false;
+
+    if (isFirstTime && !metadataDismissed && !localDismissed) {
+      setShowRecurringModal(false);
+      setShowTutorial(true);
+      setTutorialProcessed(false);
+    } else {
+      setTutorialProcessed(true);
+      if (isFirstTime) {
+        setShowRecurringModal(true);
+      }
+    }
+  }, [user, firstTimeLoading, isFirstTime]);
 
   // Sincronizar pestaña con query param ?tab=
   useEffect(() => {
@@ -318,102 +388,101 @@ const Dashboard = () => {
                           <p className="text-muted-foreground">Cargando balance...</p>
                         </div>
                       </div>
+                    ) : balanceHistory.length === 0 ? (
+                      <Card>
+                        <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                          No hay información de cuotas disponible.
+                        </CardContent>
+                      </Card>
                     ) : (
-                      <>
-                        {/* Mes Actual */}
-                        {balanceCurrent && (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg font-semibold capitalize">
-                                Cuota {balanceCurrent.mes} {balanceCurrent.anio}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
+                      balanceHistory.map((entry) => (
+                        <Card key={`${entry.anio}-${entry.mesNumero}`}>
+                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                            <CardTitle className="text-lg font-semibold capitalize">
+                              Cuota {entry.mesNombre} {entry.anio}
+                            </CardTitle>
+                            <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                              {entry.isCurrent && <span>Mes actual</span>}
+                              {entry.isNext && <span>Próximo mes</span>}
+                              {entry.isEstimate && <span>Estimación</span>}
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3 text-sm">
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Valor por clase</span>
+                              <span className="font-medium">
+                                ${formatCurrency(entry.precioUnitario)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between">
+                              <span className="text-muted-foreground">Cantidad de clases</span>
+                              <span className="font-medium">{entry.clases}</span>
+                            </div>
+                            {entry.descuentoPorcentaje > 0 && (
                               <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Valor por clase</span>
-                                <span className="font-medium">
-                                  ${balanceCurrent.precioUnitario.toLocaleString('es-AR')}
+                                <span className="text-muted-foreground">Descuento</span>
+                                <span className="font-medium text-green-500">
+                                  {entry.descuentoPorcentaje.toLocaleString('es-AR', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2,
+                                  })}% (-${formatCurrency(entry.descuento)})
                                 </span>
                               </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Cantidad de clases</span>
-                                <span className="font-medium">{balanceCurrent.clases}</span>
-                              </div>
-                              {balanceCurrent.descuentoPorcentaje > 0 && (
+                            )}
+                            {entry.ajustes && (
+                              <>
                                 <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">Descuento</span>
-                                  <span className="font-medium text-green-600">
-                                    {balanceCurrent.descuentoPorcentaje}% (-${balanceCurrent.descuento.toLocaleString('es-AR')})
+                                  <span className="text-muted-foreground">
+                                    Clases canceladas {mesActualNombre}
                                   </span>
+                                  <div className="text-right">
+                                    <p className="font-medium text-green-500">
+                                      -${formatCurrency(entry.ajustes.cancelaciones.monto)}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
+                                    </p>
+                                  </div>
                                 </div>
-                              )}
-                              <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                                <span>Total</span>
-                                <span className="text-green-600">
-                                  ${balanceCurrent.totalConDescuento.toLocaleString('es-AR')}
-                                </span>
-                              </div>
-                              {balanceCurrent.estadoPago && (
-                                <div className="text-xs text-muted-foreground">
-                                  Estado: {balanceCurrent.estadoPago === 'pagado' ? '✅ Pagado' : balanceCurrent.estadoPago === 'abonada' ? '💰 Abonada' : '⏳ Pendiente'}
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
-
-                        {/* Próximo Mes */}
-                        {balanceNext && (
-                          <Card>
-                            <CardHeader>
-                              <CardTitle className="text-lg font-semibold capitalize">
-                                Cuota {balanceNext.mes} {balanceNext.anio}
-                              </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-3 text-sm">
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Valor por clase</span>
-                                <span className="font-medium">
-                                  ${balanceNext.precioUnitario.toLocaleString('es-AR')}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Cantidad de clases</span>
-                                <span className="font-medium">{balanceNext.clases}</span>
-                              </div>
-                              {balanceNext.descuentoPorcentaje > 0 && (
                                 <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">Descuento</span>
-                                  <span className="font-medium text-green-600">
-                                    {balanceNext.descuentoPorcentaje}% (-${balanceNext.descuento.toLocaleString('es-AR')})
+                                  <span className="text-muted-foreground">
+                                    Vacantes reservadas {mesActualNombre}
                                   </span>
+                                  <div className="text-right">
+                                    <p className="font-medium text-amber-400">
+                                      +${formatCurrency(entry.ajustes.vacantes.monto)}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
+                                    </p>
+                                  </div>
                                 </div>
-                              )}
-                              <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                                <span>Total</span>
-                                <span className="text-green-600">
-                                  ${balanceNext.totalConDescuento.toLocaleString('es-AR')}
-                                </span>
+                              </>
+                            )}
+                            <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                              <span>Total</span>
+                              <span className="text-green-600">
+                                ${formatCurrency(entry.totalConDescuento)}
+                              </span>
+                            </div>
+                            {entry.estadoPago && (
+                              <div className="text-xs text-muted-foreground">
+                                Estado:{' '}
+                                {entry.estadoPago === 'pagado'
+                                  ? '✅ Pagado'
+                                  : entry.estadoPago === 'abonada'
+                                  ? '💰 Abonada'
+                                  : '⏳ Pendiente'}
                               </div>
-                              {balanceNext.clases === 0 && !balanceNext.estadoPago && (
-                                <div className="text-xs text-muted-foreground">
-                                  Se actualiza en tiempo real ante cambios.
-                                </div>
-                              )}
-                              {balanceNext.clases > 0 && !balanceNext.estadoPago && (
-                                <div className="text-xs text-muted-foreground">
-                                  Estimación basada en horarios recurrentes y turnos variables.
-                                </div>
-                              )}
-                              {balanceNext.estadoPago && (
-                                <div className="text-xs text-muted-foreground">
-                                  Estado: {balanceNext.estadoPago === 'pagado' ? '✅ Pagado' : balanceNext.estadoPago === 'abonada' ? '💰 Abonada' : '⏳ Pendiente'}
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        )}
-                      </>
+                            )}
+                            {entry.isEstimate && (
+                              <div className="text-xs text-muted-foreground">
+                                Se actualiza en tiempo real ante cambios.
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      ))
                     )}
                   </div>
                 )}
@@ -492,6 +561,12 @@ const Dashboard = () => {
       <SupportModal
         isOpen={supportOpen}
         onClose={() => setSupportOpen(false)}
+      />
+
+      <OnboardingTutorial
+        open={showTutorial}
+        slides={tutorialSlides}
+        onClose={handleTutorialClose}
       />
     </div>
   );
