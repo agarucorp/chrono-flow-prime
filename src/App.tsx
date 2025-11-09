@@ -637,7 +637,9 @@ const Dashboard = () => {
             )}
 
             {activeTab === 'vacantes' && (
-              <div className="mt-4 p-4 text-center text-muted-foreground">No hay clases disponibles canceladas por otros alumnos</div>
+              <div className="mt-4">
+                <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
+              </div>
             )}
 
             {/* Navbar móvil flotante (siempre visible en mobile) */}
