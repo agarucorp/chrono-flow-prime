@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -61,6 +62,15 @@ export const useUserBalance = (): UseUserBalanceReturn => {
   const [history, setHistory] = useState<BalanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const lockedCurrentSnapshotRef = useRef<BalanceEntry | null>(null);
+  const userStartDate = (() => {
+    if (!user?.created_at) return null;
+    const created = new Date(user.created_at);
+    if (Number.isNaN(created.valueOf())) return null;
+    created.setHours(0, 0, 0, 0);
+    return created;
+  })();
+  const userStartMonth = userStartDate ? startOfMonth(userStartDate) : null;
 
   useEffect(() => {
     if (!user?.id) {
@@ -387,8 +397,44 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           }
           return b.anio - a.anio;
         });
+        const currentFromLoad = entries.find((entry) => entry.isCurrent) ?? null;
+        let snapshotToUse = lockedCurrentSnapshotRef.current;
+        if (currentFromLoad) {
+          const shouldUpdateSnapshot =
+            !snapshotToUse ||
+            snapshotToUse.anio !== currentFromLoad.anio ||
+            snapshotToUse.mesNumero !== currentFromLoad.mesNumero;
 
-        setHistory(entries);
+          if (shouldUpdateSnapshot) {
+            snapshotToUse = { ...currentFromLoad };
+            lockedCurrentSnapshotRef.current = snapshotToUse;
+          }
+        } else if (snapshotToUse) {
+          snapshotToUse = null;
+          lockedCurrentSnapshotRef.current = null;
+        }
+
+        const finalEntries =
+          snapshotToUse && currentFromLoad
+            ? entries.map((entry) =>
+                entry.isCurrent &&
+                entry.anio === snapshotToUse!.anio &&
+                entry.mesNumero === snapshotToUse!.mesNumero
+                  ? { ...snapshotToUse! }
+                  : entry
+              )
+            : entries;
+
+        const trimmedEntries =
+          userStartMonth
+            ? finalEntries.filter((entry) => {
+                const entryMonth = new Date(entry.anio, entry.mesNumero - 1, 1);
+                entryMonth.setHours(0, 0, 0, 0);
+                return entryMonth >= userStartMonth!;
+              })
+            : finalEntries;
+
+        setHistory(trimmedEntries);
       } catch (err) {
         console.error('Error al cargar balance:', err);
         setError('Error al cargar el balance');

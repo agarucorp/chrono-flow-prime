@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate, startOfDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
@@ -82,6 +82,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+  const userStartDate = (() => {
+    if (!user?.created_at) return null;
+    const created = new Date(user.created_at);
+    if (Number.isNaN(created.valueOf())) return null;
+    created.setHours(0, 0, 0, 0);
+    return created;
+  })();
 
   // Función para formatear horas sin segundos
   const formatTime = (timeString: string) => {
@@ -531,10 +538,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         console.error('Error al cargar turnos variables:', error);
       } else if (turnosVariables) {
         // Convertir turnos variables a formato de clase
-        const clasesVariables = turnosVariables.map(turno => {
+        const clasesVariables = turnosVariables
+          .map<ClaseDelDia | null>(turno => {
           // Crear fecha correcta sin problemas de zona horaria
           const fechaParts = turno.turno_fecha.split('-');
           const fechaCorrecta = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
+            const fechaNormalizada = startOfDay(fechaCorrecta);
+            if (userStartDate && fechaNormalizada < userStartDate) {
+              return null;
+            }
           
           return {
             id: `variable-${turno.id}`,
@@ -549,7 +561,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               esVariable: true // Marcar como turno variable
             }
           };
-        });
+          })
+          .filter((clase): clase is ClaseDelDia => clase !== null);
         todasLasClases.push(...clasesVariables);
       }
 
@@ -580,6 +593,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Obtener clases del día
   const getClasesDelDia = async (dia: Date, horariosParaUsar?: HorarioRecurrente[]) => {
+    if (userStartDate && startOfDay(dia) < userStartDate) {
+      return [];
+    }
     const diaSemana = dia.getDay();
     const horariosAFiltrar = horariosParaUsar || horariosRecurrentes;
     const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemana);
@@ -1146,6 +1162,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   <UserIcon className="h-4 w-4 mr-2" />
                   Editar Perfil
                 </Button>
+
+              <Button
+                className="w-full text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                onClick={() => window.dispatchEvent(new CustomEvent('info:guide-open'))}
+              >
+                <Info className="h-4 w-4 mr-2" />
+                Información
+              </Button>
 
                 {/* Cerrar Sesión */}
                 <Button
