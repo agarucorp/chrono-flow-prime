@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -84,29 +84,51 @@ const Dashboard = () => {
     }
   };
 
-  const handleRecurringSetupComplete = () => {
+  const dismissTutorial = useCallback(async () => {
+    if (!user) return;
+    try {
+      await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
+    } catch (error) {
+      console.error('Error actualizando preferencia de tutorial:', error);
+    }
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`onboarding-tutorial-${user.id}`, 'true');
+    }
+  }, [user]);
+
+  const handleRecurringSetupComplete = async () => {
     setShowRecurringModal(false);
     setHasCompletedSetup(true);
+    await dismissTutorial();
   };
 
-  const handleTutorialClose = async (dontShowAgain: boolean) => {
-    if (dontShowAgain && user) {
-      try {
-        await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
-      } catch (error) {
-        console.error('Error actualizando preferencia de tutorial:', error);
-      }
-      if (typeof window !== 'undefined') {
-        localStorage.setItem(`onboarding-tutorial-${user.id}`, 'true');
-      }
+  const handleTutorialClose = async () => {
+    if (hasCompletedSetup) {
+      await dismissTutorial();
     }
-
     setShowTutorial(false);
     setTutorialProcessed(true);
     if (isFirstTime && !hasCompletedSetup) {
       setShowRecurringModal(true);
     }
   };
+
+  useEffect(() => {
+    if (firstTimeLoading || isFirstTime === null) return;
+    setHasCompletedSetup(!isFirstTime);
+  }, [isFirstTime, firstTimeLoading]);
+
+  useEffect(() => {
+    if (!user || firstTimeLoading || isFirstTime === null) return;
+
+    if (!hasCompletedSetup) {
+      setShowRecurringModal(false);
+      setShowTutorial(true);
+      setTutorialProcessed(false);
+    } else {
+      setTutorialProcessed(true);
+    }
+  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup]);
 
   // Mostrar modal de configuración si es la primera vez
   useEffect(() => {
@@ -297,22 +319,14 @@ const Dashboard = () => {
   useEffect(() => {
     if (!user || firstTimeLoading || isFirstTime === null) return;
 
-    const metadataDismissed = Boolean(user.user_metadata?.onboarding_tutorial_dismissed);
-    const localDismissed = typeof window !== 'undefined'
-      ? localStorage.getItem(`onboarding-tutorial-${user.id}`) === 'true'
-      : false;
-
-    if (isFirstTime && !metadataDismissed && !localDismissed) {
+    if (!hasCompletedSetup) {
       setShowRecurringModal(false);
       setShowTutorial(true);
       setTutorialProcessed(false);
     } else {
       setTutorialProcessed(true);
-      if (isFirstTime) {
-        setShowRecurringModal(true);
-      }
     }
-  }, [user, firstTimeLoading, isFirstTime]);
+  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup]);
 
   // Sincronizar pestaña con query param ?tab=
   useEffect(() => {

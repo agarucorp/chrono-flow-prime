@@ -1,0 +1,109 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="480" viewBox="0 0 720 480" fill="none">
+  <rect width="720" height="480" rx="32" fill="#111111" />
+  <rect x="0" y="0" width="720" height="480" rx="32" fill="url(#overlay)" />
+  <g filter="url(#shadow)">
+    <rect x="72" y="36" width="576" height="408" rx="28" fill="#0f0f0f" stroke="#1a1a1a" stroke-width="1.2" />
+  </g>
+  <text x="360" y="88" fill="#f5f5f5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" font-weight="500" text-anchor="middle" letter-spacing="0.28em">
+    PASO 2 DE 3
+  </text>
+  <g>
+    <rect x="116" y="108" width="488" height="60" rx="18" fill="#141414" stroke="#1f1f1f" stroke-width="1.4" />
+    <circle cx="152" cy="138" r="12" fill="#f6f6f6" />
+    <path d="M148 138L152 142L160 134" stroke="#111111" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" />
+    <text x="188" y="144" fill="#f1f1f1" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="22" font-weight="600">
+      Seleccioná tus horarios
+    </text>
+  </g>
+  <text x="360" y="184" fill="#d4d4d4" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="15" text-anchor="middle">
+    Seleccioná 1 horario por día según el plan elegido.
+  </text>
+  <g transform="translate(116 206)">
+    <rect width="488" height="92" rx="14" fill="#141414" stroke="#f6f6f6" stroke-width="1.4" />
+    <g transform="translate(20 20)">
+      <rect x="0" y="0" width="36" height="36" rx="10" fill="#f5f5f5" />
+      <text x="54" y="20" fill="#f1f1f1" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">
+        Sistema de cuota por clase
+      </text>
+      <text x="0" y="58" fill="#d4d4d4" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="12">
+        Horarios seleccionados: 2/2
+      </text>
+      <text x="310" y="58" fill="#f5f5f5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="12" font-weight="600">
+        ✓ Plan completo
+      </text>
+    </g>
+  </g>
+  <g transform="translate(116 314)">
+    <rect width="236" height="102" rx="16" fill="#101010" stroke="#1f1f1f" stroke-width="1.2" />
+    <text x="24" y="34" fill="#f7f7f7" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600">
+      Lunes
+    </text>
+    <g transform="translate(20 48)">
+      <rect width="88" height="32" rx="10" fill="#f5f5f5" />
+      <text x="44" y="21" text-anchor="middle" fill="#111111" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">
+        18:00 - 19:00
+      </text>
+    </g>
+    <g transform="translate(120 48)">
+      <rect width="88" height="32" rx="10" fill="#1f1f1f" stroke="#303030" stroke-width="1.2" />
+      <text x="44" y="21" text-anchor="middle" fill="#f1f1f1" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">
+        19:00 - 20:00
+      </text>
+    </g>
+  </g>
+  <g transform="translate(368 314)">
+    <rect width="236" height="102" rx="16" fill="#101010" stroke="#1f1f1f" stroke-width="1.2" />
+    <text x="24" y="34" fill="#f7f7f7" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="14" font-weight="600">
+      Miércoles
+    </text>
+    <g transform="translate(20 48)">
+      <rect width="88" height="32" rx="10" fill="#f5f5f5" />
+      <text x="44" y="21" text-anchor="middle" fill="#111111" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">
+        19:00 - 20:00
+      </text>
+    </g>
+    <g transform="translate(120 48)">
+      <rect width="88" height="32" rx="10" fill="#1f1f1f" stroke="#303030" stroke-width="1.2" />
+      <text x="44" y="21" text-anchor="middle" fill="#f1f1f1" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">
+        20:00 - 21:00
+      </text>
+    </g>
+  </g>
+  <g transform="translate(116 336)" opacity="0.26">
+    <rect width="152" height="96" rx="16" fill="#161616" />
+    <rect x="168" width="152" height="96" rx="16" fill="#161616" />
+    <rect x="336" width="152" height="96" rx="16" fill="#161616" />
+    <text x="20" y="28" fill="#888888" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600">
+      Martes
+    </text>
+    <text x="188" y="28" fill="#888888" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600">
+      Jueves
+    </text>
+    <text x="356" y="28" fill="#888888" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600">
+      Viernes
+    </text>
+  </g>
+  <g transform="translate(196 406)">
+    <rect width="328" height="56" rx="14" fill="#141414" stroke="#1f1f1f" stroke-width="1.2" />
+    <text x="18" y="34" fill="#d4d4d4" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">
+      Podés volver atrás si querés cambiar el plan seleccionado.
+    </text>
+    <rect x="200" y="14" width="108" height="32" rx="10" fill="#f5f5f5" />
+    <text x="254" y="34" text-anchor="middle" fill="#111111" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13" font-weight="600">
+      Continuar
+    </text>
+  </g>
+  <defs>
+    <linearGradient id="overlay" x1="360" y1="0" x2="360" y2="480" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#111111" stop-opacity="0.92" />
+      <stop offset="1" stop-color="#111111" stop-opacity="0.92" />
+    </linearGradient>
+    <filter id="shadow" x="52" y="20" width="616" height="448" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feFlood flood-opacity="0" result="BackgroundImageFix" />
+      <feGaussianBlur in="BackgroundImageFix" stdDeviation="12" />
+      <feComposite in2="SourceAlpha" operator="in" result="effect1_backgroundBlur" />
+      <feBlend mode="normal" in="SourceGraphic" in2="effect1_backgroundBlur" result="shape" />
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000000" flood-opacity="0.6" />
+    </filter>
+  </defs>
+</svg>

@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="280" viewBox="0 0 360 280" fill="none">
+  <rect width="360" height="280" rx="26" fill="#0E0E0E" />
+  <rect x="18" y="20" width="324" height="240" rx="24" fill="#111111" stroke="#2A2A2A" stroke-width="1.5" />
+  <rect x="38" y="44" width="284" height="88" rx="22" fill="#151515" stroke="#333333" stroke-width="1.5" />
+  <circle cx="74" cy="88" r="16" fill="#FFFFFF" />
+  <path d="M67 88l5.8 5.8L82 83" stroke="#111111" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />
+  <text x="108" y="78" fill="#F8F8F8" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="18" font-weight="600">Elegí tu plan de entrenamiento</text>
+  <text x="108" y="104" fill="#A5A5A5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="13">Seleccioná tus días de asistencia por semana para continuar.</text>
+  <rect x="38" y="152" width="140" height="96" rx="20" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="1.5" />
+  <rect x="186" y="152" width="140" height="96" rx="20" fill="#161616" stroke="#303030" stroke-width="1.5" />
+  <text x="58" y="178" fill="#111111" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">1 día</text>
+  <text x="206" y="178" fill="#F5F5F5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="16" font-weight="600">2 días</text>
+  <text x="58" y="206" fill="#111111" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="700">$ 15.000</text>
+  <text x="206" y="206" fill="#F5F5F5" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="24" font-weight="700">$ 14.000</text>
+  <text x="58" y="232" fill="#909090" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10" letter-spacing="5">VALOR POR CLASE</text>
+  <text x="206" y="232" fill="#909090" font-family="Inter, 'Segoe UI', Arial, sans-serif" font-size="10" letter-spacing="5">VALOR POR CLASE</text>
+</svg>
+

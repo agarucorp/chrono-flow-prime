@@ -2,7 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Calendar, Clock, Check, AlertCircle } from 'lucide-react';
+import { flushSync } from 'react-dom';
+import { Check, AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -118,31 +119,44 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const toggleHorario = (horarioId: string, diaSemana: number) => {
     setHorariosSeleccionados(prev => {
       const newSelection = new Set(prev);
-      
-      // Si el horario ya está seleccionado, deseleccionar
+
       if (newSelection.has(horarioId)) {
         newSelection.delete(horarioId);
         return newSelection;
       }
-      
-      // Si no hay paquete seleccionado, no permitir seleccionar
+
       if (!paqueteSeleccionado) {
         return prev;
       }
-      
-      // Si ya se alcanzó el límite del paquete, no permitir seleccionar más
+
+      // Eliminar cualquier horario previamente seleccionado para el mismo día
+      const horariosMismoDia = getHorariosPorDia(diaSemana);
+      horariosMismoDia.forEach((horario) => {
+        if (horario.id !== horarioId) {
+          newSelection.delete(horario.id);
+        }
+      });
+
       if (newSelection.size >= paqueteSeleccionado) {
         return prev;
       }
-      
-      // Permitir seleccionar el horario
+
       newSelection.add(horarioId);
       return newSelection;
     });
   };
 
   const handleSeleccionarPaquete = (dias: number) => {
-    setPaqueteSeleccionado(dias);
+    flushSync(() => {
+      setPaqueteSeleccionado(dias);
+    });
+  };
+
+  const handleContinuarDesdePaquete = () => {
+    if (!paqueteSeleccionado) {
+      showError('Plan requerido', 'Seleccioná un plan de entrenamiento para continuar.');
+      return;
+    }
     setStep('horarios');
   };
 
@@ -331,7 +345,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       <Dialog open={isOpen} onOpenChange={onClose}>
         <DialogContent className="sm:max-w-2xl">
           <div className="flex items-center justify-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+            <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white"></div>
           </div>
         </DialogContent>
       </Dialog>
@@ -342,51 +356,81 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     <Dialog open={isOpen} onOpenChange={() => undefined}>
       <DialogContent
         hideClose
-        className="h-[100dvh] w-[100vw] max-w-none sm:max-w-4xl sm:max-h-[85vh] sm:w-auto sm:rounded-lg p-4 sm:p-6 border-0 sm:border shadow-none sm:shadow-lg overflow-hidden flex flex-col"
+        className="flex h-[100dvh] w-full flex-col overflow-hidden border border-white/10 bg-[#111111] p-4 text-zinc-100 shadow-[0_50px_140px_rgba(0,0,0,0.75)] sm:max-h-[85vh] sm:w-[72vw] sm:max-w-[58rem] lg:w-[60vw] lg:max-w-[60rem] sm:rounded-[28px] sm:p-8"
         onEscapeKeyDown={(e) => e.preventDefault()}
         onPointerDownOutside={(e) => e.preventDefault()}
         onInteractOutside={(e) => e.preventDefault()}
       >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-sm sm:text-base lg:text-lg">
-            <Calendar className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-            <span className="truncate">
-              {step === 'paquete' && 'Elegí tu plan de entrenamiento'}
-              {step === 'horarios' && 'Seleccioná tus horarios'}
-              {step === 'review' && 'Confirmá tu selección'}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 sm:space-y-6 flex-1 overflow-y-auto px-1 sm:px-0">
+        <div className="flex-1 space-y-6 overflow-y-auto px-1 sm:space-y-8 sm:px-0">
           {/* Paso 1: Selección de paquete */}
           {step === 'paquete' && (
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-6 sm:space-y-8">
+              <div className="space-y-4 sm:space-y-5">
+                <span className="inline-flex h-8 items-center justify-center rounded-full border border-white/20 bg-black/40 px-5 text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-200 sm:h-9 sm:text-[11px]">
+                  Paso 1 de 3
+                </span>
+                <div className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/8 px-4 py-3 sm:gap-4 sm:px-6 sm:py-4">
+                  <div className="flex h-7 w-7 min-h-[28px] min-w-[28px] items-center justify-center rounded-full border border-white bg-white text-zinc-900 sm:h-8 sm:w-8">
+                    <Check className="h-3 w-3 sm:h-4 sm:w-4" strokeWidth={2.4} />
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-[12px] font-semibold text-zinc-50 sm:text-base">Elegí tu plan de entrenamiento</span>
+                    <span className="mt-1 text-[10px] text-zinc-400 sm:text-xs">
+                      Seleccioná tus días de asistencia por semana para continuar.
+                    </span>
+                  </div>
+                </div>
+              </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 sm:gap-3">
-                {PAQUETES_PRECIOS.map((paquete) => (
-                  <Card
-                    key={paquete.dias}
-                    className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:border-primary ${paqueteSeleccionado === paquete.dias ? 'border-primary ring-2 ring-primary' : ''
+              <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
+                {PAQUETES_PRECIOS.map((paquete) => {
+                  const isSelected = paqueteSeleccionado === paquete.dias;
+                  return (
+                    <Card
+                      key={paquete.dias}
+                      className={`group cursor-pointer border border-white/25 bg-zinc-900/70 backdrop-blur-sm transition-all duration-200 ${
+                        isSelected ? 'border-white bg-white text-zinc-900' : 'text-zinc-100'
                       }`}
-                    onClick={() => handleSeleccionarPaquete(paquete.dias)}
-                  >
-                    <CardHeader className="pb-2 px-3 pt-3">
-                      <CardTitle className="text-sm sm:text-base flex items-center justify-between gap-1">
-                        <span className="truncate">{paquete.dias} día{paquete.dias > 1 ? 's' : ''}</span>
-                        <Check className={`h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 ${paqueteSeleccionado === paquete.dias ? 'text-primary' : 'text-transparent'}`} />
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-1 px-3 pb-3">
-                      <div className="text-lg sm:text-2xl font-bold text-gray-300 break-words">
-                        {formatPrecio(paquete.precioPorClase)}
-                      </div>
-                      <div className="text-[10px] sm:text-xs text-muted-foreground pt-1 border-t leading-tight">
-                        valor por clase
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      onClick={() => handleSeleccionarPaquete(paquete.dias)}
+                      style={
+                        isSelected
+                          ? {
+                              boxShadow:
+                                '0 0 40px rgba(255,255,255,0.16), inset 0 0 0 2px rgba(20,20,20,0.75)',
+                              cursor: 'default',
+                            }
+                          : {
+                              transition: 'all 0.2s ease',
+                            }
+                      }
+                    >
+                      <CardHeader className="px-4 pb-3 pt-4">
+                        <CardTitle className="flex items-center justify-between text-sm font-semibold tracking-tight sm:text-base">
+                          <span className={`${isSelected ? 'text-zinc-900' : 'text-zinc-100'}`}>
+                            {paquete.dias} día{paquete.dias > 1 ? 's' : ''}
+                          </span>
+                          <Check
+                            className={`h-3 w-3 flex-shrink-0 sm:h-4 sm:w-4 ${isSelected ? 'text-zinc-900' : 'text-transparent'}`}
+                          />
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="space-y-2 px-4 pb-4">
+                        <div
+                          className={`text-lg font-semibold sm:text-2xl ${isSelected ? 'text-zinc-900' : 'text-zinc-100'}`}
+                        >
+                          {formatPrecio(paquete.precioPorClase)}
+                        </div>
+                        <div
+                          className={`text-[7px] uppercase tracking-[0.3em] ${
+                            isSelected ? 'text-zinc-500' : 'text-zinc-400'
+                          }`}
+                        >
+                          Valor por clase
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -394,34 +438,46 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
           {/* Paso 2: Selección de horarios */}
           {step === 'horarios' && !isReview && (
             <>
-              <div className="p-3 sm:p-4 bg-blue-50 border border-blue-200 rounded-lg">
-                <div className="flex items-start gap-2">
-                  <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                  <div className="text-xs sm:text-sm text-blue-800 flex-1 min-w-0">
-                    <p className="font-medium">Sistema de cuota por clase</p>
-                    <p className="text-[11px] sm:text-xs mt-1 leading-relaxed">
-                      Seleccioná 1 horario por día de acuerdo al plan elegido, para cambiar de plan volver al paso anterior. Los horarios se reservarán automáticamente cada mes.
+              <div className="space-y-4 sm:space-y-5">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('paquete');
+                      setHorariosSeleccionados(new Set());
+                    }}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white transition-colors hover:border-white/40 hover:bg-black/60 sm:h-10 sm:w-10"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <span className="inline-flex h-8 items-center justify-center rounded-full border border-white/20 bg-black/40 px-5 text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-200 sm:h-9 sm:text-[11px]">
+                  Paso 2 de 3
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-white/30 bg-white/5 p-4 sm:p-6">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1 min-w-0 text-[11px] text-zinc-300 sm:text-sm">
+                    <p className="font-medium text-zinc-100">Sistema de cuota por clase</p>
+                    <p className="mt-2 text-[11px] leading-relaxed text-zinc-400 sm:text-xs">
+                      Seleccioná 1 horario por día de acuerdo al plan elegido. Si querés modificar el plan, volvé al paso anterior. Los horarios se reservarán automáticamente cada mes.
                     </p>
-                    {/* Indicador de selección */}
-                    <div className="mt-3 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-blue-600 rounded-full"></div>
-                        <span className="text-xs font-medium">
+                    <div className="mt-4 flex items-center justify-between">
+                      <div className="flex items-center gap-2 text-[8px] font-normal uppercase tracking-[0.28em] text-zinc-400 sm:text-[11px] sm:font-medium">
+                        <span className="inline-flex h-2 w-2 items-center justify-center rounded-full bg-white" />
+                        <span className="font-normal text-zinc-100 sm:font-medium">
                           Horarios seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado || 0}
                         </span>
                       </div>
-                      {paqueteSeleccionado && horariosSeleccionados.size >= paqueteSeleccionado && (
-                        <span className="text-xs text-green-600 font-medium">
-                          ✓ Plan completo
-                        </span>
-                      )}
                     </div>
                   </div>
                 </div>
               </div>
 
               <div className="block sm:hidden">
-                <div className="divide-y divide-border rounded-md border">
+                <div className="divide-y divide-white/10 rounded-2xl border border-white/10 bg-zinc-950/60">
                   {diasSemana.map(dia => {
                     const horariosDelDia = getHorariosPorDia(dia.numero);
                     const abierto = openDay === dia.numero;
@@ -429,17 +485,19 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                       <div key={dia.numero}>
                         <button
                           type="button"
-                          className="w-full px-4 py-3 text-base font-medium flex items-center justify-between"
+                          className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-zinc-100"
                           onClick={() => setOpenDay(prev => (prev === dia.numero ? null : dia.numero))}
                         >
                           {dia.nombre}
                           <span className={`transform transition-transform ${abierto ? 'rotate-180' : ''}`}>▾</span>
                         </button>
                         <div
-                          className={`px-4 overflow-hidden transition-[max-height,opacity,padding] duration-300 ease-out ${abierto ? 'pb-3 max-h-96 opacity-100' : 'pb-0 max-h-0 opacity-0 pointer-events-none'}`}
+                          className={`overflow-hidden px-4 transition-[max-height,opacity,padding] duration-300 ease-out ${
+                            abierto ? 'max-h-96 pb-3 opacity-100' : 'pointer-events-none max-h-0 pb-0 opacity-0'
+                          }`}
                         >
                           {horariosDelDia.length === 0 ? (
-                            <p className="text-sm text-muted-foreground text-center py-2">No hay horarios disponibles</p>
+                            <p className="py-2 text-center text-sm text-zinc-500">No hay horarios disponibles</p>
                           ) : (
                             <div className="grid grid-cols-2 gap-2">
                               {horariosDelDia.map(horario => {
@@ -450,12 +508,12 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                     key={horario.id}
                                     variant="outline"
                                     size="sm"
-                                    className={`w-full justify-center text-sm h-10 ${
+                                    className={`h-10 w-full justify-center text-[13px] font-light transition-colors ${
                                       estaSeleccionado
-                                        ? 'bg-white text-gray-900 border-white shadow-md'
+                                        ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                         : puedeSeleccionar
-                                        ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
-                                        : 'bg-gray-900 text-gray-600 border-gray-700 opacity-50 cursor-not-allowed'
+                                        ? 'border-white/20 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-900'
+                                        : 'cursor-not-allowed border-white/5 bg-zinc-950 text-zinc-600 opacity-50'
                                     }`}
                                     onClick={() => toggleHorario(horario.id, dia.numero)}
                                     disabled={!puedeSeleccionar}
@@ -473,20 +531,23 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                 </div>
               </div>
 
-              <div className="hidden sm:grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="hidden grid-cols-2 gap-4 sm:grid lg:grid-cols-3">
                 {diasSemana.map(dia => {
                   const horariosDelDia = getHorariosPorDia(dia.numero);
                   return (
-                    <Card key={dia.numero}>
+                    <Card
+                      key={dia.numero}
+                      className="border border-white/10 bg-zinc-950/70 backdrop-blur-sm"
+                    >
                       <CardHeader className="pb-3">
-                        <CardTitle className="text-sm flex items-center justify-between">
-                          <span>{dia.nombre}</span>
+                        <CardTitle className="flex items-center justify-between text-sm font-normal text-zinc-100">
+                          <span className="text-[9px] uppercase tracking-[0.28em] text-zinc-400">{dia.nombre}</span>
                         </CardTitle>
                       </CardHeader>
                       <CardContent className="pt-0">
                         <div className="space-y-2">
                           {horariosDelDia.length === 0 ? (
-                            <p className="text-xs text-muted-foreground text-center py-2">No hay horarios disponibles</p>
+                            <p className="py-2 text-center text-xs text-zinc-500">No hay horarios disponibles</p>
                           ) : (
                             horariosDelDia.map(horario => {
                               const estaSeleccionado = isHorarioSeleccionado(horario.id);
@@ -496,12 +557,12 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                   key={horario.id}
                                   variant="outline"
                                   size="sm"
-                                  className={`w-full justify-start text-xs h-8 ${
+                                  className={`h-8 w-full justify-start text-[10px] font-light transition-colors ${
                                     estaSeleccionado
-                                      ? 'bg-white text-gray-900 border-white shadow-md'
+                                      ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                       : puedeSeleccionar
-                                      ? 'bg-gray-800 text-gray-300 border-gray-600 hover:bg-gray-700'
-                                      : 'bg-gray-900 text-gray-600 border-gray-700 opacity-50 cursor-not-allowed'
+                                      ? 'border-white/20 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-900'
+                                      : 'cursor-not-allowed border-white/5 bg-zinc-950 text-zinc-600 opacity-50'
                                   }`}
                                   onClick={() => toggleHorario(horario.id, dia.numero)}
                                   disabled={!puedeSeleccionar}
@@ -522,33 +583,49 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 
           {/* Paso 3: Etapa de revisión final */}
           {step === 'review' && isReview && (
-            <div className="space-y-4 max-w-md mx-auto px-2">
-              {/* Resumen del paquete */}
-              <div className="p-3 sm:p-4 bg-primary/10 border border-primary rounded-lg">
-                <h4 className="font-medium text-sm mb-2">Plan seleccionado</h4>
-                <div className="flex items-start sm:items-center justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-base sm:text-lg font-bold break-words">
+            <div className="space-y-6 sm:space-y-8">
+              <div className="space-y-4 sm:space-y-5">
+                <div className="flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setStep('horarios');
+                      setIsReview(false);
+                    }}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-black/40 text-white transition-colors hover:border-white/40 hover:bg-black/60 sm:h-10 sm:w-10"
+                  >
+                    <ArrowLeft className="h-4 w-4" />
+                  </button>
+                </div>
+                <span className="inline-flex h-8 items-center justify-center rounded-full border border-white/20 bg-black/40 px-5 text-[10px] font-medium uppercase tracking-[0.28em] text-zinc-200 sm:h-9 sm:text-[11px]">
+                  Paso 3 de 3
+                </span>
+              </div>
+
+              <div className="rounded-2xl border border-white/40 bg-white/5 p-4 sm:p-6">
+                <h4 className="mb-3 text-[12px] font-semibold uppercase tracking-[0.28em] text-zinc-300 sm:text-sm">Plan seleccionado</h4>
+                <div className="flex items-start justify-between gap-3 sm:items-center">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-normal text-zinc-100 sm:text-lg sm:font-semibold">
                       {paqueteSeleccionado} día{paqueteSeleccionado && paqueteSeleccionado > 1 ? 's' : ''} por semana
                     </p>
                   </div>
-                  <div className="text-xl sm:text-2xl font-bold text-gray-300 flex-shrink-0 break-words">
-                    {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
-                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mt-2">valor por clase</p>
+                <div className="mt-3 text-lg font-semibold text-zinc-100 sm:text-2xl">
+                  {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
+                  <span className="ml-2 text-xs uppercase tracking-[0.25em] text-zinc-500 sm:text-sm">/ clase</span>
+                </div>
               </div>
 
-              {/* Resumen de horarios */}
-              <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                <h4 className="font-medium text-sm">Horarios elegidos</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
+              <div className="space-y-3 rounded-2xl border border-white/10 bg-zinc-950/60 p-4 sm:p-6">
+                <h4 className="text-xs font-normal uppercase tracking-[0.16em] text-zinc-300 sm:text-sm sm:font-semibold sm:tracking-[0.28em]">Horarios elegidos</h4>
+                <ul className="space-y-1 text-xs text-zinc-400 sm:text-sm">
                   {Array.from(horariosSeleccionados).map(id => {
                     const h = horariosClase.find(x => x.id === id);
                     const dia = diasSemana.find(d => d.numero === h?.dia_semana)?.nombre;
                     return (
                       <li key={id} className="flex items-center space-x-2">
-                        <Check className="h-4 w-4 text-primary" />
+                        <Check className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
                         <span>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</span>
                       </li>
                     );
@@ -556,9 +633,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                 </ul>
               </div>
 
-              {/* Información importante */}
-              <div className="text-xs text-blue-800 bg-blue-50 border border-blue-200 rounded-md p-3">
-                <strong>Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-[11px] text-zinc-300 sm:p-6 sm:text-xs">
+                <strong className="font-semibold text-zinc-100">Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
               </div>
             </div>
           )}
@@ -566,26 +642,23 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 
         <DialogFooter className={step === 'review' ? 'flex-col space-y-3 sm:flex-row sm:space-y-0 sm:space-x-2' : undefined}>
           {step === 'paquete' && (
-            <div className="text-center text-sm text-muted-foreground">
-              Seleccioná un plan para continuar
+            <div className="flex w-full justify-end">
+              <Button
+                onClick={handleContinuarDesdePaquete}
+                disabled={!paqueteSeleccionado || saving}
+                className="w-full border border-transparent bg-white text-[13px] text-zinc-900 transition-colors hover:bg-zinc-100 disabled:cursor-not-allowed disabled:border-white/20 disabled:bg-white/30 disabled:text-zinc-500 sm:w-auto sm:text-sm"
+              >
+                Continuar
+              </Button>
             </div>
           )}
 
           {step === 'horarios' && (
             <>
               <Button
-                variant="outline"
-                onClick={() => {
-                  setStep('paquete');
-                  setHorariosSeleccionados(new Set());
-                }}
-                disabled={saving}
-              >
-                Volver
-              </Button>
-              <Button
                 onClick={handleSave}
                 disabled={saving || horariosSeleccionados.size === 0 || horariosSeleccionados.size !== paqueteSeleccionado}
+                className="border border-transparent bg-white text-[13px] text-zinc-900 transition-colors hover:bg-zinc-100 sm:text-sm"
               >
                 Continuar
               </Button>
@@ -595,23 +668,13 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
           {step === 'review' && (
             <>
               <Button
-                variant="outline"
-                onClick={() => {
-                  setStep('horarios');
-                  setIsReview(false);
-                }}
-                disabled={saving}
-              >
-                Volver al paso anterior
-              </Button>
-              <Button
                 onClick={handleConfirm}
                 disabled={saving}
-                className="bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                className="border border-transparent bg-white text-zinc-900 transition-colors hover:bg-zinc-100"
               >
                 {saving ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900 mr-2"></div>
+                    <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-zinc-900"></div>
                     Guardando...
                   </>
                 ) : (
