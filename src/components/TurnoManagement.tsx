@@ -60,11 +60,11 @@ export const TurnoManagement = () => {
   const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('20');
   
   // Tarifas escalonadas (valores se cargan desde BD)
-  const [combo1Tarifa, setCombo1Tarifa] = useState('15000');
-  const [combo2Tarifa, setCombo2Tarifa] = useState('14000');
-  const [combo3Tarifa, setCombo3Tarifa] = useState('12000');
-  const [combo4Tarifa, setCombo4Tarifa] = useState('11000');
-  const [combo5Tarifa, setCombo5Tarifa] = useState('10000');
+  const [combo1Tarifa, setCombo1Tarifa] = useState('12500');
+  const [combo2Tarifa, setCombo2Tarifa] = useState('11250');
+  const [combo3Tarifa, setCombo3Tarifa] = useState('10000');
+  const [combo4Tarifa, setCombo4Tarifa] = useState('8750');
+  const [combo5Tarifa, setCombo5Tarifa] = useState('7500');
   const [horariosFijos, setHorariosFijos] = useState<HorarioClase[]>([
     { id: 1, nombre: 'Clase 1', horaInicio: '07:00', horaFin: '08:00' },
     { id: 2, nombre: 'Clase 2', horaInicio: '08:00', horaFin: '09:00' },
@@ -105,11 +105,11 @@ export const TurnoManagement = () => {
           .single();
 
         if (!error && data) {
-          setCombo1Tarifa(data.combo_1_tarifa?.toString() || '15000');
-          setCombo2Tarifa(data.combo_2_tarifa?.toString() || '14000');
-          setCombo3Tarifa(data.combo_3_tarifa?.toString() || '12000');
-          setCombo4Tarifa(data.combo_4_tarifa?.toString() || '11000');
-          setCombo5Tarifa(data.combo_5_tarifa?.toString() || '10000');
+          setCombo1Tarifa(data.combo_1_tarifa?.toString() || '12500');
+          setCombo2Tarifa(data.combo_2_tarifa?.toString() || '11250');
+          setCombo3Tarifa(data.combo_3_tarifa?.toString() || '10000');
+          setCombo4Tarifa(data.combo_4_tarifa?.toString() || '8750');
+          setCombo5Tarifa(data.combo_5_tarifa?.toString() || '7500');
         }
       } catch (error) {
         console.error('Error cargando tarifas:', error);
@@ -372,7 +372,7 @@ export const TurnoManagement = () => {
 
       // Agregar tarifa si fue modificada (retrocompatibilidad)
       if (tarifaClase && parseFloat(tarifaClase) >= 0) {
-        updateData.tarifa_horaria = parseFloat(tarifaClase);
+        updateData.precio_clase = parseFloat(tarifaClase);
       }
 
       // Agregar tarifas escalonadas
@@ -770,7 +770,7 @@ export const TurnoManagement = () => {
                             value={combo1Tarifa}
                             onChange={(e) => setCombo1Tarifa(e.target.value)}
                             className="w-full h-8 text-xs text-center"
-                            placeholder="15000"
+                            placeholder="12500"
                           />
                           <span className="text-[10px] text-muted-foreground">ARS</span>
                         </div>
@@ -786,7 +786,7 @@ export const TurnoManagement = () => {
                             value={combo2Tarifa}
                             onChange={(e) => setCombo2Tarifa(e.target.value)}
                             className="w-full h-8 text-xs text-center"
-                            placeholder="14000"
+                            placeholder="11250"
                           />
                           <span className="text-[10px] text-muted-foreground">ARS</span>
                         </div>
@@ -802,7 +802,7 @@ export const TurnoManagement = () => {
                             value={combo3Tarifa}
                             onChange={(e) => setCombo3Tarifa(e.target.value)}
                             className="w-full h-8 text-xs text-center"
-                            placeholder="12000"
+                            placeholder="10000"
                           />
                           <span className="text-[10px] text-muted-foreground">ARS</span>
                         </div>
@@ -818,7 +818,7 @@ export const TurnoManagement = () => {
                             value={combo4Tarifa}
                             onChange={(e) => setCombo4Tarifa(e.target.value)}
                             className="w-full h-8 text-xs text-center"
-                            placeholder="11000"
+                            placeholder="8750"
                           />
                           <span className="text-[10px] text-muted-foreground">ARS</span>
                         </div>
@@ -834,7 +834,7 @@ export const TurnoManagement = () => {
                             value={combo5Tarifa}
                             onChange={(e) => setCombo5Tarifa(e.target.value)}
                             className="w-full h-8 text-xs text-center"
-                            placeholder="10000"
+                            placeholder="7500"
                           />
                           <span className="text-[10px] text-muted-foreground">ARS</span>
                         </div>
@@ -933,31 +933,29 @@ export const TurnoManagement = () => {
               </Dialog>
 
               {/* CTA 2: Editar ausencias */}
-              <Dialog open={isDialogAusenciasOpen} onOpenChange={setIsDialogAusenciasOpen}>
+              <Dialog open={isDialogAusenciasOpen} onOpenChange={(open) => {
+                setIsDialogAusenciasOpen(open);
+                if (!open) {
+                  // Resetear estados al cerrar
+                  setTipoAusencia(null);
+                  setMostrarResumenAusencia(false);
+                  setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
+                  setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
+                }
+              }}>
                 <DialogTrigger asChild>
                   <div className="h-12 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Editar ausencias
                   </div>
                 </DialogTrigger>
                 <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-4xl max-h-[90vh] overflow-y-auto pt-6 pb-3 px-3 sm:p-6 rounded-xl">
-                  <DialogHeader className="relative">
+                  <DialogHeader>
                     <DialogTitle style={{ fontSize: '12px' }}>
                       {tipoAusencia === 'periodo' ? '' : ''}
                     </DialogTitle>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute -top-4 -right-2 h-6 w-6 p-0 z-10"
-                      onClick={() => {
-                        setIsDialogAusenciasOpen(false);
-                        setTipoAusencia(null);
-                        setMostrarResumenAusencia(false);
-                        setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
-                        setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
-                      }}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <DialogDescription className="sr-only">
+                      Modal para gestionar ausencias del profesor
+                    </DialogDescription>
                   </DialogHeader>
 
                   {!tipoAusencia ? (

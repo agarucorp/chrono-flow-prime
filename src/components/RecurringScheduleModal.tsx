@@ -28,11 +28,11 @@ interface RecurringScheduleModalProps {
 // Fixed: Removed horario_clase_id and created_at from insert
 // Paquetes de precios - valor por clase según cantidad de días
 const PAQUETES_PRECIOS = [
-  { dias: 1, precioPorClase: 15000 },
-  { dias: 2, precioPorClase: 14000 },
-  { dias: 3, precioPorClase: 12000 },
-  { dias: 4, precioPorClase: 11000 },
-  { dias: 5, precioPorClase: 10000 }
+  { dias: 1, precioPorClase: 12500 },
+  { dias: 2, precioPorClase: 11250 },
+  { dias: 3, precioPorClase: 10000 },
+  { dias: 4, precioPorClase: 8750 },
+  { dias: 5, precioPorClase: 7500 }
 ];
 
 export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({

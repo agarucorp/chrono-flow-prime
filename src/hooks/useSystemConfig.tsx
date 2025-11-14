@@ -134,13 +134,13 @@ export const useSystemConfig = () => {
       try {
         const { data: cfgAdminTarifa } = await supabase
           .from('configuracion_admin')
-          .select('precio_clase, tarifa_horaria, moneda')
+          .select('precio_clase')
           .eq('sistema_activo', true)
           .limit(1)
           .maybeSingle();
         
-        const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.precio_clase ?? cfgAdminTarifa.tarifa_horaria) || 0) : 0;
-        const moneda = (cfgAdminTarifa && (cfgAdminTarifa as any).moneda) ? (cfgAdminTarifa as any).moneda : 'ARS';
+        const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.precio_clase) || 0) : 0;
+        const moneda = 'ARS';
         setConfiguracionTarifas(tarifa > 0 ? [{ id: 'admin', tipo_clase: 'general', tarifa_por_clase: tarifa, moneda, activo: true }] : []);
       } catch (error) {
         console.error('Error cargando configuración de tarifas:', error);
@@ -281,20 +281,13 @@ export const useSystemConfig = () => {
 
       if (error) {
         console.error('Error actualizando configuración de tarifas:', error);
-        // Intento 1: precio_clase
-        const { error: adminError1 } = await supabase
+        // Fallback: actualizar configuracion_admin
+        const { error: adminError } = await supabase
           .from('configuracion_admin')
-          .update({ precio_clase: tarifa.tarifa_por_clase, moneda: tarifa.moneda, updated_at: new Date().toISOString() })
-          .eq('activa', true);
-        if (adminError1) {
-          // Intento 2: tarifa_horaria (columna alternativa)
-          const { error: adminError2 } = await supabase
-            .from('configuracion_admin')
-            .update({ tarifa_horaria: tarifa.tarifa_por_clase, moneda: tarifa.moneda, updated_at: new Date().toISOString() })
-            .eq('activa', true);
-          if (adminError2) {
-            return { success: false, error: adminError2.message };
-          }
+          .update({ precio_clase: tarifa.tarifa_por_clase, updated_at: new Date().toISOString() })
+          .eq('sistema_activo', true);
+        if (adminError) {
+          return { success: false, error: adminError.message };
         }
         await cargarConfiguraciones();
         return { success: true };
