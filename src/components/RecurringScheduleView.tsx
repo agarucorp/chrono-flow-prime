@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +76,20 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [clasesDelMes, setClasesDelMes] = useState<any[]>([]);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   const [loadingMonth, setLoadingMonth] = useState(false);
+  const pageVisibleRef = React.useRef<boolean>(true);
+  useEffect(() => {
+    pageVisibleRef.current = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
+    const onVisibility = () => {
+      pageVisibleRef.current = document.visibilityState === 'visible';
+      if (pageVisibleRef.current) {
+        // Refrescar silenciosamente al volver al foco
+        cargarClasesDelMes(false);
+        cargarTurnosCancelados(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => document.removeEventListener('visibilitychange', onVisibility);
+  }, []);
 
   // Estado para modal de edición de perfil
   const [showProfileSettings, setShowProfileSettings] = useState(false);
@@ -219,6 +233,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }
 
       setHorariosRecurrentes(data || []);
+      // Asegurar que Mis Clases se renderice inmediatamente con los horarios recién cargados
+      try {
+        await cargarClasesDelMes(true);
+      } catch {}
       setLastLoadTime(Date.now());
     } catch (error) {
       console.error('Error al cargar horarios recurrentes:', error);
@@ -233,7 +251,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
-    setLoadingTurnosCancelados(true);
+    // Mostrar loading solo si aún no hay datos y la pestaña está visible
+    setLoadingTurnosCancelados(turnosCancelados.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
     try {
       // Obtener todos los turnos cancelados disponibles con el cliente que canceló
       const fechaHoy = format(new Date(), 'yyyy-MM-dd');
@@ -329,10 +348,57 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const channel = supabase
       .channel('turnos_disponibles_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
-        cargarTurnosCancelados(true);
+        cargarTurnosCancelados(false);
       })
       .subscribe();
 
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Suscripción a turnos_cancelados del usuario y global para refrescar inmediatamente vistas
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`turnos_cancelados_changes_${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` }, () => {
+        cargarTurnosCancelados(false);
+        cargarClasesDelMes(false);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Suscripción a turnos_variables del usuario para actualizar clases del mes y balance
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`turnos_variables_changes_${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables', filter: `cliente_id=eq.${user.id}` }, () => {
+        cargarClasesDelMes(false);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Suscripción a horarios recurrentes del usuario para refrescar sin recargar
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`horarios_recurrentes_changes_${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario', filter: `usuario_id=eq.${user.id}` }, async () => {
+        await cargarHorariosRecurrentes(true);
+        cargarClasesDelMes(false);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
+      })
+      .subscribe();
     return () => {
       supabase.removeChannel(channel);
     };
@@ -492,8 +558,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     
     // Siempre recargar para evitar problemas de cache compartido
 
-    // Mostrar loading solo si vamos a cargar datos nuevos
-    setLoadingMonth(true);
+    // Si aún no contamos con horarios y no se exige recarga, evitar barrer datos existentes
+    if (!forceReload && (!horariosRecurrentes || horariosRecurrentes.length === 0)) {
+      return;
+    }
+
+    // Mostrar loading solo si aún no hay datos y la pestaña está visible; refrescos serán en background
+    setLoadingMonth(clasesDelMes.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
 
     try {
       const diasDelMes = eachDayOfInterval({ 
@@ -518,7 +589,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }
       
       // Cargar horarios recurrentes si existen
-      if (horariosActuales.length > 0) {
+      if (horariosActuales && horariosActuales.length > 0) {
         for (const dia of diasDelMes) {
           const clasesDelDia = await getClasesDelDia(dia, horariosActuales);
           todasLasClases.push(...clasesDelDia);
@@ -792,9 +863,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       // Recargar turnos disponibles para actualizar vacantes
       await cargarTurnosCancelados(true);
 
-      // Disparar evento para actualizar balance del admin
+      // Disparar eventos para actualizar vistas relacionadas y el balance
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
 
       setShowModal(false);
       setConfirmOpen(false);

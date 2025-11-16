@@ -102,35 +102,47 @@ export const useAuth = () => {
   }
 
   const signUp = async (email: string, password: string, metadata?: any) => {
-    try {
-      setAuthState(prev => ({ ...prev, loading: true, error: null }))
-      
-      const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
-        email,
-        password,
-        options: {
-          data: metadata
+    setAuthState(prev => ({ ...prev, loading: true, error: null }))
+
+    const isRateLimit = (err: any) => {
+      const msg = (err?.message || '').toLowerCase();
+      const status = err?.status || err?.code;
+      return msg.includes('rate limit') || msg.includes('email rate limit') || status === 429 || `${status}` === '429';
+    };
+
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    const attempt = async (triesLeft: number, delayMs: number): Promise<{ success: boolean; user?: any; error?: string }> => {
+      try {
+        const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
+          email,
+          password,
+          options: {
+            data: metadata
+          }
+        };
+        const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
+        if (error) throw error;
+
+        setAuthState({
+          user: data.user,
+          loading: false,
+          error: null
+        });
+        return { success: true, user: data.user };
+      } catch (err: any) {
+        if (triesLeft > 0 && isRateLimit(err)) {
+          // Backoff y reintento
+          await sleep(delayMs);
+          return attempt(triesLeft - 1, delayMs * 2);
         }
+        const errorMessage = err instanceof Error ? err.message : 'Error al registrarse';
+        setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
+        return { success: false, error: errorMessage };
       }
-      const { data, error } = await supabase.auth.signUp({
-        ...signUpOptions
-      })
-      
-      if (error) throw error
-      
-      // No establecer el usuario como autenticado hasta que confirme el email
-      setAuthState({
-        user: data.user,
-        loading: false,
-        error: null
-      })
-      
-      return { success: true, user: data.user }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error al registrarse'
-      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }))
-      return { success: false, error: errorMessage }
-    }
+    };
+
+    return attempt(1, 15000); // 1 reintento con 15s; luego 30s si se repite
   }
 
   const signOut = async () => {
@@ -155,22 +167,36 @@ export const useAuth = () => {
   }
 
   const resetPassword = async (email: string) => {
-    try {
-      setAuthState(prev => ({ ...prev, loading: true, error: null }))
-      
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      })
-      
-      if (error) throw error
-      
-      setAuthState(prev => ({ ...prev, loading: false, error: null }))
-      return { success: true }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Error al enviar email de reset'
-      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }))
-      return { success: false, error: errorMessage }
-    }
+    setAuthState(prev => ({ ...prev, loading: true, error: null }))
+
+    const isRateLimit = (err: any) => {
+      const msg = (err?.message || '').toLowerCase();
+      const status = err?.status || err?.code;
+      return msg.includes('rate limit') || msg.includes('email rate limit') || status === 429 || `${status}` === '429';
+    };
+
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+    const attempt = async (triesLeft: number, delayMs: number): Promise<{ success: boolean; error?: string }> => {
+      try {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`
+        });
+        if (error) throw error;
+        setAuthState(prev => ({ ...prev, loading: false, error: null }));
+        return { success: true };
+      } catch (err: any) {
+        if (triesLeft > 0 && isRateLimit(err)) {
+          await sleep(delayMs);
+          return attempt(triesLeft - 1, delayMs * 2);
+        }
+        const errorMessage = err instanceof Error ? err.message : 'Error al enviar email de reset';
+        setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
+        return { success: false, error: errorMessage };
+      }
+    };
+
+    return attempt(1, 15000);
   }
 
   return {

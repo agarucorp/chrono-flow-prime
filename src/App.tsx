@@ -35,6 +35,7 @@ const Dashboard = () => {
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProcessed, setTutorialProcessed] = useState(false);
+  const [bootstrapped, setBootstrapped] = useState(false);
   const navigate = useNavigate();
   const [profileOpen, setProfileOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
@@ -100,6 +101,10 @@ const Dashboard = () => {
     setShowRecurringModal(false);
     setHasCompletedSetup(true);
     await dismissTutorial();
+    // Forzar actualización inmediata del balance tras completar setup
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
+    }
   };
 
   const handleTutorialClose = async () => {
@@ -113,13 +118,41 @@ const Dashboard = () => {
     }
   };
 
+  const getTutorialDismissed = useCallback(() => {
+    if (!user) return false;
+    const local = typeof window !== 'undefined'
+      ? localStorage.getItem(`onboarding-tutorial-${user.id}`) === 'true'
+      : false;
+    const meta = (user as any)?.user_metadata || {};
+    return Boolean(meta.onboarding_tutorial_dismissed) || local;
+  }, [user]);
+
   useEffect(() => {
     if (firstTimeLoading || isFirstTime === null) return;
+    // Si ya descartó el tutorial alguna vez, consideramos setup completo para evitar overlay
+    if (getTutorialDismissed()) {
+      setHasCompletedSetup(true);
+      return;
+    }
     setHasCompletedSetup(!isFirstTime);
-  }, [isFirstTime, firstTimeLoading]);
+  }, [isFirstTime, firstTimeLoading, getTutorialDismissed]);
+
+  // Marcar bootstrap tras primera carga completa para no mostrar el overlay global en recargas posteriores
+  useEffect(() => {
+    if (!firstTimeLoading && !bootstrapped) {
+      setBootstrapped(true);
+    }
+  }, [firstTimeLoading, bootstrapped]);
 
   useEffect(() => {
     if (!user || firstTimeLoading || isFirstTime === null) return;
+
+    // Respeta flag de descarte del tutorial (metadata/localStorage)
+    if (getTutorialDismissed()) {
+      setShowTutorial(false);
+      setTutorialProcessed(true);
+      return;
+    }
 
     if (!hasCompletedSetup) {
       setShowRecurringModal(false);
@@ -128,14 +161,15 @@ const Dashboard = () => {
     } else {
       setTutorialProcessed(true);
     }
-  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup]);
+  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup, getTutorialDismissed]);
 
   // Mostrar modal de configuración si es la primera vez
   useEffect(() => {
+    if (getTutorialDismissed()) return;
     if (!firstTimeLoading && isFirstTime && !hasCompletedSetup && !showTutorial && tutorialProcessed) {
       setShowRecurringModal(true);
     }
-  }, [isFirstTime, firstTimeLoading, hasCompletedSetup, showTutorial, tutorialProcessed]);
+  }, [isFirstTime, firstTimeLoading, hasCompletedSetup, showTutorial, tutorialProcessed, getTutorialDismissed]);
 
   // Escuchar evento de apertura de perfil desde la navbar mobile
   useEffect(() => {
@@ -457,7 +491,7 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
-        {firstTimeLoading ? (
+        {!bootstrapped && firstTimeLoading ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
@@ -471,11 +505,9 @@ const Dashboard = () => {
             {/* Desktop: usamos la navbar existente en RecurringScheduleView */}
 
             {/* Contenido según pestaña activa */}
-            {activeTab === 'clases' && (
-              <div className="mt-4">
-                <RecurringScheduleView />
-              </div>
-            )}
+            <div className={`mt-4 ${activeTab === 'clases' ? '' : 'hidden'}`}>
+              <RecurringScheduleView />
+            </div>
 
             {activeTab === 'balance' && (
               <div className="mt-4">
@@ -516,17 +548,13 @@ const Dashboard = () => {
                 </div>
 
                 {/* Contenido según sub-vista */}
-                {balanceSubView === 'mis-clases' && (
-                  <div className="mt-4">
-                    <RecurringScheduleView initialView="mis-clases" hideSubNav={true} />
-                  </div>
-                )}
+                <div className={`mt-4 ${balanceSubView === 'mis-clases' ? '' : 'hidden'}`}>
+                  <RecurringScheduleView initialView="mis-clases" hideSubNav={true} />
+                </div>
 
-                {balanceSubView === 'vacantes' && (
-                  <div className="mt-4">
-                    <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
-                  </div>
-                )}
+                <div className={`mt-4 ${balanceSubView === 'vacantes' ? '' : 'hidden'}`}>
+                  <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
+                </div>
 
                 {balanceSubView === 'balance' && (
                   <div className="space-y-4">
@@ -650,11 +678,9 @@ const Dashboard = () => {
               </div>
             )}
 
-            {activeTab === 'vacantes' && (
-              <div className="mt-4">
-                <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
-              </div>
-            )}
+            <div className={`mt-4 ${activeTab === 'vacantes' ? '' : 'hidden'}`}>
+              <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
+            </div>
 
             {/* Navbar móvil flotante (siempre visible en mobile) */}
             <div className="block sm:hidden">

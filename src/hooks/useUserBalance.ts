@@ -79,9 +79,11 @@ export const useUserBalance = (): UseUserBalanceReturn => {
       return;
     }
 
-    const loadBalance = async () => {
+    const loadBalance = async (showSpinner: boolean = false) => {
       try {
-        setLoading(true);
+        if (showSpinner) {
+          setLoading(true);
+        }
         setError(null);
 
         const now = new Date();
@@ -444,26 +446,66 @@ export const useUserBalance = (): UseUserBalanceReturn => {
       }
     };
 
-    loadBalance();
+    // Primera carga con spinner
+    loadBalance(true);
 
-    const subscription = supabase
-      .channel('balance-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'cuotas_mensuales',
-          filter: `usuario_id=eq.${user.id}`,
-        },
-        () => {
-          loadBalance();
-        }
-      )
-      .subscribe();
+    // Refrescar ante eventos manuales
+    const manualHandler = () => loadBalance(false);
+    window.addEventListener('balance:refresh', manualHandler);
+
+    // Suscripciones en tiempo real a todas las fuentes que impactan el balance
+    const channel = supabase.channel(`balance-realtime-${user.id}`);
+
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'cuotas_mensuales', filter: `usuario_id=eq.${user.id}` },
+      () => loadBalance(false)
+    );
+
+    // Cancelaciones del usuario (afectan conteo de cancelaciones)
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` },
+      () => loadBalance(false)
+    );
+
+    // Turnos variables reservados por el usuario (afectan vacantes/ajustes)
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'turnos_variables', filter: `cliente_id=eq.${user.id}` },
+      () => loadBalance(false)
+    );
+
+    // Cambios en vista de horarios (cuando se crean/activan horarios recurrentes)
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario', filter: `usuario_id=eq.${user.id}` },
+      () => loadBalance(false)
+    );
+
+    // Cambios de perfil que alteran combo/tarifa personalizada
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
+      () => loadBalance(false)
+    );
+
+    // Cambios globales de configuración de combos
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'configuracion_admin' },
+      () => loadBalance(false)
+    );
+
+    // Ausencias del admin (bloqueos) impactan estimación de próximas clases
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'ausencias_admin' },
+      () => loadBalance(false)
+    );
+
+    channel.subscribe();
 
     return () => {
-      subscription.unsubscribe();
+      try {
+        window.removeEventListener('balance:refresh', manualHandler);
+      } catch {}
+      try {
+        supabase.removeChannel(channel);
+      } catch {}
     };
   }, [user?.id]);
 

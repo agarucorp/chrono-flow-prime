@@ -302,6 +302,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 
       // Notificar al panel para recargar "Mis Clases"
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
+      // Refrescar balance inmediatamente
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
 
       onComplete();
     } catch (error) {

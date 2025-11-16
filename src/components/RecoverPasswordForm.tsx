@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useNotifications } from "@/hooks/useNotifications";
 import { supabase } from "@/lib/supabase";
+import { isEmailConfirmDisabledDev } from "@/lib/env";
 
 interface RecoverPasswordFormProps {
   onBack: () => void;
@@ -27,19 +28,51 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
 
     try {
       setIsLoading(true);
-      const loadingToast = showLoading("Enviando email de recuperación...");
+      let loadingToast = showLoading("Enviando email de recuperación...");
 
-      // Enviar email de recuperación de contraseña
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`
-      });
-
-      dismissToast(loadingToast);
-
-      if (error) {
-        showError("Error al enviar email", error.message);
+      // Modo dev: no enviar email, simular éxito para evitar límites
+      if (isEmailConfirmDisabledDev()) {
+        dismissToast(loadingToast);
+        setEmailSent(true);
+        showSuccess(
+          "Modo desarrollo",
+          "Se simuló el envío del email de recuperación (no se envió ningún correo)."
+        );
+        setIsLoading(false);
         return;
       }
+
+      const isRateLimit = (err: any) => {
+        const msg = (err?.message || '').toLowerCase();
+        const status = err?.status || err?.code;
+        return msg.includes('rate limit') || msg.includes('email rate limit') || status === 429 || `${status}` === '429';
+      };
+      const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+
+      // Intento con un reintento si hay rate limit
+      const attemptReset = async (triesLeft: number, delayMs: number): Promise<void> => {
+        // Enviar email de recuperación de contraseña
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/reset-password`
+        });
+
+        if (!error) return;
+
+        if (triesLeft > 0 && isRateLimit(error)) {
+          dismissToast(loadingToast);
+          loadingToast = showLoading(`Límite de emails alcanzado. Reintentando en ${Math.round(delayMs / 1000)}s...`);
+          await sleep(delayMs);
+          dismissToast(loadingToast);
+          loadingToast = showLoading("Reintentando envío...");
+          return attemptReset(triesLeft - 1, delayMs * 2);
+        }
+
+        throw error;
+      };
+
+      await attemptReset(1, 15000);
+
+      dismissToast(loadingToast);
 
       // Éxito
       setEmailSent(true);
@@ -49,7 +82,8 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
       );
 
     } catch (err) {
-      showError("Error inesperado", "Ocurrió un problema al enviar el email");
+      const message = err instanceof Error ? err.message : "Ocurrió un problema al enviar el email";
+      showError("Error al enviar email", message);
     } finally {
       setIsLoading(false);
     }
