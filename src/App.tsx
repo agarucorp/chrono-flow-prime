@@ -89,6 +89,10 @@ const Dashboard = () => {
     if (!user) return;
     try {
       await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
+      await supabase
+        .from('profiles')
+        .update({ onboarding_tutorial_seen: true })
+        .eq('id', user.id);
     } catch (error) {
       console.error('Error actualizando preferencia de tutorial:', error);
     }
@@ -127,9 +131,35 @@ const Dashboard = () => {
   };
 
   useEffect(() => {
-    if (firstTimeLoading || isFirstTime === null) return;
-    setHasCompletedSetup(!isFirstTime);
-  }, [isFirstTime, firstTimeLoading]);
+    if (firstTimeLoading || isFirstTime === null || !user) return;
+    
+    // Verificar si el usuario tiene horarios recurrentes configurados
+    const checkHasHorarios = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .select('id')
+          .eq('usuario_id', user.id)
+          .limit(1);
+        
+        if (error) {
+          console.warn('Error verificando horarios recurrentes:', error);
+          // Si hay error, usar solo isFirstTime como fallback
+          setHasCompletedSetup(!isFirstTime);
+          return;
+        }
+        
+        // Si tiene horarios o no es primera vez, el setup está completo
+        const hasHorarios = data && data.length > 0;
+        setHasCompletedSetup(!isFirstTime || hasHorarios);
+      } catch (err) {
+        console.error('Error inesperado verificando horarios:', err);
+        setHasCompletedSetup(!isFirstTime);
+      }
+    };
+    
+    checkHasHorarios();
+  }, [isFirstTime, firstTimeLoading, user]);
 
   useEffect(() => {
     if (!user || firstTimeLoading || isFirstTime === null) return;
@@ -341,18 +371,6 @@ const Dashboard = () => {
     }
   ];
 
-  useEffect(() => {
-    if (!user || firstTimeLoading || isFirstTime === null) return;
-
-    if (!hasCompletedSetup) {
-      setShowRecurringModal(false);
-      setShowTutorial(true);
-      setTutorialProcessed(false);
-    } else {
-      setTutorialProcessed(true);
-    }
-  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup]);
-
   // Sincronizar pestaña con query param ?tab=
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -361,6 +379,7 @@ const Dashboard = () => {
       setActiveTab(tab);
     }
   }, [location.search]);
+
 
   // Permitir cambiar pestaña vía eventos globales (para integrar navbar inferior existente)
   useEffect(() => {
@@ -431,15 +450,6 @@ const Dashboard = () => {
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
-              <button
-                type="button"
-                aria-label="Soporte"
-                className="sm:hidden inline-flex items-center justify-center h-10 w-10 active:scale-95 transition-all duration-200 group"
-                onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
-              >
-                <HelpCircle className="h-5 w-5 text-gray-300 group-hover:text-white transition-colors" />
-              </button>
-
               {/* Perfil en mobile: Dropdown con acciones */}
               <div className="sm:hidden">
                 <DropdownMenu>
@@ -463,6 +473,13 @@ const Dashboard = () => {
                     >
                       <Info className="h-4 w-4 mr-2" />
                       Información
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      className="cursor-pointer"
+                      onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
+                    >
+                      <HelpCircle className="h-4 w-4 mr-2" />
+                      Soporte
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem 

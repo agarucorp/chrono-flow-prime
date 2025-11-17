@@ -252,18 +252,24 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       if (error) {
         console.error('Error al cargar horarios recurrentes:', error);
+        setLoading(false);
         return;
       }
 
       setHorariosRecurrentes(data || []);
-      // Asegurar que Mis Clases se renderice inmediatamente con los horarios recién cargados
+      setLastLoadTime(Date.now());
+      
+      // Cargar clases del mes y mantener loading hasta que termine
       try {
         await cargarClasesDelMes(true);
-      } catch {}
-      setLastLoadTime(Date.now());
+      } catch (err) {
+        console.error('Error al cargar clases del mes:', err);
+      } finally {
+        // Solo desactivar loading después de que ambas cargas terminen
+        setLoading(false);
+      }
     } catch (error) {
       console.error('Error al cargar horarios recurrentes:', error);
-    } finally {
       setLoading(false);
     }
   };
@@ -586,8 +592,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
-    // Mostrar loading solo si aún no hay datos y la pestaña está visible; refrescos serán en background
-    setLoadingMonth(clasesDelMes.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
+    // Mostrar loadingMonth solo si no hay loading principal activo, hay datos previos y la pestaña está visible
+    // Si loading está activo, no mostrar loadingMonth porque ya se muestra el loading principal
+    setLoadingMonth(!loading && clasesDelMes.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
 
     try {
       const diasDelMes = eachDayOfInterval({ 
@@ -1101,7 +1108,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           <div className="w-full md:w-[55%] mx-auto animate-view-swap">
           <Card>
             <CardContent className="p-0">
-              {horariosRecurrentes.length === 0 ? (
+              {loading ? (
+                <div className="p-12 text-center">
+                  <div className="flex flex-col items-center justify-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                    <p className="text-sm text-muted-foreground">Cargando tus clases...</p>
+                  </div>
+                </div>
+              ) : horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No tienes clases configuradas</p>
@@ -1118,14 +1132,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                       </tr>
                     </thead>
                     <tbody>
-                      {loading || loadingMonth ? (
+                      {loadingMonth ? (
                         <tr>
                           <td colSpan={4} className="px-4 py-8 text-center">
                             <div className="flex flex-col items-center">
                               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
-                              <p className="text-sm text-muted-foreground">
-                                {loading ? 'Cargando clases...' : 'Cargando mes...'}
-                              </p>
+                              <p className="text-sm text-muted-foreground">Cargando mes...</p>
                             </div>
                           </td>
                         </tr>
@@ -1462,28 +1474,28 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 if (esCancelacionTardia) {
                   return (
                     <div className="space-y-2">
-                      <p>¿Estás seguro de que quieres cancelar esta clase?</p>
+                      <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
                       <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
-                        <p className="text-yellow-800 dark:text-yellow-200 font-medium">
+                        <span className="block text-yellow-800 dark:text-yellow-200 font-medium">
                           ⚠️ Cancelación tardía
-                        </p>
-                        <p className="text-yellow-700 dark:text-yellow-300 text-sm">
+                        </span>
+                        <span className="block text-yellow-700 dark:text-yellow-300 text-sm">
                           Al cancelar dentro de las 24hs previas al inicio de la clase, se te cobrará el valor completo de la misma.
-                        </p>
+                        </span>
                       </div>
                     </div>
                   );
                 } else {
                   return (
                     <div className="space-y-2">
-                      <p>¿Estás seguro de que quieres cancelar esta clase?</p>
+                      <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
                       <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
-                        <p className="text-green-800 dark:text-green-200 font-medium">
+                        <span className="block text-green-800 dark:text-green-200 font-medium">
                           ✅ Cancelación con anticipación
-                        </p>
-                        <p className="text-green-700 dark:text-green-300 text-sm">
+                        </span>
+                        <span className="block text-green-700 dark:text-green-300 text-sm">
                           Al cancelar con más de 24hs de anticipación, no se te cobrará por esta clase.
-                        </p>
+                        </span>
                       </div>
                     </div>
                   );

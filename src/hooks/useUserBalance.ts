@@ -246,8 +246,31 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             ? true
             : cuota?.anio === nextYear && cuota?.mes === nextMonthNum;
 
-          const unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
           const clases = Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
+          
+          // Para el mes actual, usar siempre la tarifa del perfil actual (no la de la cuota)
+          // porque el plan puede haber cambiado después de generar la cuota
+          let unitPrice: number;
+          if (isCurrent) {
+            // Priorizar tarifa_personalizada del perfil
+            if (profile?.tarifa_personalizada && Number(profile.tarifa_personalizada) > 0) {
+              unitPrice = Number(profile.tarifa_personalizada);
+            } else if (profile?.combo_asignado && config) {
+              const comboKey = `combo_${profile.combo_asignado}_tarifa` as keyof typeof config;
+              const value = config[comboKey];
+              if (value && Number(value) > 0) {
+                unitPrice = Number(value);
+              } else {
+                unitPrice = baseUnitPrice;
+              }
+            } else {
+              unitPrice = baseUnitPrice;
+            }
+          } else {
+            // Para meses pasados o futuros, usar la tarifa de la cuota
+            unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+          }
+          
           const totalBase = cuota?.monto_total !== undefined ? Number(cuota.monto_total) : clases * unitPrice;
           const totalConDescuento =
             cuota?.monto_con_descuento !== undefined ? Number(cuota.monto_con_descuento) : totalBase;
