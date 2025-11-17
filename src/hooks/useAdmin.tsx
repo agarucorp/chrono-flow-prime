@@ -17,6 +17,24 @@ export interface AdminUser {
   }[];
 }
 
+const DIA_SEMANA_MAP: Record<number, string> = {
+  1: 'Lunes',
+  2: 'Martes',
+  3: 'Miércoles',
+  4: 'Jueves',
+  5: 'Viernes',
+  6: 'Sábado',
+  7: 'Domingo',
+};
+
+const DIA_SEMANA_NOMBRE_MAP: Record<string, number> = Object.entries(DIA_SEMANA_MAP).reduce(
+  (acc, [numero, nombre]) => {
+    acc[nombre] = Number(numero);
+    return acc;
+  },
+  {} as Record<string, number>
+);
+
 export const useAdmin = () => {
   const { user } = useAuthContext();
   const [isAdmin, setIsAdmin] = useState<boolean>(false);
@@ -105,45 +123,30 @@ export const useAdmin = () => {
     checkAdminStatus();
   }, [user]);
 
-  // Obtener horarios recurrentes de un usuario específico
-  const fetchUserHorarios = useCallback(async (userId: string) => {
+  const fetchHorariosRecurrentes = useCallback(async (): Promise<Record<string, Set<string>>> => {
     try {
       const { data, error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .select(`
-          id,
-          dia_semana,
-          hora_inicio,
-          hora_fin
-        `)
-        .eq('usuario_id', userId)
+        .from('vista_horarios_usuarios')
+        .select('usuario_id, dia_semana, activo')
         .eq('activo', true);
 
       if (error) {
-        console.warn('Error obteniendo horarios:', error.message);
-        return [];
+        console.error('❌ Error obteniendo horarios recurrentes:', error);
+        return {};
       }
 
-      // Mapear números de día a nombres
-      const diasMap: Record<number, string> = {
-        1: 'Lunes', 2: 'Martes', 3: 'Miércoles', 4: 'Jueves',
-        5: 'Viernes', 6: 'Sábado', 7: 'Domingo'
-      };
-
-      // Agrupar por día
-      const diasUnicos = new Set<string>();
-      data?.forEach(hr => {
-        const diaNombre = diasMap[hr.dia_semana] || '';
-        if (diaNombre) diasUnicos.add(diaNombre);
-      });
-
-      return [{
-        turno_nombre: 'Horarios recurrentes',
-        dias_semana: Array.from(diasUnicos)
-      }];
+      return (data || []).reduce<Record<string, Set<string>>>((acc, row: any) => {
+        const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
+        if (!diaNombre) return acc;
+        if (!acc[row.usuario_id]) {
+          acc[row.usuario_id] = new Set<string>();
+        }
+        acc[row.usuario_id].add(diaNombre);
+        return acc;
+      }, {});
     } catch (err) {
-      console.error('Error inesperado obteniendo horarios:', err);
-      return [];
+      console.error('❌ Error inesperado obteniendo horarios recurrentes:', err);
+      return {};
     }
   }, []);
 
@@ -155,10 +158,13 @@ export const useAdmin = () => {
 
 
     try {
-      const { data, error } = await supabase
+      const [{ data, error }, horariosMap] = await Promise.all([
+        supabase
         .from('profiles')
         .select('id, email, role, created_at, full_name, first_name, last_name, phone')
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false }),
+        fetchHorariosRecurrentes()
+      ]);
 
 
       if (error) {
@@ -174,16 +180,19 @@ export const useAdmin = () => {
 
         const clientes = data.filter(u => u.role === 'client');
 
-      // Obtener horarios para cada usuario de manera individual
-      const usersWithHorarios = await Promise.all(
-        (data || []).map(async (user) => {
-          const horarios = await fetchUserHorarios(user.id);
-          return {
-            ...user,
-            horarios_recurrentes: horarios
-          };
-        })
-      );
+      const usersWithHorarios = (data || []).map(user => {
+        const diasSet = horariosMap[user.id];
+        const diasOrdenados = diasSet ? Array.from(diasSet)
+          .sort((a, b) => (DIA_SEMANA_NOMBRE_MAP[a] ?? 99) - (DIA_SEMANA_NOMBRE_MAP[b] ?? 99)) : [];
+
+        return {
+          ...user,
+          horarios_recurrentes: diasOrdenados.length > 0 ? [{
+            turno_nombre: 'Horarios recurrentes',
+            dias_semana: diasOrdenados
+          }] : []
+        };
+      });
 
       // Filtrar usuarios ocultos (soft-delete en sistema)
       const hidden = new Set(getHiddenUserIds());
@@ -192,7 +201,7 @@ export const useAdmin = () => {
     } catch (err) {
       console.error('❌ Error inesperado obteniendo usuarios:', err);
     }
-  }, [isAdmin, fetchUserHorarios]);
+  }, [isAdmin, fetchHorariosRecurrentes]);
 
   // Lectura de cuotas por mes/año
   const fetchCuotasMensuales = useCallback(async (anio: number, mes: number) => {

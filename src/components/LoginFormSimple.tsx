@@ -326,7 +326,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         {/* Logo - Removed for mobile */}
 
         {/* Login/Register Card */}
-        <Card className="shadow-elegant animate-slide-up">
+        <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
           <CardHeader className="space-y-1">
             <CardTitle className="text-lg md:text-xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
@@ -575,7 +575,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
               <Button
                 type="submit"
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 transition-all duration-300 h-11"
+                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 transition-all duration-300 h-11 text-[12px]"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -604,7 +604,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             </form>
 
             <div className="mt-6 text-center space-y-3">
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[10px] text-muted-foreground">
                 {isRegisterMode ? (
                   <>
                     ¿Ya tenés cuenta?{" "}
@@ -614,7 +614,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-gray-300 hover:underline font-medium"
+                      className="text-gray-300 hover:underline font-medium text-[10px]"
                     >
                       Iniciar sesión
                     </button>
@@ -628,7 +628,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-white hover:text-gray-200 hover:underline font-medium"
+                      className="text-white hover:text-gray-200 hover:underline font-medium text-[10px]"
                     >
                       Crear cuenta
                     </button>
@@ -637,11 +637,11 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               </p>
               
               {!isRegisterMode && (
-                <p className="text-xs text-muted-foreground">
+                <p className="text-[10px] text-muted-foreground">
                   ¿Olvidaste tu contraseña?{" "}
                   <button 
                     onClick={handleRecoverMode}
-                    className="text-white hover:text-gray-200 hover:underline font-medium"
+                    className="text-white hover:text-gray-200 hover:underline font-medium text-[10px]"
                   >
                     Recuperar acceso
                   </button>

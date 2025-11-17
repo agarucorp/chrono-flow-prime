@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -7,50 +7,46 @@ export const useFirstTimeUser = () => {
   const [isFirstTime, setIsFirstTime] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (user) {
-      checkFirstTimeUser();
-    } else {
-      setIsFirstTime(null);
-      setLoading(false);
+  const getFirstLoginFlag = useCallback(async () => {
+    if (!user) return false;
+    const metadata = (user.user_metadata || {}) as Record<string, any>;
+    if (metadata.onboarding_tutorial_dismissed) return false;
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('onboarding_tutorial_seen')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('useFirstTimeUser: error leyendo onboarding flag', error);
+        return false;
+      }
+
+      return !(data?.onboarding_tutorial_seen);
+    } catch (err) {
+      console.error('useFirstTimeUser: error inesperado', err);
+      return false;
     }
   }, [user]);
 
-  const checkFirstTimeUser = async () => {
-    if (!user) return;
-
-    try {
-      setLoading(true);
-      
-      // Verificar si el usuario ya tiene horarios recurrentes configurados
-      const { data, error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .select('id')
-        .eq('usuario_id', user.id)
-        .eq('activo', true)
-        .limit(1);
-
-      if (error) {
-        console.error('Error verificando usuario primerizo:', error);
-        // Si la tabla no existe aún, asumir que es primera vez
-        if (error.code === 'PGRST116' || error.message.includes('relation') || error.message.includes('does not exist')) {
-          setIsFirstTime(true);
-        } else {
-          setIsFirstTime(false);
-        }
-        return;
-      }
-
-      // Si no hay horarios recurrentes, es la primera vez
-      setIsFirstTime(data.length === 0);
-    } catch (error) {
-      console.error('Error inesperado:', error);
-      // En caso de error, asumir que no es primera vez para evitar bloqueos
-      setIsFirstTime(false);
-    } finally {
+  useEffect(() => {
+    if (!user) {
+      setIsFirstTime(null);
       setLoading(false);
+      return;
     }
-  };
 
-  return { isFirstTime, loading, refetch: checkFirstTimeUser };
+    const dismissedTutorial = Boolean((user.user_metadata as any)?.onboarding_tutorial_dismissed);
+    if (dismissedTutorial) {
+      setIsFirstTime(false);
+      setLoading(false);
+      return;
+    }
+
+    getFirstLoginFlag().then(setIsFirstTime).finally(() => setLoading(false));
+  }, [user, getFirstLoginFlag]);
+
+  return { isFirstTime, loading, refetch: getFirstLoginFlag };
 };

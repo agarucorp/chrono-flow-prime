@@ -300,6 +300,17 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         console.warn('⚠️ Error enviando email de bienvenida:', err);
       }
 
+      // Marcar tutorial como completado (onboarding)
+      try {
+        await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
+        await supabase
+          .from('profiles')
+          .update({ onboarding_tutorial_seen: true })
+          .eq('id', user?.id);
+      } catch (err) {
+        console.warn('⚠️ No se pudo marcar el tutorial como visto:', err);
+      }
+
       // Notificar al panel para recargar "Mis Clases"
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
       // Refrescar balance inmediatamente

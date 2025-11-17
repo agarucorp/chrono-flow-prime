@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -47,7 +48,8 @@ interface RecurringScheduleViewProps {
 }
 
 export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false }: RecurringScheduleViewProps = {}) => {
-  const { user } = useAuthContext();
+  const { user, signOut } = useAuthContext();
+  const navigate = useNavigate();
   const { isAdmin } = useAdmin();
   const { toast } = useToast();
   const [profileData, setProfileData] = useState<any>(null);
@@ -60,6 +62,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [showTurnosCancelados, setShowTurnosCancelados] = useState(false);
   const [turnosCancelados, setTurnosCancelados] = useState<any[]>([]);
   const [loadingTurnosCancelados, setLoadingTurnosCancelados] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   
   // Estados para modal de reserva
   const [showReservaModal, setShowReservaModal] = useState(false);
@@ -134,12 +137,32 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   }, [user?.id]);
 
-  // Escuchar confirmación de cerrar sesión disparada desde el menú desktop
+  // Escuchar confirmación de cierre de sesión desde menús
   useEffect(() => {
     const handleSignoutConfirm = () => setShowLogoutConfirm(true);
     window.addEventListener('auth:signout-confirm', handleSignoutConfirm);
-    return () => window.removeEventListener('auth:signout-confirm', handleSignoutConfirm);
+    return () => {
+      window.removeEventListener('auth:signout-confirm', handleSignoutConfirm);
+    };
   }, []);
+
+  const handleLogout = async () => {
+    if (!signOut || loggingOut) return;
+    try {
+      setLoggingOut(true);
+      const result = await signOut();
+      if (!result.success) {
+        console.error('Error al cerrar sesión:', result.error);
+        return;
+      }
+      navigate('/login', { replace: true });
+    } catch (error) {
+      console.error('Error inesperado al cerrar sesión:', error);
+    } finally {
+      setLoggingOut(false);
+      setShowLogoutConfirm(false);
+    }
+  };
 
   // Días de la semana (0 = Domingo, 1 = Lunes, etc.)
   const diasSemana = useMemo(() => [
@@ -1552,14 +1575,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row sm:justify-between items-stretch gap-2">
             <AlertDialogCancel className="text-xs sm:text-sm m-0 w-full sm:flex-1">Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={() => {
-                setShowLogoutConfirm(false);
-                window.dispatchEvent(new CustomEvent('auth:signout'));
-              }}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:flex-1"
+            <AlertDialogAction
+              onClick={handleLogout}
+              disabled={loggingOut}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 text-xs sm:text-sm m-0 w-full sm:flex-1 disabled:opacity-70 disabled:cursor-not-allowed"
             >
-              Cerrar sesión
+              {loggingOut ? 'Cerrando...' : 'Cerrar sesión'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
