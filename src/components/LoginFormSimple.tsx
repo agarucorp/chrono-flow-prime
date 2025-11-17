@@ -653,7 +653,22 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
         {/* Footer */}
         <div className="text-center mt-8">
-          <p className="text-xs text-muted-foreground">© Powered by AgaruCorp</p>
+          <div className="flex items-center justify-center gap-2">
+            <p className="text-xs text-muted-foreground">© Powered by</p>
+            <a 
+              href="https://www.agarucorp.com" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="inline-block"
+            >
+              <img 
+                src="/agarucorp-logo.svg" 
+                alt="AgaruCorp" 
+                className="h-[17px] w-auto sm:h-6 md:h-7 opacity-70 hover:opacity-100 transition-opacity"
+                style={{ maxWidth: '120px' }}
+              />
+            </a>
+          </div>
         </div>
 
       </div>
