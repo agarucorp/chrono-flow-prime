@@ -512,191 +512,195 @@ const Dashboard = () => {
           <div className="w-full pb-24 sm:pb-0">
             {/* Desktop: usamos la navbar existente en RecurringScheduleView */}
 
-            {/* Contenido según pestaña activa */}
-            {activeTab === 'clases' && (
-              <div className="mt-4">
-                <RecurringScheduleView />
-              </div>
-            )}
-
-            {activeTab === 'balance' && (
-              <div className="mt-4">
-                {/* Subnavbar igual que en RecurringScheduleView */}
-                <div className="hidden sm:flex justify-center mb-4">
-                  <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
-                    <button
-                      onClick={() => setBalanceSubView('mis-clases')}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                        balanceSubView === 'mis-clases'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Mis Clases
-                    </button>
-                    <button
-                      onClick={() => setBalanceSubView('vacantes')}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                        balanceSubView === 'vacantes'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Vacantes
-                    </button>
-                    <button
-                      onClick={() => setBalanceSubView('balance')}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                        balanceSubView === 'balance'
-                          ? 'bg-background text-foreground shadow-sm'
-                          : 'text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      Balance
-                    </button>
-                  </div>
-                </div>
-
-                {/* Contenido según sub-vista */}
-                {balanceSubView === 'mis-clases' && (
-                  <div className="mt-4">
-                    <RecurringScheduleView initialView="mis-clases" hideSubNav={true} />
-                  </div>
-                )}
-
-                {balanceSubView === 'vacantes' && (
-                  <div className="mt-4">
-                    <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
-                  </div>
-                )}
-
-                {balanceSubView === 'balance' && (
-                  <div className="space-y-4">
-                    {balanceLoading ? (
-                      <div className="flex items-center justify-center py-8">
-                        <div className="text-center">
-                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                          <p className="text-muted-foreground">Cargando balance...</p>
-                        </div>
+            {/* Calcular la vista inicial basada en la pestaña activa */}
+            {(() => {
+              let initialView: 'mis-clases' | 'turnos-disponibles' | 'perfil' = 'mis-clases';
+              let hideSubNav = false;
+              
+              if (activeTab === 'clases') {
+                initialView = 'mis-clases';
+                hideSubNav = false;
+              } else if (activeTab === 'vacantes') {
+                initialView = 'turnos-disponibles';
+                hideSubNav = true;
+              } else if (activeTab === 'balance') {
+                if (balanceSubView === 'mis-clases') {
+                  initialView = 'mis-clases';
+                  hideSubNav = true;
+                } else if (balanceSubView === 'vacantes') {
+                  initialView = 'turnos-disponibles';
+                  hideSubNav = true;
+                }
+              }
+              
+              return (
+                <>
+                  {/* Subnavbar para balance (solo cuando activeTab === 'balance') */}
+                  {activeTab === 'balance' && (
+                    <div className="hidden sm:flex justify-center mb-4">
+                      <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
+                        <button
+                          onClick={() => setBalanceSubView('mis-clases')}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                            balanceSubView === 'mis-clases'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Mis Clases
+                        </button>
+                        <button
+                          onClick={() => setBalanceSubView('vacantes')}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                            balanceSubView === 'vacantes'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Vacantes
+                        </button>
+                        <button
+                          onClick={() => setBalanceSubView('balance')}
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                            balanceSubView === 'balance'
+                              ? 'bg-background text-foreground shadow-sm'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Balance
+                        </button>
                       </div>
-                    ) : balanceHistory.length === 0 ? (
-                      <Card>
-                        <CardContent className="py-8 text-center text-sm text-muted-foreground">
-                          No hay información de cuotas disponible.
-                        </CardContent>
-                      </Card>
-                    ) : (
-                      visibleBalanceEntries.map((entry) => (
-                        <Card key={`${entry.anio}-${entry.mesNumero}`}>
-                          <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                            <CardTitle className="text-lg font-semibold capitalize">
-                              Cuota {entry.mesNombre} {entry.anio}
-                            </CardTitle>
-                                   {entry.isEstimate && (
-                                     <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                                       <span>Estimación</span>
-                                     </div>
-                                   )}
-                          </CardHeader>
-                          <CardContent className="space-y-3 text-sm">
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Valor por clase</span>
-                              <span className="font-medium">
-                                ${formatCurrency(entry.precioUnitario)}
-                              </span>
-                            </div>
-                            <div className="flex items-center justify-between">
-                              <span className="text-muted-foreground">Cantidad de clases</span>
-                              <span className="font-medium">{entry.clases}</span>
-                            </div>
-                            {entry.descuentoPorcentaje > 0 && (
-                              <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Descuento</span>
-                                <span className="font-medium text-green-500">
-                                  {entry.descuentoPorcentaje.toLocaleString('es-AR', {
-                                    minimumFractionDigits: 0,
-                                    maximumFractionDigits: 2,
-                                  })}% (-${formatCurrency(entry.descuento)})
-                                </span>
-                              </div>
-                            )}
-                            {entry.ajustes && (
-                              <>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">
-                                    Clases canceladas {mesActualNombre}
-                                  </span>
-                                  <div className="text-right">
-                                    <p className="font-medium text-green-500">
-                                      -${formatCurrency(entry.ajustes.cancelaciones.monto)}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
-                                    </p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">
-                                    Vacantes reservadas {mesActualNombre}
-                                  </span>
-                                  <div className="text-right">
-                                    <p className="font-medium text-amber-400">
-                                      +${formatCurrency(entry.ajustes.vacantes.monto)}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
-                                    </p>
-                                  </div>
-                                </div>
-                              </>
-                            )}
-                            <div className="border-t pt-2 flex items-center justify-between font-semibold">
-                              <span>Total</span>
-                              <span className="text-green-600">
-                                ${formatCurrency(entry.totalConDescuento)}
-                              </span>
-                            </div>
-                            {entry.estadoPago && !entry.isCurrent && (
-                              <div className="text-xs text-muted-foreground">
-                                Estado:{' '}
-                                {entry.estadoPago === 'pagado'
-                                  ? '✅ Pagado'
-                                  : entry.estadoPago === 'abonada'
-                                  ? '💰 Abonada'
-                                  : '⏳ Pendiente'}
-                              </div>
-                            )}
-                            {entry.isEstimate && (
-                              <div className="text-xs text-muted-foreground">
-                                Se actualiza en tiempo real ante cambios.
-                              </div>
-                            )}
+                    </div>
+                  )}
+
+                  {/* Contenido de balance (solo cuando balanceSubView === 'balance') */}
+                  {activeTab === 'balance' && balanceSubView === 'balance' && (
+                    <div className="space-y-4">
+                      {balanceLoading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="text-center">
+                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                            <p className="text-muted-foreground">Cargando balance...</p>
+                          </div>
+                        </div>
+                      ) : balanceHistory.length === 0 ? (
+                        <Card>
+                          <CardContent className="py-8 text-center text-sm text-muted-foreground">
+                            No hay información de cuotas disponible.
                           </CardContent>
                         </Card>
-                      ))
-                    )}
-                    {hasAdditionalBalanceHistory && (
-                      <div className="flex justify-center pt-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="border-white text-white hover:bg-white/10"
-                          onClick={() => setHistoryModalOpen(true)}
-                        >
-                          Ver histórico
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+                      ) : (
+                        visibleBalanceEntries.map((entry) => (
+                          <Card key={`${entry.anio}-${entry.mesNumero}`}>
+                            <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                              <CardTitle className="text-lg font-semibold capitalize">
+                                Cuota {entry.mesNombre} {entry.anio}
+                              </CardTitle>
+                                     {entry.isEstimate && (
+                                       <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                                         <span>Estimación</span>
+                                       </div>
+                                     )}
+                            </CardHeader>
+                            <CardContent className="space-y-3 text-sm">
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Valor por clase</span>
+                                <span className="font-medium">
+                                  ${formatCurrency(entry.precioUnitario)}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between">
+                                <span className="text-muted-foreground">Cantidad de clases</span>
+                                <span className="font-medium">{entry.clases}</span>
+                              </div>
+                              {entry.descuentoPorcentaje > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Descuento</span>
+                                  <span className="font-medium text-green-500">
+                                    {entry.descuentoPorcentaje.toLocaleString('es-AR', {
+                                      minimumFractionDigits: 0,
+                                      maximumFractionDigits: 2,
+                                    })}% (-${formatCurrency(entry.descuento)})
+                                  </span>
+                                </div>
+                              )}
+                              {entry.ajustes && (
+                                <>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">
+                                      Clases canceladas {mesActualNombre}
+                                    </span>
+                                    <div className="text-right">
+                                      <p className="font-medium text-green-500">
+                                        -${formatCurrency(entry.ajustes.cancelaciones.monto)}
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground">
+                                        {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">
+                                      Vacantes reservadas {mesActualNombre}
+                                    </span>
+                                    <div className="text-right">
+                                      <p className="font-medium text-amber-400">
+                                        +${formatCurrency(entry.ajustes.vacantes.monto)}
+                                      </p>
+                                      <p className="text-[11px] text-muted-foreground">
+                                        {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
+                              <div className="border-t pt-2 flex items-center justify-between font-semibold">
+                                <span>Total</span>
+                                <span className="text-green-600">
+                                  ${formatCurrency(entry.totalConDescuento)}
+                                </span>
+                              </div>
+                              {entry.estadoPago && !entry.isCurrent && (
+                                <div className="text-xs text-muted-foreground">
+                                  Estado:{' '}
+                                  {entry.estadoPago === 'pagado'
+                                    ? '✅ Pagado'
+                                    : entry.estadoPago === 'abonada'
+                                    ? '💰 Abonada'
+                                    : '⏳ Pendiente'}
+                                </div>
+                              )}
+                              {entry.isEstimate && (
+                                <div className="text-xs text-muted-foreground">
+                                  Se actualiza en tiempo real ante cambios.
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        ))
+                      )}
+                      {hasAdditionalBalanceHistory && (
+                        <div className="flex justify-center pt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-white text-white hover:bg-white/10"
+                            onClick={() => setHistoryModalOpen(true)}
+                          >
+                            Ver histórico
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
-            {activeTab === 'vacantes' && (
-              <div className="mt-4">
-                <RecurringScheduleView initialView="turnos-disponibles" hideSubNav={true} />
-              </div>
-            )}
+                  {/* Componente RecurringScheduleView siempre montado para mantener caché */}
+                  <div className={activeTab === 'balance' && balanceSubView === 'balance' ? 'hidden' : 'mt-4'}>
+                    <RecurringScheduleView initialView={initialView} hideSubNav={hideSubNav} />
+                  </div>
+                </>
+              );
+            })()}
 
             {/* Navbar móvil flotante (siempre visible en mobile) */}
             <div className="block sm:hidden">

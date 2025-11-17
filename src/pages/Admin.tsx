@@ -853,28 +853,28 @@ export default function Admin() {
           <TabsContent value="balance" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <div className="mb-6 flex items-center justify-end gap-2">
               <Select value={String(selectedMonth)} onValueChange={(v)=>setSelectedMonth(parseInt(v))}>
-                <SelectTrigger className="w-[120px] h-6 md:h-8 text-xs md:text-sm"><SelectValue placeholder="Mes" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Enero</SelectItem>
-                  <SelectItem value="2">Febrero</SelectItem>
-                  <SelectItem value="3">Marzo</SelectItem>
-                  <SelectItem value="4">Abril</SelectItem>
-                  <SelectItem value="5">Mayo</SelectItem>
-                  <SelectItem value="6">Junio</SelectItem>
-                  <SelectItem value="7">Julio</SelectItem>
-                  <SelectItem value="8">Agosto</SelectItem>
-                  <SelectItem value="9">Septiembre</SelectItem>
-                  <SelectItem value="10">Octubre</SelectItem>
-                  <SelectItem value="11">Noviembre</SelectItem>
-                  <SelectItem value="12">Diciembre</SelectItem>
+                <SelectTrigger className="w-[120px] h-8 md:h-9 text-[11px] md:text-sm"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectContent className="max-h-[200px] md:max-h-none">
+                  <SelectItem value="1" className="text-[11px] md:text-sm py-1.5 md:py-2">Enero</SelectItem>
+                  <SelectItem value="2" className="text-[11px] md:text-sm py-1.5 md:py-2">Febrero</SelectItem>
+                  <SelectItem value="3" className="text-[11px] md:text-sm py-1.5 md:py-2">Marzo</SelectItem>
+                  <SelectItem value="4" className="text-[11px] md:text-sm py-1.5 md:py-2">Abril</SelectItem>
+                  <SelectItem value="5" className="text-[11px] md:text-sm py-1.5 md:py-2">Mayo</SelectItem>
+                  <SelectItem value="6" className="text-[11px] md:text-sm py-1.5 md:py-2">Junio</SelectItem>
+                  <SelectItem value="7" className="text-[11px] md:text-sm py-1.5 md:py-2">Julio</SelectItem>
+                  <SelectItem value="8" className="text-[11px] md:text-sm py-1.5 md:py-2">Agosto</SelectItem>
+                  <SelectItem value="9" className="text-[11px] md:text-sm py-1.5 md:py-2">Septiembre</SelectItem>
+                  <SelectItem value="10" className="text-[11px] md:text-sm py-1.5 md:py-2">Octubre</SelectItem>
+                  <SelectItem value="11" className="text-[11px] md:text-sm py-1.5 md:py-2">Noviembre</SelectItem>
+                  <SelectItem value="12" className="text-[11px] md:text-sm py-1.5 md:py-2">Diciembre</SelectItem>
                 </SelectContent>
               </Select>
               <Select value={String(selectedYear)} onValueChange={(v)=>setSelectedYear(parseInt(v))}>
-                <SelectTrigger className="w-[100px] h-6 md:h-8 text-xs md:text-sm"><SelectValue placeholder="Año" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={String(new Date().getFullYear()-1)}>{String(new Date().getFullYear()-1)}</SelectItem>
-                  <SelectItem value={String(new Date().getFullYear())}>{String(new Date().getFullYear())}</SelectItem>
-                  <SelectItem value={String(new Date().getFullYear()+1)}>{String(new Date().getFullYear()+1)}</SelectItem>
+                <SelectTrigger className="w-[100px] h-8 md:h-9 text-[11px] md:text-sm"><SelectValue placeholder="Año" /></SelectTrigger>
+                <SelectContent className="max-h-[200px] md:max-h-none">
+                  <SelectItem value={String(new Date().getFullYear()-1)} className="text-[11px] md:text-sm py-1.5 md:py-2">{String(new Date().getFullYear()-1)}</SelectItem>
+                  <SelectItem value={String(new Date().getFullYear())} className="text-[11px] md:text-sm py-1.5 md:py-2">{String(new Date().getFullYear())}</SelectItem>
+                  <SelectItem value={String(new Date().getFullYear()+1)} className="text-[11px] md:text-sm py-1.5 md:py-2">{String(new Date().getFullYear()+1)}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

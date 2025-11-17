@@ -47,7 +47,7 @@ interface RecurringScheduleViewProps {
   hideSubNav?: boolean;
 }
 
-export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false }: RecurringScheduleViewProps = {}) => {
+export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false }: RecurringScheduleViewProps) => {
   const { user, signOut } = useAuthContext();
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
@@ -72,10 +72,31 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>(initialView);
   
+  // Refs para rastrear qué vistas ya han sido cargadas (persisten entre renders)
+  const misClasesLoadedRef = useRef<boolean>(false);
+  const turnosDisponiblesLoadedRef = useRef<boolean>(false);
+  
   // Actualizar vista cuando cambie initialView desde fuera
   useEffect(() => {
     setActiveView(initialView);
-  }, [initialView]);
+    // Solo cargar si no se han cargado antes
+    if (initialView === 'mis-clases' && user?.id && !misClasesLoadedRef.current) {
+      setLoading(true);
+      cargarHorariosRecurrentes(true);
+      misClasesLoadedRef.current = true;
+    } else if (initialView === 'mis-clases' && misClasesLoadedRef.current) {
+      // Si ya está cargado, no mostrar loading
+      setLoading(false);
+    } else if (initialView === 'turnos-disponibles' && user?.id && !turnosDisponiblesLoadedRef.current) {
+      setLoadingTurnosCancelados(true);
+      cargarTurnosCancelados(true);
+      turnosDisponiblesLoadedRef.current = true;
+    } else if (initialView === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
+      // Si ya está cargado, no mostrar loading
+      setLoadingTurnosCancelados(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialView, user?.id]);
   const [clasesDelMes, setClasesDelMes] = useState<any[]>([]);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   const [loadingMonth, setLoadingMonth] = useState(false);
@@ -124,18 +145,40 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
     setActiveView(view);
     
-    // Si se cambia a vacantes, recargar los datos
-    if (view === 'turnos-disponibles') {
+    // Solo cargar si no se han cargado antes
+    if (view === 'mis-clases' && !misClasesLoadedRef.current) {
+      setLoading(true);
+      cargarHorariosRecurrentes(true);
+      misClasesLoadedRef.current = true;
+    } else if (view === 'mis-clases' && misClasesLoadedRef.current) {
+      // Si ya está cargado, no mostrar loading
+      setLoading(false);
+    }
+    // Si se cambia a vacantes, solo cargar si no se han cargado antes
+    else if (view === 'turnos-disponibles' && !turnosDisponiblesLoadedRef.current) {
+      setLoadingTurnosCancelados(true);
       cargarTurnosCancelados(true);
+      turnosDisponiblesLoadedRef.current = true;
+    } else if (view === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
+      // Si ya está cargado, no mostrar loading
+      setLoadingTurnosCancelados(false);
     }
   };
 
   // Cargar turnos cancelados al inicio y cuando se cambie a la vista de turnos disponibles
+  // Solo cargar si no se han cargado antes
   useEffect(() => {
-    if (user?.id) {
-      cargarTurnosCancelados();
+    if (user?.id && activeView === 'turnos-disponibles' && !turnosDisponiblesLoadedRef.current) {
+      // Si se cambia a la vista de vacantes, mostrar loading y cargar
+      setLoadingTurnosCancelados(true);
+      cargarTurnosCancelados(true);
+      turnosDisponiblesLoadedRef.current = true;
+    } else if (activeView === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
+      // Si ya está cargado, no mostrar loading
+      setLoadingTurnosCancelados(false);
     }
-  }, [user?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, activeView]);
 
   // Escuchar confirmación de cierre de sesión desde menús
   useEffect(() => {
@@ -280,23 +323,42 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
-    // Mostrar loading solo si aún no hay datos y la pestaña está visible
-    setLoadingTurnosCancelados(turnosCancelados.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
+    // Mostrar loading si se fuerza recarga o si no hay datos
+    if (forceReload || turnosCancelados.length === 0) {
+      setLoadingTurnosCancelados(true);
+    }
     try {
       // Obtener todos los turnos cancelados disponibles con el cliente que canceló
       const fechaHoy = format(new Date(), 'yyyy-MM-dd');
       
-      const { data, error } = await supabase
+      const turnosDisponiblesPromise = supabase
         .from('turnos_disponibles')
         .select('*')
         .gte('turno_fecha', fechaHoy)
         .order('turno_fecha', { ascending: true })
         .order('turno_hora_inicio', { ascending: true });
 
+      // Obtener turnos reservados por el usuario en paralelo
+      const turnosReservadosPromise = supabase
+        .from('turnos_variables')
+        .select('creado_desde_disponible_id')
+        .eq('cliente_id', user.id)
+        .eq('estado', 'confirmada');
+
+      // Ejecutar ambas consultas en paralelo
+      const [{ data, error }, { data: reservados, error: errorReservados }] = await Promise.all([
+        turnosDisponiblesPromise,
+        turnosReservadosPromise
+      ]);
 
       if (error) {
         console.error('❌ Error al cargar turnos cancelados:', error);
+        setLoadingTurnosCancelados(false);
         return;
+      }
+
+      if (errorReservados) {
+        console.error('Error al cargar turnos reservados:', errorReservados);
       }
 
       // Obtener información de quién canceló cada turno en una sola consulta
@@ -322,45 +384,19 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         cancelacionesMap.set(c.id, c);
       });
 
-      // Combinar datos
-      const turnosConCancelaciones = (data || []).map((turno) => {
+      const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
+
+      // Combinar datos y marcar como reservados
+      const turnosFiltrados = (data || []).map((turno) => {
         const cancelacion = cancelacionesMap.get(turno.creado_desde_cancelacion_id);
         return {
           ...turno,
           cliente_que_cancelo: cancelacion?.cliente_id,
-          tipo_cancelacion: cancelacion?.tipo_cancelacion
+          tipo_cancelacion: cancelacion?.tipo_cancelacion,
+          reservado: idsReservados.has(turno.id),
+          canceladoPorUsuario: cancelacion?.cliente_id === user.id
         };
-      });
-
-      // Obtener turnos reservados por el usuario para marcar como reservados
-      const { data: reservados, error: errorReservados } = await supabase
-        .from('turnos_variables')
-        .select('creado_desde_disponible_id')
-        .eq('cliente_id', user.id)
-        .eq('estado', 'confirmada');
-
-      if (errorReservados) {
-        console.error('Error al cargar turnos reservados:', errorReservados);
-      }
-
-      const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
-
-      // Marcar como reservados y verificar si el usuario actual fue quien canceló
-      const turnosMarcados = turnosConCancelaciones.map((turno) => ({
-        ...turno,
-        reservado: idsReservados.has(turno.id), // turno.id es el ID de turnos_disponibles
-        canceladoPorUsuario: turno.cliente_que_cancelo === user.id
-      }));
-
-      // Mostrar todos los turnos disponibles (globales para todos los usuarios)
-      // Solo excluir los que ya están reservados por el usuario actual
-      const turnosFiltrados = turnosMarcados.filter(turno => {
-        if (turno.reservado) {
-          return false;
-        }
-        
-        return true;
-      });
+      }).filter(turno => !turno.reservado); // Excluir los que ya están reservados
 
       setTurnosCancelados(turnosFiltrados);
     } catch (error) {
@@ -677,8 +713,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Cargar clases del mes cuando cambien los horarios, el mes o las ausencias del admin
   useEffect(() => {
-    cargarClasesDelMes();
-  }, [horariosRecurrentes, currentMonth, ausenciasAdmin]);
+    if (activeView === 'mis-clases') {
+      cargarClasesDelMes();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horariosRecurrentes, currentMonth, ausenciasAdmin, activeView]);
 
   // Recargar ausencias cuando cambie el mes
   useEffect(() => {
@@ -1079,6 +1118,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       {/* Contenido basado en la vista activa */}
       {activeView === 'mis-clases' && (
         <>
+          {loading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+                <p className="text-sm text-muted-foreground">Cargando tus clases...</p>
+              </div>
+            </div>
+          ) : (
+            <>
           {/* Navegación del mes */}
           <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0 animate-view-swap">
             <Button
@@ -1108,14 +1156,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           <div className="w-full md:w-[55%] mx-auto animate-view-swap">
           <Card>
             <CardContent className="p-0">
-              {loading ? (
-                <div className="p-12 text-center">
-                  <div className="flex flex-col items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                    <p className="text-sm text-muted-foreground">Cargando tus clases...</p>
-                  </div>
-                </div>
-              ) : horariosRecurrentes.length === 0 ? (
+              {horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
                   <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
                   <p className="text-muted-foreground">No tienes clases configuradas</p>
@@ -1225,6 +1266,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             </CardContent>
           </Card>
           </div>
+            </>
+          )}
         </>
       )}
 
@@ -1315,7 +1358,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             {loadingTurnosCancelados ? (
               <div className="p-8 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Cargando turnos cancelados...</p>
+                <p className="text-muted-foreground">Cargando vacantes...</p>
               </div>
             ) : turnosConEstado.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">
