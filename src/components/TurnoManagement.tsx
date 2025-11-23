@@ -57,7 +57,7 @@ const formatDate = (dateString: string) => {
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
-  const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('20');
+  const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('4');
   
   // Tarifas escalonadas (valores se cargan desde BD)
   const [combo1Tarifa, setCombo1Tarifa] = useState('12500');
@@ -498,17 +498,47 @@ export const TurnoManagement = () => {
 
   const handleGuardarCapacidadMaxima = async () => {
     try {
-      const { error } = await supabase
+      const nuevaCapacidad = parseInt(capacidadMaximaGlobal);
+      
+      // 1. Actualizar configuracion_admin
+      const { error: errorConfig } = await supabase
         .from('configuracion_admin')
         .update({ 
-          max_alumnos_por_clase: parseInt(capacidadMaximaGlobal),
+          max_alumnos_por_clase: nuevaCapacidad,
           updated_at: new Date().toISOString()
         })
-        .eq('id_configuracion', '1'); // Asumiendo que hay una configuración con ID 1
+        .eq('sistema_activo', true);
 
-      if (error) throw error;
+      if (errorConfig) {
+        console.error('Error actualizando configuracion_admin:', errorConfig);
+        throw errorConfig;
+      }
 
-      toast({ title: 'Guardado', description: 'Capacidad máxima actualizada' });
+      // 2. Actualizar todos los horarios_semanales con la nueva capacidad
+      const { error: errorHorarios } = await supabase
+        .from('horarios_semanales')
+        .update({ 
+          capacidad: nuevaCapacidad,
+          updated_at: new Date().toISOString()
+        })
+        .eq('activo', true);
+
+      if (errorHorarios) {
+        console.error('Error actualizando horarios_semanales:', errorHorarios);
+        // No lanzar error, solo loguear - la capacidad global ya se actualizó
+      }
+
+      toast({ title: 'Guardado', description: 'Capacidad máxima actualizada globalmente' });
+      
+      // Disparar evento para actualizar otros componentes
+      window.dispatchEvent(new Event('capacidad:updated'));
+      
+      // Recargar configuración
+      await actualizarConfiguracionCapacidad({
+        tipo_clase: 'general',
+        max_alumnos_por_clase: nuevaCapacidad,
+        activo: true
+      });
     } catch (error) {
       console.error('Error actualizando capacidad máxima:', error);
       toast({ title: 'Error', description: 'No se pudo actualizar la capacidad máxima', variant: 'destructive' });

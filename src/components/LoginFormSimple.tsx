@@ -352,7 +352,19 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         
         if (!result.success) {
           console.error('Error en registro:', result.error);
-          setError(result.error || 'Error al crear la cuenta');
+          const errorMsg = result.error || 'Error al crear la cuenta';
+          
+          // Mostrar mensaje más claro para rate limit
+          if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('límite') || errorMsg.toLowerCase().includes('429')) {
+            showError(
+              'Límite de registros alcanzado', 
+              'Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.'
+            );
+          } else {
+            showError('Error al crear cuenta', errorMsg);
+          }
+          
+          setError(errorMsg);
           return;
         }
         

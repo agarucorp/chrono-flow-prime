@@ -13,6 +13,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { AdminTurnoInfoModal } from './AdminTurnoInfoModal';
 import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { format } from 'date-fns';
 
 interface Turno {
@@ -52,6 +53,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const { isAdmin } = useAdmin();
+  const { obtenerCapacidadActual } = useSystemConfig();
 
   const [turnos, setTurnos] = useState<Turno[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -237,14 +239,29 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       await fetchAlumnosHorarios();
     };
 
+    const handleCapacidadUpdated = async () => {
+      // Recargar slots para obtener la nueva capacidad
+      await fetchAdminSlots();
+      await fetchAlumnosHorarios();
+    };
+
+    const handleAlumnosHorariosUpdated = async () => {
+      // Recargar alumnos para actualizar contadores
+      await fetchAlumnosHorarios();
+    };
+
     window.addEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
     window.addEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);
     window.addEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
+    window.addEventListener('capacidad:updated', handleCapacidadUpdated);
+    window.addEventListener('alumnosHorarios:updated', handleAlumnosHorariosUpdated);
 
     return () => {
       window.removeEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
       window.removeEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);
       window.removeEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
+      window.removeEventListener('capacidad:updated', handleCapacidadUpdated);
+      window.removeEventListener('alumnosHorarios:updated', handleAlumnosHorariosUpdated);
     };
   }, []);
 
@@ -714,6 +731,32 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     if (!selectedUser || !selectedSlot) return;
 
     try {
+      // Validar capacidad máxima antes de agregar usuario
+      const capacidadMaxima = obtenerCapacidadActual() || 4;
+      const fechaTurno = formatLocalDate(currentDate);
+      
+      // Contar cuántos usuarios ya tienen reserva para este horario
+      const { data: reservasHorario, error: errorReservasHorario } = await supabase
+        .from('turnos_variables')
+        .select('id')
+        .eq('turno_fecha', fechaTurno)
+        .eq('turno_hora_inicio', selectedSlot.horaInicio + ':00')
+        .eq('turno_hora_fin', selectedSlot.horaFin + ':00')
+        .eq('estado', 'confirmada');
+
+      if (errorReservasHorario) {
+        console.error('Error verificando capacidad del horario:', errorReservasHorario);
+        showError('Error al verificar capacidad', errorReservasHorario.message);
+        return;
+      }
+
+      const usuariosEnHorario = reservasHorario?.length || 0;
+      
+      if (usuariosEnHorario >= capacidadMaxima) {
+        showError('Cupo completo', `Este horario ya tiene ${capacidadMaxima} usuarios registrados. No hay más cupos disponibles.`);
+        return;
+      }
+
       setAddingUser(true);
       const loadingToast = showLoading('Agregando usuario...');
 
@@ -849,6 +892,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   // Función para manejar clic en horario para reserva
   const handleTimeSlotReservation = (horaInicio: string, horaFin: string) => {
     const dayTurnos = getTurnosForDate(currentDate);
+    const capacidadMaxima = obtenerCapacidadActual() || 4;
 
     // Buscar turnos ocupados para este horario
     const turnosOcupados = dayTurnos.filter(turno =>
@@ -856,8 +900,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       turno.estado === 'ocupado'
     );
 
-    // Si hay menos de 3 turnos ocupados, el horario está disponible
-    if (turnosOcupados.length < 3) {
+    // Si hay menos usuarios que la capacidad máxima, el horario está disponible
+    if (turnosOcupados.length < capacidadMaxima) {
       // Crear un turno temporal para la reserva
       const turnoTemporal: Turno = {
         id: 'temp',
@@ -1066,12 +1110,22 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Contar solo alumnos activos para el cupo disponible
       const alumnosActivos = alumnosEnHorario.filter(a => a.tipo !== 'cancelado');
       
+      // Usar capacidad global de configuracion_admin en lugar de capacidad individual del horario
+      const capacidadGlobal = obtenerCapacidadActual() || 4;
+      
+      // Detectar si hay exceso de usuarios (más que la capacidad máxima)
+      const tieneExceso = alumnosActivos.length > capacidadGlobal;
+      const exceso = tieneExceso ? alumnosActivos.length - capacidadGlobal : 0;
+      
       return {
         horaInicio: slot.horaInicio,
         horaFin: slot.horaFin,
         alumnos: alumnosEnHorario, // Incluir cancelados para mostrar con stroke rojo
-        capacidad: slot.capacidad,
-        cupoDisponible: Math.max(0, (slot.capacidad || 0) - alumnosActivos.length),
+        alumnosActivos: alumnosActivos, // Solo alumnos activos (azules y verdes)
+        capacidad: capacidadGlobal, // Usar capacidad global
+        cupoDisponible: Math.max(0, capacidadGlobal - alumnosActivos.length),
+        tieneExceso, // Flag para indicar si hay exceso
+        exceso, // Cantidad de usuarios que exceden el límite
       };
     });
 
@@ -1117,9 +1171,22 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant="secondary" className="bg-blue-100 text-blue-800 font-light text-[10px]">
-                        <span className="hidden sm:inline">{slot.alumnos.length}/{slot.capacidad || 0} alumnos</span>
-                        <span className="sm:hidden">{slot.alumnos.length}/{slot.capacidad || 0}</span>
+                      <Badge 
+                        variant="secondary" 
+                        className={`font-light text-[10px] ${
+                          slot.tieneExceso 
+                            ? 'bg-red-100 text-red-800 border-red-300' 
+                            : 'bg-blue-100 text-blue-800'
+                        }`}
+                      >
+                        <span className="hidden sm:inline">
+                          {slot.alumnosActivos.length}/{slot.capacidad || 0} alumnos
+                          {slot.tieneExceso && ` (+${slot.exceso} exceso)`}
+                        </span>
+                        <span className="sm:hidden">
+                          {slot.alumnosActivos.length}/{slot.capacidad || 0}
+                          {slot.tieneExceso && ` (+${slot.exceso})`}
+                        </span>
                       </Badge>
                       {/* Botón + para agregar usuario - visible en desktop, deshabilitado para clases pasadas */}
                       {isAdminView && slot.cupoDisponible > 0 && (
@@ -1146,6 +1213,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
                   {isExpanded && (
                     <div className="mt-4">
+                      {/* Advertencia de exceso */}
+                      {slot.tieneExceso && (
+                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                          <div className="flex items-center gap-2 text-red-800 text-xs font-medium">
+                            <AlertTriangle className="h-4 w-4" />
+                            <span>⚠️ Exceso de capacidad: {slot.exceso} usuario(s) por encima del límite ({slot.capacidad})</span>
+                          </div>
+                          <p className="text-red-600 text-[10px] mt-1">
+                            Este horario tiene {slot.alumnosActivos.length} usuarios activos registrados, pero el límite es {slot.capacidad}. 
+                            Considera cancelar los turnos más recientes para respetar el límite.
+                          </p>
+                        </div>
+                      )}
                       {slot.alumnos.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {slot.alumnos.map((alumno, alumnoIndex) => {
@@ -1228,6 +1308,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     // Vista normal para clientes (código existente)
     // Separar slots en AM y PM con propiedades completas
+    const capacidadGlobal = obtenerCapacidadActual() || 4;
+    
     const amSlots = adminSlots
       .filter(slot => {
         const hora = parseInt(slot.horaInicio.split(':')[0]);
@@ -1236,7 +1318,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       .map(slot => ({
         ...slot,
         estado: 'disponible' as const,
-        turnosDisponibles: slot.capacidad || 0
+        turnosDisponibles: capacidadGlobal // Usar capacidad global
       }));
 
     const pmSlots = adminSlots
@@ -1247,7 +1329,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       .map(slot => ({
         ...slot,
         estado: 'disponible' as const,
-        turnosDisponibles: slot.capacidad || 0
+        turnosDisponibles: capacidadGlobal // Usar capacidad global
       }));
 
     return (
@@ -1277,7 +1359,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                       variant="secondary"
                       className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
-                      {`${slot.turnosDisponibles}/3`}
+                      {`${slot.turnosDisponibles}/${capacidadGlobal}`}
                     </Badge>
                   )}
                 </Button>
@@ -1311,7 +1393,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                       variant="secondary"
                       className="text-xs font-medium bg-primary-foreground text-primary hover:bg-primary-foreground/90 ml-1"
                     >
-                      {`${slot.turnosDisponibles}/3`}
+                      {`${slot.turnosDisponibles}/${capacidadGlobal}`}
                     </Badge>
                   )}
                 </Button>

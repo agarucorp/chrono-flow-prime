@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CancelacionConfirmationModal } from './CancelacionConfirmationModal';
 import { format, parse } from 'date-fns';
@@ -42,6 +43,7 @@ interface AdminTurnoModalProps {
 
 export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: AdminTurnoModalProps) => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  const { obtenerCapacidadActual } = useSystemConfig();
 
   const [clientes, setClientes] = useState<AdminUser[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
@@ -138,8 +140,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       setClientesReservados(todosLosClientes);
 
-      // Calcular capacidad disponible
-      const maxAlumnos = turno.max_alumnos || 1;
+      // Calcular capacidad disponible usando capacidad global
+      const maxAlumnos = obtenerCapacidadActual() || 4;
       setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));
     } catch (error) {
       console.error('Error cargando reservas:', error);
@@ -337,6 +339,9 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      // Disparar evento específico para actualizar contadores en agenda
+      window.dispatchEvent(new Event('alumnosHorarios:updated'));
 
       // Recargar datos
       await cargarReservasExistentes();
@@ -541,12 +546,16 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
 
-
       // Disparar eventos para actualizar otras vistas
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      // Disparar evento específico para actualizar contadores en agenda
+      window.dispatchEvent(new Event('alumnosHorarios:updated'));
 
+      // Recargar datos
+      await cargarReservasExistentes();
       onTurnoUpdated();
 
       // Cerrar modal después de un pequeño delay para asegurar que se vea el mensaje de éxito

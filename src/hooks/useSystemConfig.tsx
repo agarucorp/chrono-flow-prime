@@ -343,7 +343,7 @@ export const useSystemConfig = () => {
   };
 
   const obtenerCapacidadActual = () => {
-    return configuracionCapacidad.find(c => c.activo)?.max_alumnos_por_clase || 1;
+    return configuracionCapacidad.find(c => c.activo)?.max_alumnos_por_clase || 4;
   };
 
   const obtenerHorariosActivos = () => {
