@@ -75,7 +75,7 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
 
   return (
     <div className="fixed inset-0 z-[110] flex items-stretch sm:items-center justify-center bg-black/80 px-3 py-4 sm:py-6">
-      <div className="w-full max-w-3xl bg-background border border-border/60 sm:rounded-3xl shadow-2xl overflow-hidden h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
+      <div className="w-full max-w-3xl bg-black border-2 border-white sm:border-2 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
         <div className="flex flex-col gap-4 px-4 pt-4 pb-2 sm:p-10 overflow-y-auto flex-1">
           <div className="flex justify-center sm:hidden">
             <div className="text-white/70">{renderDots()}</div>
@@ -109,7 +109,7 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                         <img
                           src={image.src}
                           alt={image.alt}
-                          className="mx-auto h-[220px] sm:h-48 w-auto rounded-2xl border border-border/60 object-contain"
+                          className="mx-auto h-[220px] sm:h-48 w-auto rounded-2xl object-contain"
                           loading="lazy"
                         />
                       </div>
@@ -133,15 +133,15 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
               )}
             </div>
 
-            <div className="relative overflow-hidden">
+            <div className="relative overflow-hidden mt-6 sm:mt-0">
               <div
                 key={`content-${currentIndex}-${direction}`}
-                className="space-y-4 sm:space-y-0"
+                className="space-y-0 sm:space-y-0"
                 style={{
                   animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
                 }}
               >
-                <h2 className="text-[12px] sm:text-[21px] font-semibold tracking-tight text-foreground">
+                <h2 className="text-[14px] sm:text-[20px] font-semibold tracking-tight text-white">
                   {currentSlide.title}
                 </h2>
                 <p className="text-[11px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed">

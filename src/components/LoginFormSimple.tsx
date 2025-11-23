@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { supabase } from "@/lib/supabase";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { RecoverPasswordForm } from "./RecoverPasswordForm";
+import { OnboardingTutorial } from "./OnboardingTutorial";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -49,6 +50,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showTutorial, setShowTutorial] = useState(false);
+  const [showSplash, setShowSplash] = useState(true);
 
   // Handler para nombre y apellido: solo letras y espacios
   const handleNameChange = (field: 'firstName' | 'lastName', value: string) => {
@@ -63,6 +66,110 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     setRegisterData(prev => ({ ...prev, phone: sanitized }));
     setFieldErrors(prev => ({ ...prev, phone: "" }));
   };
+
+  // Mostrar splash screen en mobile durante 2.5 segundos
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowSplash(false);
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Mostrar tutorial solo una vez al cargar la página de login
+  useEffect(() => {
+    const tutorialShown = localStorage.getItem('login-tutorial-shown');
+    if (!tutorialShown) {
+      setShowTutorial(true);
+    }
+  }, []);
+
+  const handleTutorialClose = () => {
+    setShowTutorial(false);
+    localStorage.setItem('login-tutorial-shown', 'true');
+  };
+
+  const tutorialSlides = [
+    {
+      title: 'Sistema de autogestión de clases',
+      description: 'En esta plataforma vas a poder setear tus clases en MALDA de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.',
+      images: [
+        {
+          src: '/tutorial/logovertical.png',
+          alt: 'Logo Malda',
+          mobileOnly: true
+        },
+        {
+          src: '/tutorial/malda.png',
+          alt: 'Logo Malda',
+          desktopOnly: true
+        }
+      ]
+    },
+    {
+      title: 'Selección de horarios',
+      description: 'Una vez que selecciones tus horarios, no podrán ser modificados (etapa en desarrollo). Por favor elegirlos cuidadosamente.',
+      images: [
+        {
+          src: '/tutorial/mobilehorarios.png',
+          alt: 'Vista mobile del tutorial de horarios',
+          mobileOnly: true
+        },
+        {
+          src: '/tutorial/desktoptutorialhorarios.png',
+          alt: 'Vista desktop del tutorial de horarios',
+          desktopOnly: true
+        }
+      ]
+    },
+    {
+      title: 'Balance',
+      description: 'Vista de tu cuota actual, siguiente e historial. El pago es por adelantado y todos los cambios que afecten el mes actual impactarán en el próximo.',
+      images: [
+        {
+          src: '/tutorial/balancemobile.jpeg',
+          alt: 'Vista mobile del balance',
+          mobileOnly: true
+        },
+        {
+          src: '/tutorial/balancedesktop.png',
+          alt: 'Vista desktop del balance',
+          desktopOnly: true
+        }
+      ]
+    },
+    {
+      title: 'Vacantes',
+      description: 'Las clases canceladas aparecerán en este panel para que puedan ser reservadas por otros alumnos si así lo desean.',
+      images: [
+        {
+          src: '/tutorial/vacantesmobile.jpeg',
+          alt: 'Vista mobile de vacantes',
+          mobileOnly: true
+        },
+        {
+          src: '/tutorial/vacantesdesktop.png',
+          alt: 'Vista desktop de vacantes',
+          desktopOnly: true
+        }
+      ]
+    },
+    {
+      title: 'Información',
+      description: 'Si tenés alguna duda podés ver una guía de las funcionalidades de la plataforma ingresando a "Información" desde el ícono de perfil.',
+      images: [
+        {
+          src: '/tutorial/guiamobile.jpeg',
+          alt: 'Vista mobile de la guía',
+          mobileOnly: true
+        },
+        {
+          src: '/tutorial/guiadesktop.png',
+          alt: 'Vista desktop de la guía',
+          desktopOnly: true
+        }
+      ]
+    }
+  ];
 
   // Verificar requisitos de contraseña
   const checkPasswordRequirements = (password: string) => {
@@ -320,11 +427,21 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     );
   }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative">
-      <div className="w-full max-w-md space-y-8">
-        {/* Logo - Removed for mobile */}
+  // Splash screen para mobile (solo se muestra 2.5 segundos)
+  if (showSplash) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:hidden">
+        <img src="/tutorial/m-alda.png" alt="Logo" className="max-w-xs" />
+      </div>
+    );
+  }
 
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center bg-black p-4 relative">
+      <div className="hidden md:flex justify-center mb-8">
+        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+      </div>
+      <div className="w-full max-w-md space-y-8">
         {/* Login/Register Card */}
         <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
           <CardHeader className="space-y-1">
@@ -333,17 +450,17 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             </CardTitle>
             <CardDescription className="text-xs md:text-sm text-center">
               {isRegisterMode 
-                ? currentStep === 1 
-                  ? "Complete su información personal" 
-                  : "Configure su acceso al sistema"
+                ? currentStep === 2 
+                  ? "Configure su acceso al sistema"
+                  : ""
                 : "Ingresá a la plataforma para visualizar y gestionar tus clases."
               }
             </CardDescription>
             {isRegisterMode && (
               <div className="flex justify-center mt-4">
                 <div className="flex space-x-2">
-                  <div className={`w-8 h-2 rounded-full ${currentStep >= 1 ? 'bg-primary' : 'bg-muted'}`}></div>
-                  <div className={`w-8 h-2 rounded-full ${currentStep >= 2 ? 'bg-primary' : 'bg-muted'}`}></div>
+                  <div className={`w-8 h-2 rounded-full ${currentStep >= 1 ? 'bg-white' : 'bg-muted'}`}></div>
+                  <div className={`w-8 h-2 rounded-full ${currentStep >= 2 ? 'bg-white' : 'bg-muted'}`}></div>
                 </div>
               </div>
             )}
@@ -407,7 +524,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                 <>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="firstName">Nombre</Label>
+                      <Label htmlFor="firstName" className="text-[11px] md:text-sm">Nombre</Label>
                       <Input
                         id="firstName"
                         type="text"
@@ -415,12 +532,12 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.firstName}
                         onChange={(e) => handleNameChange('firstName', e.target.value)}
                         onBlur={(e) => validateField('firstName', e.target.value)}
-                        className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.firstName ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.firstName ? 'border-red-500' : ''}`}
                       />
                       {fieldErrors.firstName && <p className="text-xs text-red-500">{fieldErrors.firstName}</p>}
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="lastName">Apellido</Label>
+                      <Label htmlFor="lastName" className="text-[11px] md:text-sm">Apellido</Label>
                       <Input
                         id="lastName"
                         type="text"
@@ -428,14 +545,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.lastName}
                         onChange={(e) => handleNameChange('lastName', e.target.value)}
                         onBlur={(e) => validateField('lastName', e.target.value)}
-                        className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.lastName ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.lastName ? 'border-red-500' : ''}`}
                       />
                       {fieldErrors.lastName && <p className="text-xs text-red-500">{fieldErrors.lastName}</p>}
                     </div>
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="phone">Número de Teléfono</Label>
+                    <Label htmlFor="phone" className="text-[11px] md:text-sm">Número de Teléfono</Label>
                     <Input
                       id="phone"
                       type="tel"
@@ -443,7 +560,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                       value={registerData.phone}
                       onChange={(e) => handlePhoneChange(e.target.value)}
                       onBlur={(e) => validateField('phone', e.target.value)}
-                      className={`transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.phone ? 'border-red-500' : ''}`}
+                      className={`text-[11px] md:text-sm transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.phone ? 'border-red-500' : ''}`}
                       maxLength={10}
                     />
                     {fieldErrors.phone && <p className="text-xs text-red-500">{fieldErrors.phone}</p>}
@@ -453,7 +570,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                 // Step 2: Account Setup
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="registerEmail">Email</Label>
+                    <Label htmlFor="registerEmail" className="text-[11px] md:text-sm">Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -463,14 +580,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.email}
                         onChange={(e) => handleFieldChange('email', e.target.value)}
                         onBlur={(e) => validateField('email', e.target.value)}
-                        className={`pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.email ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.email ? 'border-red-500' : ''}`}
                       />
                     </div>
                     {fieldErrors.email && <p className="text-xs text-red-500">{fieldErrors.email}</p>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="confirmEmail">Confirmar Email</Label>
+                    <Label htmlFor="confirmEmail" className="text-[11px] md:text-sm">Confirmar Email</Label>
                     <div className="relative">
                       <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -480,14 +597,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.confirmEmail}
                         onChange={(e) => handleFieldChange('confirmEmail', e.target.value)}
                         onBlur={(e) => validateField('confirmEmail', e.target.value)}
-                        className={`pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmEmail ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm pl-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmEmail ? 'border-red-500' : ''}`}
                       />
                     </div>
                     {fieldErrors.confirmEmail && <p className="text-xs text-red-500">{fieldErrors.confirmEmail}</p>}
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="registerPassword">Contraseña</Label>
+                    <Label htmlFor="registerPassword" className="text-[11px] md:text-sm">Contraseña</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -497,7 +614,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.password}
                         onChange={(e) => handleFieldChange('password', e.target.value)}
                         onBlur={(e) => validateField('password', e.target.value)}
-                        className={`pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.password ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.password ? 'border-red-500' : ''}`}
                       />
                       <button
                         type="button"
@@ -533,7 +650,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   </div>
                   
                   <div className="space-y-2">
-                    <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                    <Label htmlFor="confirmPassword" className="text-[11px] md:text-sm">Confirmar Contraseña</Label>
                     <div className="relative">
                       <Lock className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                       <Input
@@ -543,7 +660,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         value={registerData.confirmPassword}
                         onChange={(e) => handleFieldChange('confirmPassword', e.target.value)}
                         onBlur={(e) => validateField('confirmPassword', e.target.value)}
-                        className={`pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmPassword ? 'border-red-500' : ''}`}
+                        className={`text-[11px] md:text-sm pl-10 pr-10 transition-all duration-300 focus:ring-2 focus:ring-primary/50 ${fieldErrors.confirmPassword ? 'border-red-500' : ''}`}
                       />
                       <button
                         type="button"
@@ -567,7 +684,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   type="button"
                   variant="outline"
                   onClick={handleBackStep}
-                  className="w-full mb-4"
+                  className="w-full mb-4 text-[12px] md:text-base"
                 >
                   Volver al Paso Anterior
                 </Button>
@@ -672,6 +789,13 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         </div>
 
       </div>
+
+      {/* Tutorial - Solo se muestra una vez */}
+      <OnboardingTutorial
+        open={showTutorial}
+        slides={tutorialSlides}
+        onClose={handleTutorialClose}
+      />
     </div>
   );
 };

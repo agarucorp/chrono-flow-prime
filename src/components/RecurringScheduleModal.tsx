@@ -646,8 +646,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                 </ul>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-[11px] text-zinc-300 sm:p-6 sm:text-xs">
-                <strong className="font-semibold text-zinc-100">Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
+              <div className="rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 p-4 text-[11px] text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.15)] sm:p-6 sm:text-xs">
+                <strong className="font-semibold text-amber-200">Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
               </div>
             </div>
           )}

@@ -33,6 +33,8 @@ const Dashboard = () => {
   const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
+  const [hasHorarios, setHasHorarios] = useState<boolean | null>(null);
+  const [loadingHorarios, setLoadingHorarios] = useState(true);
   const [showTutorial, setShowTutorial] = useState(false);
   const [tutorialProcessed, setTutorialProcessed] = useState(false);
   const [tutorialDismissed, setTutorialDismissed] = useState(false);
@@ -118,6 +120,7 @@ const Dashboard = () => {
   const handleRecurringSetupComplete = async () => {
     setShowRecurringModal(false);
     setHasCompletedSetup(true);
+    setHasHorarios(true);
     await dismissTutorial();
   };
 
@@ -130,11 +133,16 @@ const Dashboard = () => {
     }
   };
 
+  // Verificar SIEMPRE si el usuario tiene horarios recurrentes configurados
   useEffect(() => {
-    if (firstTimeLoading || isFirstTime === null || !user) return;
+    if (!user) {
+      setHasHorarios(null);
+      setLoadingHorarios(false);
+      return;
+    }
     
-    // Verificar si el usuario tiene horarios recurrentes configurados
     const checkHasHorarios = async () => {
+      setLoadingHorarios(true);
       try {
         const { data, error } = await supabase
           .from('horarios_recurrentes_usuario')
@@ -144,41 +152,83 @@ const Dashboard = () => {
         
         if (error) {
           console.warn('Error verificando horarios recurrentes:', error);
-          // Si hay error, usar solo isFirstTime como fallback
-          setHasCompletedSetup(!isFirstTime);
+          setHasHorarios(false);
+          setHasCompletedSetup(false);
+          setLoadingHorarios(false);
           return;
         }
         
-        // Si tiene horarios o no es primera vez, el setup está completo
-        const hasHorarios = data && data.length > 0;
-        setHasCompletedSetup(!isFirstTime || hasHorarios);
+        // Verificar si tiene horarios (SIEMPRE, no solo en primera vez)
+        const tieneHorarios = data && data.length > 0;
+        setHasHorarios(tieneHorarios);
+        setHasCompletedSetup(tieneHorarios);
       } catch (err) {
         console.error('Error inesperado verificando horarios:', err);
-        setHasCompletedSetup(!isFirstTime);
+        setHasHorarios(false);
+        setHasCompletedSetup(false);
+      } finally {
+        setLoadingHorarios(false);
       }
     };
     
     checkHasHorarios();
-  }, [isFirstTime, firstTimeLoading, user]);
+  }, [user]);
 
   useEffect(() => {
-    if (!user || firstTimeLoading || isFirstTime === null) return;
+    if (!user || firstTimeLoading || isFirstTime === null || loadingHorarios || hasHorarios === null) return;
 
-    if (isFirstTime && !hasCompletedSetup && !tutorialDismissed) {
+    // Si es primera vez y no tiene horarios, mostrar tutorial primero
+    if (isFirstTime && !hasHorarios && !tutorialDismissed) {
       setShowRecurringModal(false);
       setShowTutorial(true);
       setTutorialProcessed(false);
     } else {
       setTutorialProcessed(true);
     }
-  }, [user, firstTimeLoading, isFirstTime, hasCompletedSetup, tutorialDismissed]);
+  }, [user, firstTimeLoading, isFirstTime, hasHorarios, loadingHorarios, tutorialDismissed]);
 
-  // Mostrar modal de configuración si es la primera vez
+  // Mostrar modal de configuración SIEMPRE que no tenga horarios (no solo en primera vez)
   useEffect(() => {
-    if (!firstTimeLoading && isFirstTime && !hasCompletedSetup && !showTutorial && tutorialProcessed) {
+    if (loadingHorarios || hasHorarios === null) return;
+    
+    // Si no tiene horarios, mostrar modal (independientemente de si es primera vez o no)
+    if (!hasHorarios && !showTutorial && tutorialProcessed) {
       setShowRecurringModal(true);
+    } else if (hasHorarios) {
+      setShowRecurringModal(false);
     }
-  }, [isFirstTime, firstTimeLoading, hasCompletedSetup, showTutorial, tutorialProcessed]);
+  }, [hasHorarios, loadingHorarios, showTutorial, tutorialProcessed]);
+
+  // Escuchar evento de actualización de horarios recurrentes
+  useEffect(() => {
+    const handleHorariosUpdated = () => {
+      // Recargar verificación de horarios cuando se actualicen
+      if (user) {
+        const checkHasHorarios = async () => {
+          try {
+            const { data, error } = await supabase
+              .from('horarios_recurrentes_usuario')
+              .select('id')
+              .eq('usuario_id', user.id)
+              .limit(1);
+            
+            if (!error && data && data.length > 0) {
+              setHasHorarios(true);
+              setHasCompletedSetup(true);
+            }
+          } catch (err) {
+            console.error('Error verificando horarios después de actualización:', err);
+          }
+        };
+        checkHasHorarios();
+      }
+    };
+    
+    window.addEventListener('horariosRecurrentes:updated', handleHorariosUpdated);
+    return () => {
+      window.removeEventListener('horariosRecurrentes:updated', handleHorariosUpdated);
+    };
+  }, [user]);
 
   // Escuchar evento de apertura de perfil desde la navbar mobile
   useEffect(() => {
@@ -450,7 +500,14 @@ const Dashboard = () => {
       <header className="bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex-1"></div>
+            <div className="flex-1 flex items-center">
+              {!isAdmin && (
+                <>
+                  <img src="/favicon.png" alt="Logo Malda" className="h-8 w-auto sm:hidden" />
+                  <img src="/tutorial/malda.png" alt="Logo Malda" className="h-[60px] w-auto hidden sm:block" />
+                </>
+              )}
+            </div>
             <div className="flex items-center gap-3">
               <button
                 type="button"
@@ -504,10 +561,10 @@ const Dashboard = () => {
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="h-10 w-10 p-0 active:scale-95 transition-all duration-200"
+                      className="h-14 w-14 p-0 active:scale-95 transition-all duration-200"
                       aria-label="Abrir menú de perfil"
                     >
-                      <User className="h-5 w-5 text-gray-300" />
+                      <User className="h-7 w-7 text-gray-300" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
@@ -547,12 +604,20 @@ const Dashboard = () => {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
-        {firstTimeLoading ? (
+        {firstTimeLoading || loadingHorarios ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
               <p className="text-muted-foreground">
                 Cargando...
+              </p>
+            </div>
+          </div>
+        ) : hasHorarios === false ? (
+          <div className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <p className="text-muted-foreground">
+                Configurando horarios...
               </p>
             </div>
           </div>
@@ -570,14 +635,14 @@ const Dashboard = () => {
                 hideSubNav = false;
               } else if (activeTab === 'vacantes') {
                 initialView = 'turnos-disponibles';
-                hideSubNav = true;
+                hideSubNav = false;
               } else if (activeTab === 'balance') {
                 if (balanceSubView === 'mis-clases') {
                   initialView = 'mis-clases';
-                  hideSubNav = true;
+                  hideSubNav = false;
                 } else if (balanceSubView === 'vacantes') {
                   initialView = 'turnos-disponibles';
-                  hideSubNav = true;
+                  hideSubNav = false;
                 }
               }
               
