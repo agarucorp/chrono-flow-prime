@@ -132,18 +132,24 @@ export const useSystemConfig = () => {
 
       // Cargar configuración de tarifas (usar configuracion_admin directamente)
       try {
-        const { data: cfgAdminTarifa } = await supabase
+        const { data: cfgAdminTarifa, error: errorTarifa } = await supabase
           .from('configuracion_admin')
-          .select('precio_clase')
+          .select('tarifa_horaria')
           .eq('sistema_activo', true)
           .limit(1)
           .maybeSingle();
         
-        const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.precio_clase) || 0) : 0;
+        if (errorTarifa) {
+          console.error('❌ Error al cargar configuración de tarifas:', errorTarifa);
+          setConfiguracionTarifas([]);
+          return;
+        }
+        
+        const tarifa = cfgAdminTarifa ? (Number(cfgAdminTarifa.tarifa_horaria) || 0) : 0;
         const moneda = 'ARS';
         setConfiguracionTarifas(tarifa > 0 ? [{ id: 'admin', tipo_clase: 'general', tarifa_por_clase: tarifa, moneda, activo: true }] : []);
       } catch (error) {
-        console.error('Error cargando configuración de tarifas:', error);
+        console.error('❌ Error inesperado cargando configuración de tarifas:', error);
         setConfiguracionTarifas([]);
       }
 
@@ -284,7 +290,7 @@ export const useSystemConfig = () => {
         // Fallback: actualizar configuracion_admin
         const { error: adminError } = await supabase
           .from('configuracion_admin')
-          .update({ precio_clase: tarifa.tarifa_por_clase, updated_at: new Date().toISOString() })
+          .update({ tarifa_horaria: tarifa.tarifa_por_clase, updated_at: new Date().toISOString() })
           .eq('sistema_activo', true);
         if (adminError) {
           return { success: false, error: adminError.message };
