@@ -10,7 +10,6 @@ import { supabase } from "@/lib/supabase";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { RecoverPasswordForm } from "./RecoverPasswordForm";
-import { OnboardingTutorial } from "./OnboardingTutorial";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -50,7 +49,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showTutorial, setShowTutorial] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
 
   // Handler para nombre y apellido: solo letras y espacios
@@ -74,102 +72,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     }, 2500);
     return () => clearTimeout(timer);
   }, []);
-
-  // Mostrar tutorial solo una vez al cargar la página de login
-  useEffect(() => {
-    const tutorialShown = localStorage.getItem('login-tutorial-shown');
-    if (!tutorialShown) {
-      setShowTutorial(true);
-    }
-  }, []);
-
-  const handleTutorialClose = () => {
-    setShowTutorial(false);
-    localStorage.setItem('login-tutorial-shown', 'true');
-  };
-
-  const tutorialSlides = [
-    {
-      title: 'Sistema de autogestión de clases',
-      description: 'En esta plataforma vas a poder setear tus clases en MALDA de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.',
-      images: [
-        {
-          src: '/tutorial/logovertical.png',
-          alt: 'Logo Malda',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/malda.png',
-          alt: 'Logo Malda',
-          desktopOnly: true
-        }
-      ]
-    },
-    {
-      title: 'Selección de horarios',
-      description: 'Una vez que selecciones tus horarios, no podrán ser modificados (etapa en desarrollo). Por favor elegirlos cuidadosamente.',
-      images: [
-        {
-          src: '/tutorial/mobilehorarios.png',
-          alt: 'Vista mobile del tutorial de horarios',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/desktoptutorialhorarios.png',
-          alt: 'Vista desktop del tutorial de horarios',
-          desktopOnly: true
-        }
-      ]
-    },
-    {
-      title: 'Balance',
-      description: 'Vista de tu cuota actual, siguiente e historial. El pago es por adelantado y todos los cambios que afecten el mes actual impactarán en el próximo.',
-      images: [
-        {
-          src: '/tutorial/balancemobile.jpeg',
-          alt: 'Vista mobile del balance',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/balancedesktop.png',
-          alt: 'Vista desktop del balance',
-          desktopOnly: true
-        }
-      ]
-    },
-    {
-      title: 'Vacantes',
-      description: 'Las clases canceladas aparecerán en este panel para que puedan ser reservadas por otros alumnos si así lo desean.',
-      images: [
-        {
-          src: '/tutorial/vacantesmobile.jpeg',
-          alt: 'Vista mobile de vacantes',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/vacantesdesktop.png',
-          alt: 'Vista desktop de vacantes',
-          desktopOnly: true
-        }
-      ]
-    },
-    {
-      title: 'Información',
-      description: 'Si tenés alguna duda podés ver una guía de las funcionalidades de la plataforma ingresando a "Información" desde el ícono de perfil.',
-      images: [
-        {
-          src: '/tutorial/guiamobile.jpeg',
-          alt: 'Vista mobile de la guía',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/guiadesktop.png',
-          alt: 'Vista desktop de la guía',
-          desktopOnly: true
-        }
-      ]
-    }
-  ];
 
   // Verificar requisitos de contraseña
   const checkPasswordRequirements = (password: string) => {
@@ -801,13 +703,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         </div>
 
       </div>
-
-      {/* Tutorial - Solo se muestra una vez */}
-      <OnboardingTutorial
-        open={showTutorial}
-        slides={tutorialSlides}
-        onClose={handleTutorialClose}
-      />
     </div>
   );
 };
