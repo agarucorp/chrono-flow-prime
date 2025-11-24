@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Badge } from "@/components/ui/badge";
 import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
 import { SupportModal } from "./components/SupportModal";
 import Admin from "./pages/Admin";
@@ -343,6 +344,7 @@ const Dashboard = () => {
   const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [vacantesCount, setVacantesCount] = useState(0);
   const {
     history: balanceHistory,
     loading: balanceLoading,
@@ -494,6 +496,65 @@ const Dashboard = () => {
     };
   }, []);
 
+  // Cargar contador de vacantes disponibles (siempre, en background)
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const cargarVacantesCount = async () => {
+      try {
+        const fechaHoy = new Date().toISOString().split('T')[0];
+        
+        // Obtener turnos disponibles
+        const { data: turnosDisponibles, error: errorDisponibles } = await supabase
+          .from('turnos_disponibles')
+          .select('id')
+          .gte('turno_fecha', fechaHoy);
+
+        if (errorDisponibles) {
+          console.error('Error cargando turnos disponibles:', errorDisponibles);
+          return;
+        }
+
+        // Obtener turnos ya reservados por el usuario
+        const { data: turnosReservados, error: errorReservados } = await supabase
+          .from('turnos_variables')
+          .select('creado_desde_disponible_id')
+          .eq('cliente_id', user.id)
+          .eq('estado', 'confirmada');
+
+        if (errorReservados) {
+          console.error('Error cargando turnos reservados:', errorReservados);
+          return;
+        }
+
+        const idsReservados = new Set(turnosReservados?.map(r => r.creado_desde_disponible_id) || []);
+        const disponibles = (turnosDisponibles || []).filter(t => !idsReservados.has(t.id));
+        
+        setVacantesCount(disponibles.length);
+      } catch (error) {
+        console.error('Error calculando contador de vacantes:', error);
+      }
+    };
+
+    // Cargar inmediatamente
+    cargarVacantesCount();
+
+    // Suscripción en tiempo real a cambios
+    const channel = supabase
+      .channel('vacantes_count_changes')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
+        cargarVacantesCount();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
+        cargarVacantesCount();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header restaurado */}
@@ -637,12 +698,13 @@ const Dashboard = () => {
                 initialView = 'turnos-disponibles';
                 hideSubNav = false;
               } else if (activeTab === 'balance') {
+                // Cuando estamos en balance, siempre ocultar la navbar de RecurringScheduleView
+                // porque usamos la subnavbar de balance
+                hideSubNav = true;
                 if (balanceSubView === 'mis-clases') {
                   initialView = 'mis-clases';
-                  hideSubNav = false;
                 } else if (balanceSubView === 'vacantes') {
                   initialView = 'turnos-disponibles';
-                  hideSubNav = false;
                 }
               }
               
@@ -664,13 +726,16 @@ const Dashboard = () => {
                         </button>
                         <button
                           onClick={() => setBalanceSubView('vacantes')}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
                             balanceSubView === 'vacantes'
                               ? 'bg-background text-foreground shadow-sm'
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           Vacantes
+                          <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
+                            {vacantesCount}
+                          </Badge>
                         </button>
                         <button
                           onClick={() => setBalanceSubView('balance')}
@@ -840,7 +905,15 @@ const Dashboard = () => {
                       }`}
                       aria-current={activeTab === 'vacantes'}
                     >
-                      <Zap className={`h-5 w-5 ${activeTab === 'vacantes' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
+                      <div className="relative">
+                        <Zap className={`h-5 w-5 ${activeTab === 'vacantes' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
+                        <Badge 
+                          variant="default" 
+                          className="absolute -top-2 -right-2 h-4 min-w-4 px-1 text-[9px] font-bold flex items-center justify-center"
+                        >
+                          {vacantesCount}
+                        </Badge>
+                      </div>
                       {activeTab === 'vacantes' && <span className="leading-none">Vacantes</span>}
                       {activeTab === 'vacantes' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                     </button>

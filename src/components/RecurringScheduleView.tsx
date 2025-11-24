@@ -154,28 +154,44 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       // Si ya está cargado, no mostrar loading
       setLoading(false);
     }
-    // Si se cambia a vacantes, solo cargar si no se han cargado antes
-    else if (view === 'turnos-disponibles' && !turnosDisponiblesLoadedRef.current) {
-      setLoadingTurnosCancelados(true);
-      cargarTurnosCancelados(true);
-      turnosDisponiblesLoadedRef.current = true;
-    } else if (view === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
-      // Si ya está cargado, no mostrar loading
-      setLoadingTurnosCancelados(false);
+    // Si se cambia a vacantes, recargar siempre para asegurar datos frescos
+    else if (view === 'turnos-disponibles') {
+      if (!turnosDisponiblesLoadedRef.current) {
+        setLoadingTurnosCancelados(true);
+        cargarTurnosCancelados(true, true);
+        turnosDisponiblesLoadedRef.current = true;
+      } else {
+        // Si ya están cargados, refrescar sin loading
+        cargarTurnosCancelados(false, false);
+        setLoadingTurnosCancelados(false);
+      }
     }
   };
 
-  // Cargar turnos cancelados al inicio y cuando se cambie a la vista de turnos disponibles
-  // Solo cargar si no se han cargado antes
+  // Cargar turnos cancelados al inicio (en background) para tener el contador actualizado
+  // Cargar siempre, pero solo mostrar loading cuando se entra a la vista de vacantes
   useEffect(() => {
-    if (user?.id && activeView === 'turnos-disponibles' && !turnosDisponiblesLoadedRef.current) {
-      // Si se cambia a la vista de vacantes, mostrar loading y cargar
-      setLoadingTurnosCancelados(true);
-      cargarTurnosCancelados(true);
+    if (user?.id && !turnosDisponiblesLoadedRef.current) {
+      // Cargar en background sin mostrar loading
+      cargarTurnosCancelados(false, false);
       turnosDisponiblesLoadedRef.current = true;
-    } else if (activeView === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
-      // Si ya está cargado, no mostrar loading
-      setLoadingTurnosCancelados(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
+
+  // Cuando se cambia a la vista de vacantes, recargar si es necesario
+  useEffect(() => {
+    if (user?.id && activeView === 'turnos-disponibles') {
+      if (!turnosDisponiblesLoadedRef.current) {
+        // Si no se han cargado, cargar con loading
+        setLoadingTurnosCancelados(true);
+        cargarTurnosCancelados(true, true);
+        turnosDisponiblesLoadedRef.current = true;
+      } else {
+        // Si ya están cargados, solo refrescar sin loading
+        cargarTurnosCancelados(false, false);
+        setLoadingTurnosCancelados(false);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeView]);
@@ -227,13 +243,35 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         .eq('activo', true);
 
       if (error) {
+        // Si el error es 400, puede ser que la columna 'activo' no exista o tenga otro nombre
+        if (error.code === 'PGRST116' || error.message?.includes('column') || error.message?.includes('400')) {
+          console.warn('⚠️ Error al cargar ausencias del admin (posible problema de esquema):', error.message);
+          // Intentar sin el filtro de activo
+          const { data: dataAll, error: errorAll } = await supabase
+            .from('ausencias_admin')
+            .select('*');
+          
+          if (errorAll) {
+            console.error('❌ Error al cargar ausencias del admin (sin filtro):', errorAll);
+            setAusenciasAdmin([]);
+            return;
+          }
+          
+          // Filtrar manualmente las activas si existe la propiedad
+          const activas = (dataAll || []).filter(a => a.activo !== false);
+          setAusenciasAdmin(activas);
+          return;
+        }
+        
         console.error('❌ Error al cargar ausencias del admin:', error);
+        setAusenciasAdmin([]);
         return;
       }
 
       setAusenciasAdmin(data || []);
     } catch (error) {
       console.error('❌ Error inesperado al cargar ausencias:', error);
+      setAusenciasAdmin([]);
     }
   };
 
@@ -318,13 +356,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   };
 
   // Cargar turnos cancelados disponibles
-  const cargarTurnosCancelados = async (forceReload = false) => {
+  const cargarTurnosCancelados = async (forceReload = false, showLoading = false) => {
     if (!user?.id) {
       return;
     }
 
-    // Mostrar loading si se fuerza recarga o si no hay datos
-    if (forceReload || turnosCancelados.length === 0) {
+    // Mostrar loading solo si se solicita explícitamente o si se fuerza recarga y estamos en la vista de vacantes
+    if (showLoading || (forceReload && activeView === 'turnos-disponibles')) {
       setLoadingTurnosCancelados(true);
     }
     try {
@@ -413,7 +451,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const channel = supabase
       .channel('turnos_disponibles_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
-        cargarTurnosCancelados(false);
+        cargarTurnosCancelados(false, false);
       })
       .subscribe();
 
@@ -428,7 +466,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const channel = supabase
       .channel(`turnos_cancelados_changes_${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` }, () => {
-        cargarTurnosCancelados(false);
+        cargarTurnosCancelados(false, false);
         cargarClasesDelMes(false);
         window.dispatchEvent(new CustomEvent('balance:refresh'));
       })
@@ -533,9 +571,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   useEffect(() => {
     if (user?.id) {
       // Cargar datos iniciales con loading visible
+      // cargarHorariosRecurrentes maneja su propio setLoading(false)
       cargarHorariosRecurrentes();
       cargarDatosPerfil();
-      cargarAusenciasAdmin(); // Cargar ausencias del admin
+      cargarAusenciasAdmin(); // Cargar ausencias del admin (no bloquea, solo carga en background)
       
       // Timeout de seguridad para evitar loading infinito
       const timeoutId = setTimeout(() => {
@@ -701,6 +740,60 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           })
           .filter((clase): clase is ClaseDelDia => clase !== null);
         todasLasClases.push(...clasesVariables);
+      }
+
+      // Cargar turnos cancelados del mes (incluyendo turnos variables cancelados)
+      const { data: turnosCancelados, error: errorCancelados } = await supabase
+        .from('turnos_cancelados')
+        .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
+        .eq('cliente_id', user.id)
+        .gte('turno_fecha', format(startOfMonth(currentMonth), 'yyyy-MM-dd'))
+        .lte('turno_fecha', format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
+
+      if (errorCancelados) {
+        console.error('Error al cargar turnos cancelados:', errorCancelados);
+      } else if (turnosCancelados) {
+        // Crear un Set de turnos variables activos para evitar duplicados
+        const turnosVariablesSet = new Set(
+          turnosVariables?.map(tv => `${tv.turno_fecha}-${tv.turno_hora_inicio}-${tv.turno_hora_fin}`) || []
+        );
+
+        // Convertir turnos cancelados a formato de clase (solo los que no están ya en turnos variables)
+        const clasesCanceladas = turnosCancelados
+          .map<ClaseDelDia | null>(cancelado => {
+            const claveCancelado = `${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}-${cancelado.turno_hora_fin}`;
+            
+            // Si ya está en turnos variables, no duplicar (se marcará como cancelada en getClasesDelDia)
+            if (turnosVariablesSet.has(claveCancelado)) {
+              return null;
+            }
+
+            // Crear fecha correcta sin problemas de zona horaria
+            const fechaParts = cancelado.turno_fecha.split('-');
+            const fechaCorrecta = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
+            const fechaNormalizada = startOfDay(fechaCorrecta);
+            
+            if (userStartDate && fechaNormalizada < userStartDate) {
+              return null;
+            }
+          
+            return {
+              id: `cancelado-${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}`,
+              dia: fechaCorrecta,
+              horario: {
+                id: `cancelado-${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}`,
+                dia_semana: fechaCorrecta.getDay(),
+                hora_inicio: cancelado.turno_hora_inicio,
+                hora_fin: cancelado.turno_hora_fin,
+                activo: false,
+                cancelada: true,
+                esVariable: true // Marcar como turno variable cancelado
+              }
+            };
+          })
+          .filter((clase): clase is ClaseDelDia => clase !== null);
+        
+        todasLasClases.push(...clasesCanceladas);
       }
 
       setClasesDelMes(todasLasClases);
@@ -1095,7 +1188,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   const fecha = new Date(turno.turno_fecha);
                   return !turno.reservado && !estaClaseBloqueada(fecha, turno.clase_numero);
                 });
-                return turnosDisponibles.length > 0 && (
+                return (
                   <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
                     {turnosDisponibles.length}
                   </Badge>
@@ -1110,8 +1203,6 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             </button>
           </div>
           </div>
-
-          {/* Navbar móvil flotante se muestra globalmente en Dashboard */}
         </div>
       )}
 
