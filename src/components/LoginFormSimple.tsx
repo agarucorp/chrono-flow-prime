@@ -369,7 +369,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         }
         
         // Mostrar mensaje de éxito ANTES de cambiar el estado
-        showSuccess('¡Cuenta creada exitosamente!', 'Revisa tu email para confirmar tu cuenta.');
+        showSuccess('Correo enviado', 'Revisa tu casilla de correo para confirmar tu cuenta. La cuenta se creará una vez que confirmes el email.');
         
         // Pequeño delay para que el toast se muestre
         await new Promise(resolve => setTimeout(resolve, 500));

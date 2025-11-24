@@ -439,9 +439,31 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         }
 
       } else if (esTurnoRecurrente) {
-        // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
-        // Solo crear cancelación, NO eliminar nada
+        // CANCELAR TURNO RECURRENTE
+        // 1. Actualizar horarios_recurrentes_usuario.activo = false para este usuario y horario
+        // 2. Crear registro en turnos_cancelados
 
+        // Obtener día de la semana desde la fecha
+        const fechaTurno = new Date(turno.fecha);
+        const diaSemana = fechaTurno.getDay() === 0 ? 7 : fechaTurno.getDay(); // Convertir domingo (0) a 7
+
+        // Actualizar horarios_recurrentes_usuario.activo = false
+        const { error: errorActualizarRecurrente } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .update({ 
+            activo: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('usuario_id', turno.cliente_id)
+          .eq('dia_semana', diaSemana)
+          .eq('hora_inicio', turno.hora_inicio)
+          .eq('hora_fin', turno.hora_fin)
+          .eq('activo', true); // Solo actualizar los que están activos
+
+        if (errorActualizarRecurrente) {
+          console.error('❌ Error actualizando horario recurrente:', errorActualizarRecurrente);
+          // No bloquear el flujo, solo loguear el error
+        }
 
         // Verificar si ya existe una cancelación para este turno
         const { data: cancelacionExistente, error: errorVerificar } = await supabase
@@ -451,7 +473,6 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           .eq('turno_fecha', turno.fecha)
           .eq('turno_hora_inicio', turno.hora_inicio)
           .eq('turno_hora_fin', turno.hora_fin);
-
 
         if (errorVerificar) {
           console.error('❌ Error verificando cancelación existente:', errorVerificar);
