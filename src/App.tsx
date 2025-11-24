@@ -899,7 +899,8 @@ const Dashboard = () => {
             <span className="sr-only">Cerrar</span>
           </DialogClose>
           <div className="mt-6 space-y-6">
-            <div className="flex items-center justify-center gap-2 rounded-full bg-muted/60 p-1 text-[12px] md:text-[11px]">
+            {/* Botones para mobile */}
+            <div className="flex items-center justify-center gap-2 rounded-full bg-muted/60 p-1 text-[12px] md:hidden">
               <button
                 type="button"
                 onClick={() => setInfoGuideSection('clases')}
@@ -924,9 +925,16 @@ const Dashboard = () => {
                 {infoGuideSection === 'clases' ? misClasesGuide : balanceGuide}
               </div>
             </div>
+            {/* Desktop: títulos centrados sobre sus respectivas cards */}
             <div className="hidden gap-6 md:grid md:grid-cols-2">
-              {misClasesGuide}
-              {balanceGuide}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-center">Mis Clases</h3>
+                {misClasesGuide}
+              </div>
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-center">Balance</h3>
+                {balanceGuide}
+              </div>
             </div>
           </div>
         </DialogContent>
