@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { CancelacionConfirmationModal } from './CancelacionConfirmationModal';
 import { format, parse } from 'date-fns';
@@ -42,6 +43,7 @@ interface AdminTurnoModalProps {
 
 export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: AdminTurnoModalProps) => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  const { obtenerCapacidadActual } = useSystemConfig();
 
   const [clientes, setClientes] = useState<AdminUser[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
@@ -138,8 +140,8 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       setClientesReservados(todosLosClientes);
 
-      // Calcular capacidad disponible
-      const maxAlumnos = turno.max_alumnos || 1;
+      // Calcular capacidad disponible usando capacidad global
+      const maxAlumnos = obtenerCapacidadActual() || 4;
       setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));
     } catch (error) {
       console.error('Error cargando reservas:', error);
@@ -337,6 +339,9 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      // Disparar evento específico para actualizar contadores en agenda
+      window.dispatchEvent(new Event('alumnosHorarios:updated'));
 
       // Recargar datos
       await cargarReservasExistentes();
@@ -434,9 +439,31 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         }
 
       } else if (esTurnoRecurrente) {
-        // CANCELAR TURNO RECURRENTE - igual que en RecurringScheduleView
-        // Solo crear cancelación, NO eliminar nada
+        // CANCELAR TURNO RECURRENTE
+        // 1. Actualizar horarios_recurrentes_usuario.activo = false para este usuario y horario
+        // 2. Crear registro en turnos_cancelados
 
+        // Obtener día de la semana desde la fecha
+        const fechaTurno = new Date(turno.fecha);
+        const diaSemana = fechaTurno.getDay() === 0 ? 7 : fechaTurno.getDay(); // Convertir domingo (0) a 7
+
+        // Actualizar horarios_recurrentes_usuario.activo = false
+        const { error: errorActualizarRecurrente } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .update({ 
+            activo: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('usuario_id', turno.cliente_id)
+          .eq('dia_semana', diaSemana)
+          .eq('hora_inicio', turno.hora_inicio)
+          .eq('hora_fin', turno.hora_fin)
+          .eq('activo', true); // Solo actualizar los que están activos
+
+        if (errorActualizarRecurrente) {
+          console.error('❌ Error actualizando horario recurrente:', errorActualizarRecurrente);
+          // No bloquear el flujo, solo loguear el error
+        }
 
         // Verificar si ya existe una cancelación para este turno
         const { data: cancelacionExistente, error: errorVerificar } = await supabase
@@ -446,7 +473,6 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
           .eq('turno_fecha', turno.fecha)
           .eq('turno_hora_inicio', turno.hora_inicio)
           .eq('turno_hora_fin', turno.hora_fin);
-
 
         if (errorVerificar) {
           console.error('❌ Error verificando cancelación existente:', errorVerificar);
@@ -541,12 +567,16 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
 
-
       // Disparar eventos para actualizar otras vistas
       window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      
+      // Disparar evento específico para actualizar contadores en agenda
+      window.dispatchEvent(new Event('alumnosHorarios:updated'));
 
+      // Recargar datos
+      await cargarReservasExistentes();
       onTurnoUpdated();
 
       // Cerrar modal después de un pequeño delay para asegurar que se vea el mensaje de éxito

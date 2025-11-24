@@ -7,6 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoConfirmationModal } from '@/components/TurnoConfirmationModal';
 import { CancelacionConfirmationModal } from '@/components/CancelacionConfirmationModal';
@@ -35,6 +36,7 @@ interface TurnoReservado {
 export const TurnoReservation = () => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  const { obtenerCapacidadActual } = useSystemConfig();
   
   const [turnosDisponibles, setTurnosDisponibles] = useState<Turno[]>([]);
   const [turnosReservados, setTurnosReservados] = useState<TurnoReservado[]>([]);
@@ -152,6 +154,52 @@ export const TurnoReservation = () => {
 
       if (reservasExistentes && reservasExistentes.length > 0) {
         showError('Límite de reservas alcanzado', 'Solo puedes reservar 1 turno por día');
+        return;
+      }
+
+      // Validar capacidad máxima antes de reservar
+      const capacidadMaxima = obtenerCapacidadActual() || 4;
+      const fechaTurno = selectedDate.toISOString().split('T')[0];
+      
+      // Contar cuántos usuarios ya tienen reserva para este horario
+      // Contar de ambas tablas: turnos y turnos_variables
+      const [reservasTurnos, reservasVariables] = await Promise.all([
+        supabase
+          .from('turnos')
+          .select('id')
+          .eq('fecha', fechaTurno)
+          .eq('hora_inicio', turno.hora_inicio)
+          .eq('hora_fin', turno.hora_fin)
+          .in('estado', ['ocupado', 'disponible'])
+          .not('cliente_id', 'is', null),
+        supabase
+          .from('turnos_variables')
+          .select('id')
+          .eq('turno_fecha', fechaTurno)
+          .eq('turno_hora_inicio', turno.hora_inicio)
+          .eq('turno_hora_fin', turno.hora_fin)
+          .eq('estado', 'confirmada')
+      ]);
+
+      if (reservasTurnos.error || reservasVariables.error) {
+        const errorReservasHorario = reservasTurnos.error || reservasVariables.error;
+        console.error('❌ Error verificando capacidad del horario:', errorReservasHorario);
+        showError('Error al verificar capacidad', errorReservasHorario?.message || 'Error desconocido');
+        return;
+      }
+
+      const usuariosEnHorario = (reservasTurnos.data?.length || 0) + (reservasVariables.data?.length || 0);
+
+      if (errorReservasHorario) {
+        console.error('❌ Error verificando capacidad del horario:', errorReservasHorario);
+        showError('Error al verificar capacidad', errorReservasHorario.message);
+        return;
+      }
+
+      const usuariosEnHorario = reservasHorario?.length || 0;
+      
+      if (usuariosEnHorario >= capacidadMaxima) {
+        showError('Cupo completo', `Este horario ya tiene ${capacidadMaxima} usuarios registrados. No hay más cupos disponibles.`);
         return;
       }
       

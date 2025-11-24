@@ -92,7 +92,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
   // Pantalla de confirmación después de enviar el email
   if (emailSent) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-black p-4">
         <div className="w-full max-w-md space-y-8">
           {/* Success Card */}
           <Card className="shadow-elegant animate-slide-up">

@@ -42,7 +42,10 @@ export const AuthForm: React.FC = () => {
   }
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+      <div className="hidden md:flex justify-center mb-8">
+        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+      </div>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
           <CardTitle className="text-lg text-center">

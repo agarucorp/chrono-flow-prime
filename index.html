@@ -3,23 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>MaldaGym</title>
-    <meta name="description" content="Sistema de gestión de turnos para MaldaGym" />
-    <meta name="author" content="MaldaGym" />
+    <title>MALDA®</title>
+    <meta name="description" content="Sistema de gestión de turnos para MALDA®" />
+    <meta name="author" content="MALDA®" />
 
-    <meta property="og:title" content="MaldaGym" />
-    <meta property="og:description" content="Sistema de gestión de turnos para MaldaGym" />
+    <meta property="og:title" content="MALDA®" />
+    <meta property="og:description" content="Sistema de autogestión de horarios para entrenamientos personalizados" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta property="og:image" id="og-image" content="" />
 
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
+    <meta name="twitter:image" id="twitter-image" content="" />
+    
+    <script>
+      // Generar URLs absolutas para Open Graph y Twitter Cards
+      (function() {
+        const baseUrl = window.location.origin;
+        const ogImage = document.getElementById('og-image');
+        const twitterImage = document.getElementById('twitter-image');
+        if (ogImage) ogImage.setAttribute('content', baseUrl + '/biglogo.png');
+        if (twitterImage) twitterImage.setAttribute('content', baseUrl + '/biglogo.png');
+      })();
+    </script>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/favicongym.png" />
-    <link rel="shortcut icon" type="image/png" href="/favicongym.png" />
-    <link rel="apple-touch-icon" href="/favicongym.png" />
+    <link rel="icon" type="image/png" href="/favicon1.png" />
+    <link rel="shortcut icon" type="image/png" href="/favicon1.png" />
+    <link rel="apple-touch-icon" href="/favicon1.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@400;600;700&family=Poppins:wght@400;500;600;700&family=Roboto+Condensed:wght@400;600;700&display=swap" rel="stylesheet">

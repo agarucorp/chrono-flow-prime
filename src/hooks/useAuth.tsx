@@ -105,14 +105,40 @@ export const useAuth = () => {
     setAuthState(prev => ({ ...prev, loading: true, error: null }))
 
     const isRateLimit = (err: any) => {
-      const msg = (err?.message || '').toLowerCase();
-      const status = err?.status || err?.code;
-      return msg.includes('rate limit') || msg.includes('email rate limit') || status === 429 || `${status}` === '429';
+      if (!err) return false;
+      
+      const msg = (err?.message || err?.error?.message || '').toLowerCase();
+      const status = err?.status || err?.code || err?.statusCode || err?.error?.code;
+      const httpStatus = err?.response?.status || err?.status;
+      
+      // Verificar múltiples formas en que puede venir el error 429
+      const is429 = status === 429 || `${status}` === '429' || httpStatus === 429 || `${httpStatus}` === '429';
+      const hasRateLimitMsg = msg.includes('rate limit') || 
+                             msg.includes('email rate limit') || 
+                             msg.includes('too many requests') ||
+                             msg.includes('rate_limit_exceeded') ||
+                             msg.includes('429');
+      
+      return is429 || hasRateLimitMsg;
     };
 
     const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
-    const attempt = async (triesLeft: number, delayMs: number): Promise<{ success: boolean; user?: any; error?: string }> => {
+    // Delay preventivo: esperar antes de intentar para evitar rate limit
+    // Supabase limita a ~3-4 registros por hora desde la misma IP en plan gratuito
+    const lastSignUpTime = localStorage.getItem('lastSignUpAttempt');
+    if (lastSignUpTime) {
+      const timeSinceLastAttempt = Date.now() - parseInt(lastSignUpTime);
+      const minDelay = 15000; // Mínimo 15 segundos entre intentos (más conservador)
+      if (timeSinceLastAttempt < minDelay) {
+        const waitTime = minDelay - timeSinceLastAttempt;
+        console.log(`Esperando ${Math.round(waitTime / 1000)} segundos antes de intentar registro para evitar rate limit...`);
+        await sleep(waitTime);
+      }
+    }
+    localStorage.setItem('lastSignUpAttempt', Date.now().toString());
+
+    const attempt = async (triesLeft: number, delayMs: number, attemptNumber: number = 1): Promise<{ success: boolean; user?: any; error?: string }> => {
       try {
         const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
           email,
@@ -124,6 +150,9 @@ export const useAuth = () => {
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
         if (error) throw error;
 
+        // Limpiar el timestamp de último intento al tener éxito
+        localStorage.removeItem('lastSignUpAttempt');
+        
         setAuthState({
           user: data.user,
           loading: false,
@@ -132,17 +161,30 @@ export const useAuth = () => {
         return { success: true, user: data.user };
       } catch (err: any) {
         if (triesLeft > 0 && isRateLimit(err)) {
-          // Backoff y reintento
+          // Backoff exponencial con más reintentos
+          const delaySeconds = Math.round(delayMs / 1000);
+          console.log(`Rate limit detectado. Reintentando en ${delaySeconds} segundos... (Intento ${attemptNumber + 1}/3)`);
           await sleep(delayMs);
-          return attempt(triesLeft - 1, delayMs * 2);
+          return attempt(triesLeft - 1, delayMs * 1.5, attemptNumber + 1);
         }
-        const errorMessage = err instanceof Error ? err.message : 'Error al registrarse';
+        
+        // Mensaje de error más claro para rate limit
+        let errorMessage = 'Error al registrarse';
+        if (isRateLimit(err)) {
+          errorMessage = 'Límite de registros alcanzado. Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.';
+        } else {
+          errorMessage = err instanceof Error ? err.message : 'Error al registrarse';
+        }
+        
         setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
         return { success: false, error: errorMessage };
       }
     };
 
-    return attempt(1, 15000); // 1 reintento con 15s; luego 30s si se repite
+    // Reintentos con delays más largos: 2 reintentos con delays progresivos (30s, 60s)
+    // Nota: Si el rate limit ya se alcanzó, los reintentos no ayudarán mucho
+    // El delay preventivo es más importante
+    return attempt(2, 30000);
   }
 
   const signOut = async () => {

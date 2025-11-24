@@ -7,6 +7,7 @@ import { Check, AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
+import { useSystemConfig } from '@/hooks/useSystemConfig';
 
 interface HorarioClase {
   id: string;
@@ -16,6 +17,8 @@ interface HorarioClase {
   hora_fin: string;
   capacidad_maxima: number;
   activo: boolean;
+  usuariosActuales?: number; // Usuarios ya registrados en este horario
+  cupoCompleto?: boolean; // Si el horario está lleno
 }
 
 interface RecurringScheduleModalProps {
@@ -42,6 +45,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
 }) => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
+  const { obtenerCapacidadActual } = useSystemConfig();
 
   // Build timestamp to force cache invalidation
   const BUILD_VERSION = '2025-01-12T16:00:00Z';
@@ -97,11 +101,130 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         return;
       }
 
-      const mappedData = (data || []).map(item => ({
-        ...item,
-        capacidad_maxima: item.capacidad
-      }));
-      setHorariosClase(mappedData);
+      // Obtener capacidad global
+      const capacidadGlobal = obtenerCapacidadActual() || 4;
+
+      // Para cada horario, verificar cuántos usuarios recurrentes ya están registrados
+      const horariosConCapacidad = await Promise.all(
+        (data || []).map(async (item) => {
+          // Normalizar formato de hora: puede venir como HH:MM o HH:MM:SS
+          // Necesitamos usar el mismo formato que se guarda en la BD
+          const horaInicioRaw = item.hora_inicio || '';
+          const horaFinRaw = item.hora_fin || '';
+          
+          // Normalizar a formato HH:MM:SS (PostgreSQL TIME)
+          let horaInicio: string;
+          let horaFin: string;
+          
+          if (horaInicioRaw.includes(':')) {
+            const partsInicio = horaInicioRaw.split(':');
+            horaInicio = `${partsInicio[0].padStart(2, '0')}:${partsInicio[1].padStart(2, '0')}:${(partsInicio[2] || '00').padStart(2, '0')}`;
+          } else {
+            horaInicio = horaInicioRaw + ':00:00';
+          }
+          
+          if (horaFinRaw.includes(':')) {
+            const partsFin = horaFinRaw.split(':');
+            horaFin = `${partsFin[0].padStart(2, '0')}:${partsFin[1].padStart(2, '0')}:${(partsFin[2] || '00').padStart(2, '0')}`;
+          } else {
+            horaFin = horaFinRaw + ':00:00';
+          }
+
+          // Contar usuarios recurrentes activos en este horario
+          // Usar RPC para evitar problemas de RLS - la función cuenta todos los usuarios sin restricciones
+          // Si no existe la función, usar consulta directa como fallback
+          let usuariosRecurrentesCount = 0;
+          
+          try {
+            // Usar función RPC para contar usuarios sin restricciones de RLS
+            const { data: countData, error: rpcError } = await supabase.rpc(
+              'contar_usuarios_horario_recurrente',
+              {
+                p_dia_semana: item.dia_semana,
+                p_hora_inicio: horaInicio.substring(0, 5), // Solo HH:MM
+                p_hora_fin: horaFin.substring(0, 5) // Solo HH:MM
+              }
+            );
+
+            if (rpcError) {
+              console.error('Error en RPC contar_usuarios_horario_recurrente:', rpcError);
+              console.error('Parámetros:', { 
+                dia_semana: item.dia_semana, 
+                hora_inicio: horaInicio.substring(0, 5), 
+                hora_fin: horaFin.substring(0, 5) 
+              });
+              // Si hay error en RPC, usar fallback (limitado por RLS pero mejor que nada)
+              const { data: usuariosRecurrentes, error: errorRecurrentes } = await supabase
+                .from('horarios_recurrentes_usuario')
+                .select('id, hora_inicio, hora_fin', { count: 'exact' })
+                .eq('dia_semana', item.dia_semana)
+                .eq('activo', true);
+
+              if (errorRecurrentes) {
+                console.error('Error en fallback de conteo:', errorRecurrentes);
+                usuariosRecurrentesCount = 0;
+              } else {
+                // Filtrar manualmente por hora ya que el formato puede variar
+                const usuariosRecurrentesFiltrados = (usuariosRecurrentes || []).filter(usr => {
+                  const usrHoraInicio = (usr.hora_inicio || '').substring(0, 5); // HH:MM
+                  const usrHoraFin = (usr.hora_fin || '').substring(0, 5); // HH:MM
+                  const itemHoraInicio = horaInicio.substring(0, 5); // HH:MM
+                  const itemHoraFin = horaFin.substring(0, 5); // HH:MM
+                  return usrHoraInicio === itemHoraInicio && usrHoraFin === itemHoraFin;
+                });
+                usuariosRecurrentesCount = usuariosRecurrentesFiltrados.length;
+              }
+            } else {
+              // RPC funcionó correctamente
+              usuariosRecurrentesCount = typeof countData === 'number' ? countData : parseInt(String(countData)) || 0;
+            }
+          } catch (error) {
+            console.error('Error inesperado en conteo de usuarios:', error);
+            // En caso de error, intentar usar fallback
+            try {
+              const { data: usuariosRecurrentes } = await supabase
+                .from('horarios_recurrentes_usuario')
+                .select('id, hora_inicio, hora_fin')
+                .eq('dia_semana', item.dia_semana)
+                .eq('activo', true);
+              
+              const usuariosRecurrentesFiltrados = (usuariosRecurrentes || []).filter(usr => {
+                const usrHoraInicio = (usr.hora_inicio || '').substring(0, 5);
+                const usrHoraFin = (usr.hora_fin || '').substring(0, 5);
+                return usrHoraInicio === horaInicio.substring(0, 5) && usrHoraFin === horaFin.substring(0, 5);
+              });
+              usuariosRecurrentesCount = usuariosRecurrentesFiltrados.length;
+            } catch (fallbackError) {
+              console.error('Error en fallback también:', fallbackError);
+              usuariosRecurrentesCount = 0; // Si todo falla, asumir 0 (puede estar limitado por RLS)
+            }
+          }
+          const cupoCompleto = usuariosRecurrentesCount >= capacidadGlobal;
+
+          // Log para debug - siempre mostrar para verificar
+          console.log(`📊 Horario ${item.id} (Día ${item.dia_semana}, ${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}): ${usuariosRecurrentesCount}/${capacidadGlobal} usuarios - ${cupoCompleto ? 'COMPLETO ❌' : 'DISPONIBLE ✅'}`);
+          
+          if (cupoCompleto) {
+            console.warn(`⚠️ BLOQUEO: Horario ${item.id} (${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}) está COMPLETO: ${usuariosRecurrentesCount}/${capacidadGlobal}`);
+          }
+
+          const horarioConCapacidad = {
+            ...item,
+            capacidad_maxima: capacidadGlobal, // Usar capacidad global
+            usuariosActuales: usuariosRecurrentesCount,
+            cupoCompleto: cupoCompleto // Asegurar que siempre sea boolean
+          };
+
+          // Verificación adicional
+          if (horarioConCapacidad.cupoCompleto) {
+            console.log(`🔒 Horario ${horarioConCapacidad.id} marcado como COMPLETO en el objeto`);
+          }
+
+          return horarioConCapacidad;
+        })
+      );
+
+      setHorariosClase(horariosConCapacidad);
     } catch (error) {
       console.error('❌ Error inesperado:', error);
       showError('Error', 'Error inesperado al cargar horarios');
@@ -117,6 +240,21 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   }
 
   const toggleHorario = (horarioId: string, diaSemana: number) => {
+    // Validar que el horario no esté lleno antes de permitir la selección
+    const horario = horariosClase.find(h => h.id === horarioId);
+    if (horario) {
+      // Verificar si está lleno de forma robusta
+      const estaLleno = horario.cupoCompleto === true || 
+                        (horario.usuariosActuales !== undefined && 
+                         horario.capacidad_maxima !== undefined && 
+                         horario.usuariosActuales >= horario.capacidad_maxima);
+      
+      if (estaLleno && !horariosSeleccionados.has(horarioId)) {
+        showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+        return;
+      }
+    }
+
     setHorariosSeleccionados(prev => {
       const newSelection = new Set(prev);
 
@@ -344,8 +482,27 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       return false;
     }
     
-    // Si ya se alcanzó el límite, no puede seleccionar más
-    return horariosSeleccionados.size < paqueteSeleccionado;
+    // Si ya se alcanzó el límite del paquete, no puede seleccionar más
+    if (horariosSeleccionados.size >= paqueteSeleccionado) {
+      return false;
+    }
+
+    // Verificar si el horario tiene cupo disponible
+    const horario = horariosClase.find(h => h.id === horarioId);
+    if (horario) {
+      // Verificar si el horario está completo
+      if (horario.cupoCompleto === true) {
+        return false; // Horario lleno, no se puede seleccionar
+      }
+      // Verificar también por capacidad si cupoCompleto no está definido
+      if (horario.usuariosActuales !== undefined && horario.capacidad_maxima !== undefined) {
+        if (horario.usuariosActuales >= horario.capacidad_maxima) {
+          return false; // Horario lleno según capacidad
+        }
+      }
+    }
+    
+    return true;
   };
 
   const tieneHorarioEnDia = (diaSemana: number) => {
@@ -515,6 +672,11 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                             <div className="grid grid-cols-2 gap-2">
                               {horariosDelDia.map(horario => {
                                 const estaSeleccionado = isHorarioSeleccionado(horario.id);
+                                // Verificar si está lleno de forma robusta
+                                const estaLleno = horario.cupoCompleto === true || 
+                                                  (horario.usuariosActuales !== undefined && 
+                                                   horario.capacidad_maxima !== undefined && 
+                                                   horario.usuariosActuales >= horario.capacidad_maxima);
                                 const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
                                 return (
                                   <Button
@@ -524,14 +686,22 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                     className={`h-10 w-full justify-center text-[13px] font-light transition-colors ${
                                       estaSeleccionado
                                         ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
-                                        : puedeSeleccionar
+                                        : puedeSeleccionar && !estaLleno
                                         ? 'border-white/20 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-900'
                                         : 'cursor-not-allowed border-white/5 bg-zinc-950 text-zinc-600 opacity-50'
                                     }`}
-                                    onClick={() => toggleHorario(horario.id, dia.numero)}
-                                    disabled={!puedeSeleccionar}
+                                    onClick={() => {
+                                      if (estaLleno && !estaSeleccionado) {
+                                        showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                        return;
+                                      }
+                                      toggleHorario(horario.id, dia.numero);
+                                    }}
+                                    disabled={!puedeSeleccionar || estaLleno}
+                                    title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
                                   >
                                     {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                    {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                   </Button>
                                 );
                               })}
@@ -564,6 +734,11 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                           ) : (
                             horariosDelDia.map(horario => {
                               const estaSeleccionado = isHorarioSeleccionado(horario.id);
+                              // Verificar si está lleno de forma robusta
+                              const estaLleno = horario.cupoCompleto === true || 
+                                                (horario.usuariosActuales !== undefined && 
+                                                 horario.capacidad_maxima !== undefined && 
+                                                 horario.usuariosActuales >= horario.capacidad_maxima);
                               const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
                               return (
                                 <Button
@@ -573,14 +748,22 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                   className={`h-8 w-full justify-start text-[10px] font-light transition-colors ${
                                     estaSeleccionado
                                       ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
-                                      : puedeSeleccionar
+                                      : puedeSeleccionar && !estaLleno
                                       ? 'border-white/20 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-900'
                                       : 'cursor-not-allowed border-white/5 bg-zinc-950 text-zinc-600 opacity-50'
                                   }`}
-                                  onClick={() => toggleHorario(horario.id, dia.numero)}
-                                  disabled={!puedeSeleccionar}
+                                  onClick={() => {
+                                    if (estaLleno && !estaSeleccionado) {
+                                      showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                      return;
+                                    }
+                                    toggleHorario(horario.id, dia.numero);
+                                  }}
+                                  disabled={!puedeSeleccionar || estaLleno}
+                                  title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
                                 >
                                   {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                  {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                 </Button>
                               );
                             })
@@ -646,8 +829,8 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                 </ul>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/5 p-4 text-[11px] text-zinc-300 sm:p-6 sm:text-xs">
-                <strong className="font-semibold text-zinc-100">Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
+              <div className="rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 p-4 text-[11px] text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.15)] sm:p-6 sm:text-xs">
+                <strong className="font-semibold text-amber-200">Importante:</strong> La cuota mensual se tendrá en cuenta a partir del horario seleccionado más cercano, no es posible decidir la fecha de inicio del entrenamiento.
               </div>
             </div>
           )}

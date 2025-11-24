@@ -101,7 +101,7 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
           {/* Información adicional */}
           <div className="text-center pt-1 sm:pt-2 px-2">
             <p className="text-[10px] sm:text-xs text-muted-foreground">
-              Envíanos tus comentarios para seguir mejorando la plataforma
+              Envianos tus comentarios para seguir mejorando la plataforma
             </p>
           </div>
         </div>
