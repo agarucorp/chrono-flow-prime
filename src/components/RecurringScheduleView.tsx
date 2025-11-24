@@ -520,7 +520,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, first_name, last_name, phone')
+        .select('full_name, first_name, last_name, phone, is_active, fecha_desactivacion')
         .eq('id', user.id)
         .maybeSingle();
       
@@ -1062,6 +1062,30 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // Manejar confirmación de reserva
   const handleConfirmarReserva = async () => {
     if (!turnoToReserve || !user?.id) return;
+
+    // Verificar si el usuario está inactivo
+    const { data: perfilUsuario, error: errorPerfil } = await supabase
+      .from('profiles')
+      .select('is_active, fecha_desactivacion')
+      .eq('id', user.id)
+      .single();
+
+    if (errorPerfil) {
+      console.error('Error verificando estado del usuario:', errorPerfil);
+    }
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const estaInactivo = perfilUsuario?.is_active === false || 
+      (perfilUsuario?.fecha_desactivacion && perfilUsuario.fecha_desactivacion <= hoy);
+
+    if (estaInactivo) {
+      toast({
+        title: "Usuario inactivo",
+        description: "Tu cuenta está inactiva. No puedes realizar nuevas reservas.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     setConfirmingReserva(true);
     try {

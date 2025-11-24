@@ -600,18 +600,18 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   onClick={handleBackStep}
                   className="w-full mb-4 text-[12px] md:text-base"
                 >
-                  Volver al Paso Anterior
+                  Volver al paso anterior
                 </Button>
               )}
 
               <Button
                 type="submit"
-                className="w-full bg-gray-200 hover:bg-gray-300 text-gray-800 transition-all duration-300 h-11 text-[12px]"
+                className="w-full bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 transition-all duration-300 h-11 text-[12px]"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-800"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>
                       {!isRegisterMode 
                         ? "Accediendo..." 

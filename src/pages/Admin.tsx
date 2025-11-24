@@ -743,7 +743,21 @@ export default function Admin() {
                           <tr key={user.id} className="border-b hover:bg-muted/50">
                             <td className="p-3">
                               <div className="min-w-0">
-                                <p className="font-medium truncate">{getDisplayFullName(user)}</p>
+                                <div className="flex items-center gap-2">
+                                  <p className={`font-medium truncate ${user.is_active === false ? 'text-muted-foreground line-through' : ''}`}>
+                                    {getDisplayFullName(user)}
+                                  </p>
+                                  {user.is_active === false && (
+                                    <Badge variant="secondary" className="text-xs">
+                                      Inactivo
+                                    </Badge>
+                                  )}
+                                  {user.fecha_desactivacion && user.fecha_desactivacion > new Date().toISOString().split('T')[0] && (
+                                    <Badge variant="outline" className="text-xs">
+                                      Se desactiva: {new Date(user.fecha_desactivacion).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' })}
+                                    </Badge>
+                                  )}
+                                </div>
                               </div>
                             </td>
                             <td className="p-3">
@@ -773,9 +787,10 @@ export default function Admin() {
                                     <DropdownMenuItem
                                     onClick={() => requestDeleteUser(user.id, getDisplayFullName(user))}
                                     className="text-red-600"
+                                    disabled={user.is_active === false}
                                   >
                                     <Trash2 className="w-4 h-4 mr-2" />
-                                    Eliminar Usuario
+                                    {user.is_active === false ? 'Usuario Inactivo' : 'Desactivar Usuario'}
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -1185,16 +1200,16 @@ export default function Admin() {
       <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
         <AlertDialogContent className="w-[85vw] sm:w-[380px] max-w-sm">
           <AlertDialogHeader>
-            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+            <AlertDialogTitle>Desactivar usuario</AlertDialogTitle>
             <AlertDialogDescription>
-              ¿Estás seguro de que deseas eliminar a {deleteTarget?.name || 'este usuario'}?
-              Esta acción no se puede deshacer.
+              ¿Estás seguro de que deseas desactivar a {deleteTarget?.name || 'este usuario'}?
+              El usuario quedará inactivo a partir del mes siguiente. Sus datos históricos se mantendrán, pero no podrá realizar nuevas reservas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2">
             <AlertDialogCancel className="w-full sm:flex-1">Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDeleteUser} className="w-full sm:flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Eliminar
+              Desactivar
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

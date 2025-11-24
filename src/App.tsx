@@ -394,7 +394,7 @@ const Dashboard = () => {
       description: 'En esta plataforma vas a poder setear tus clases en MaldaGym de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.',
       images: [
         {
-          src: '/tutorial/maldamobile.jpeg',
+          src: '/tutorial/logovertical.png',
           alt: 'Logo Malda',
           mobileOnly: true
         },
@@ -410,7 +410,7 @@ const Dashboard = () => {
       description: 'Una vez que selecciones tus horarios, no podrán ser modificados (etapa en desarrollo). Por favor elegirlos cuidadosamente.',
       images: [
         {
-          src: '/tutorial/mobilehorarios.png',
+          src: '/tutorial/horariomobile.jpeg',
           alt: 'Vista mobile del tutorial de horarios',
           mobileOnly: true
         },

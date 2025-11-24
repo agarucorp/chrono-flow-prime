@@ -11,6 +11,8 @@ export interface AdminUser {
   phone?: string;
   role: 'client' | 'admin';
   created_at: string;
+  is_active?: boolean;
+  fecha_desactivacion?: string | null;
   horarios_recurrentes?: {
     turno_nombre: string;
     dias_semana: string[];
@@ -161,7 +163,7 @@ export const useAdmin = () => {
       const [{ data, error }, horariosMap] = await Promise.all([
         supabase
         .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name, phone')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone, is_active, fecha_desactivacion')
         .order('created_at', { ascending: false }),
         fetchHorariosRecurrentes()
       ]);
@@ -194,10 +196,20 @@ export const useAdmin = () => {
         };
       });
 
-      // Filtrar usuarios ocultos (soft-delete en sistema)
-      const hidden = new Set(getHiddenUserIds());
-      const visibleUsers = usersWithHorarios.filter(u => !hidden.has(u.id));
-      setAllUsers(visibleUsers);
+      // Filtrar usuarios: mostrar todos (activos e inactivos) pero marcar los inactivos
+      // Los usuarios inactivos son aquellos con is_active = false O con fecha_desactivacion <= hoy
+      const hoy = new Date().toISOString().split('T')[0];
+      const usuariosMarcados = usersWithHorarios.map(user => {
+        const estaInactivo = user.is_active === false || 
+          (user.fecha_desactivacion && user.fecha_desactivacion <= hoy);
+        return {
+          ...user,
+          is_active: !estaInactivo,
+          fecha_desactivacion: user.fecha_desactivacion || null
+        };
+      });
+      
+      setAllUsers(usuariosMarcados);
     } catch (err) {
       console.error('❌ Error inesperado obteniendo usuarios:', err);
     }
@@ -333,18 +345,38 @@ export const useAdmin = () => {
     }
   };
 
-  // Eliminar usuario
+  // Desactivar usuario (marcar como inactivo a partir del mes siguiente)
   const deleteUser = async (userId: string) => {
     if (!isAdmin) return { success: false, error: 'No tienes permisos de administrador' };
 
-    // Soft-delete a nivel de sistema: ocultar en Admin sin tocar la BD
     try {
-      addHiddenUserId(userId);
+      // Calcular el primer día del mes siguiente
+      const ahora = new Date();
+      const primerDiaMesSiguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+      const fechaDesactivacion = primerDiaMesSiguiente.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+
+      // Actualizar el perfil: marcar como inactivo y establecer fecha de desactivación
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          is_active: false,
+          fecha_desactivacion: fechaDesactivacion,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', userId);
+
+      if (error) {
+        console.error('Error desactivando usuario:', error);
+        return { success: false, error: error.message || 'No se pudo desactivar el usuario' };
+      }
+
+      // Recargar listas de usuarios
       await fetchAllUsers();
       await fetchAdminUsers();
+      
       return { success: true };
     } catch (err) {
-      console.error('Error realizando soft-delete:', err);
+      console.error('Error inesperado desactivando usuario:', err);
       return { success: false, error: 'Error inesperado' };
     }
   };

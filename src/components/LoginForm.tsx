@@ -566,18 +566,18 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
                   className="w-full mb-4"
                 >
                   <ChevronLeft className="w-4 h-4 mr-2" />
-                  Volver al Paso Anterior
+                  Volver al paso anterior
                 </Button>
               )}
 
               <Button
                 type="submit"
-                className="w-full bg-gradient-primary hover:shadow-md transition-all duration-300 h-11"
+                className="w-full bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 hover:shadow-md transition-all duration-300 h-11"
                 disabled={isLoading}
               >
                 {isLoading ? (
                   <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
                     <span>
                       {!isRegisterMode 
                         ? "Accediendo..." 

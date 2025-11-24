@@ -28,7 +28,7 @@ Ve a: **Authentication > Email Templates > Confirm your signup**
               </p>
               
               <a href="{{ .ConfirmationURL }}" 
-                 style="display: inline-block; background-color: #ffffff; color: #1a1a1a; text-decoration: none; padding: 16px 36px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; text-align: center; min-width: 200px; box-shadow: 0 4px 16px rgba(255,255,255,0.2);">
+                 style="display: inline-block; background-color: #ffffff !important; color: #000000 !important; text-decoration: none; padding: 16px 36px; border-radius: 8px; font-size: 14px; font-weight: 600; letter-spacing: 0.5px; text-align: center; min-width: 200px; border: 1px solid #e0e0e0 !important;">
                 Confirmar email
               </a>
               

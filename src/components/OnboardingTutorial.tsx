@@ -74,14 +74,14 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
   }
 
   return (
-    <div className="fixed inset-0 z-[110] flex items-stretch sm:items-center justify-center bg-black/80 px-3 py-4 sm:py-6">
-      <div className="w-full max-w-3xl bg-black border-2 border-white sm:border-2 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden h-full sm:h-auto sm:max-h-[90vh] flex flex-col">
-        <div className="flex flex-col gap-4 px-4 pt-4 pb-2 sm:p-10 overflow-y-auto flex-1">
-          <div className="flex justify-center sm:hidden">
+    <div className="fixed inset-0 z-[110] flex items-center sm:items-center justify-center bg-black/80 px-3 py-4 sm:py-6">
+      <div className="w-full max-w-3xl bg-black border-2 border-white sm:border-2 rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden h-[65vh] sm:h-auto sm:max-h-[90vh] flex flex-col">
+        <div className="flex flex-col px-4 sm:p-10 overflow-y-auto flex-1">
+          <div className="flex justify-center sm:hidden pt-4 pb-2">
             <div className="text-white/70">{renderDots()}</div>
           </div>
 
-          <div className="relative w-full overflow-hidden">
+          <div className="relative w-full overflow-hidden flex-1 flex items-center justify-center sm:items-start sm:justify-start">
             <div
               key={`${currentIndex}-${direction}`}
               className="w-full transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
@@ -90,63 +90,65 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                 animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
               }}
             >
-              {currentSlide.images?.length ? (
-                <>
-                  {currentSlide.images.map((image, index) => {
-                    const isExtraImage =
-                      currentSlide.images && currentSlide.images.length > 1 && index !== 0
-                    const extraClass = isExtraImage && !image.mobileOnly ? 'hidden sm:block' : ''
-                    const visibilityClass = image.desktopOnly
-                      ? 'hidden sm:block'
-                      : image.mobileOnly
-                        ? 'sm:hidden'
-                        : ''
-                    return (
-                      <div
-                        key={`${image.src}-${index}`}
-                        className={`relative overflow-hidden ${extraClass} ${visibilityClass}`}
-                      >
-                        <img
-                          src={image.src}
-                          alt={image.alt}
-                          className="mx-auto h-[220px] sm:h-48 w-auto rounded-2xl object-contain"
-                          loading="lazy"
-                        />
+              <div className="flex flex-col items-center sm:items-start">
+                {currentSlide.images?.length ? (
+                  <>
+                    {currentSlide.images.map((image, index) => {
+                      const isExtraImage =
+                        currentSlide.images && currentSlide.images.length > 1 && index !== 0
+                      const extraClass = isExtraImage && !image.mobileOnly ? 'hidden sm:block' : ''
+                      const visibilityClass = image.desktopOnly
+                        ? 'hidden sm:block'
+                        : image.mobileOnly
+                          ? 'sm:hidden'
+                          : ''
+                      return (
+                        <div
+                          key={`${image.src}-${index}`}
+                          className={`relative overflow-hidden flex justify-center sm:justify-start ${extraClass} ${visibilityClass}`}
+                        >
+                          <img
+                            src={image.src}
+                            alt={image.alt}
+                            className="mx-auto sm:mx-0 h-[220px] sm:h-48 w-auto rounded-2xl object-contain"
+                            loading="lazy"
+                          />
+                        </div>
+                      )
+                    })}
+                    {onlyDesktopImages && (
+                      <div className="flex h-[220px] items-center justify-center text-muted-foreground text-xs sm:hidden">
+                        Imagen del panel
                       </div>
-                    )
-                  })}
-                  {onlyDesktopImages && (
-                    <div className="flex h-[220px] items-center justify-center text-muted-foreground text-xs sm:hidden">
-                      Imagen del panel
-                    </div>
-                  )}
-                  {onlyMobileImages && (
-                    <div className="hidden sm:flex h-48 items-center justify-center text-muted-foreground text-sm">
-                      Imagen del panel
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="flex h-[220px] sm:h-48 items-center justify-center text-muted-foreground text-xs sm:text-sm">
-                  Imagen del panel
-                </div>
-              )}
-            </div>
+                    )}
+                    {onlyMobileImages && (
+                      <div className="hidden sm:flex h-48 items-center justify-center text-muted-foreground text-sm">
+                        Imagen del panel
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-[220px] sm:h-48 items-center justify-center text-muted-foreground text-xs sm:text-sm">
+                    Imagen del panel
+                  </div>
+                )}
 
-            <div className="relative overflow-hidden mt-6 sm:mt-0">
-              <div
-                key={`content-${currentIndex}-${direction}`}
-                className="space-y-0 sm:space-y-0"
-                style={{
-                  animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
-                }}
-              >
-                <h2 className="text-[14px] sm:text-[20px] font-semibold tracking-tight text-white">
-                  {currentSlide.title}
-                </h2>
-                <p className="text-[11px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed">
-                  {currentSlide.description}
-                </p>
+                <div className="relative overflow-hidden mt-6 sm:mt-0 w-full flex flex-col items-center sm:items-start">
+                  <div
+                    key={`content-${currentIndex}-${direction}`}
+                    className="space-y-0 sm:space-y-0 flex flex-col items-center sm:items-start text-center sm:text-left"
+                    style={{
+                      animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
+                    }}
+                  >
+                    <h2 className="text-[19px] sm:text-[20px] font-semibold tracking-tight text-white">
+                      {currentSlide.title}
+                    </h2>
+                    <p className="text-[15px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed">
+                      {currentSlide.description}
+                    </p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -169,19 +171,19 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
             </div>
           </div>
         </div>
-        <div className="flex sm:hidden justify-between items-center px-4 py-2 border-t border-border/40">
+        <div className="flex sm:hidden justify-between items-center px-4 py-6">
           <button
             type="button"
             onClick={handleBack}
             disabled={isFirstSlide}
-            className={`text-[10px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`text-[12px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             Volver
           </button>
           <button
             type="button"
             onClick={handleNext}
-            className="text-[10px] uppercase tracking-[0.3em] text-white hover:text-white/90 transition-colors"
+            className="text-[12px] uppercase tracking-[0.3em] text-white hover:text-white/90 transition-colors"
           >
             {isLastSlide ? 'Ingresar' : 'Siguiente'}
           </button>

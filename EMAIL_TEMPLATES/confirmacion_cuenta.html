@@ -66,8 +66,8 @@
         /* Botón de confirmación */
         .confirm-button {
             display: inline-block;
-            background-color: #ffffff;
-            color: #1a1a1a !important;
+            background-color: #ffffff !important;
+            color: #000000 !important;
             text-decoration: none;
             padding: 16px 40px;
             border-radius: 8px;
@@ -75,6 +75,7 @@
             font-size: 16px;
             text-align: center;
             margin: 30px 0;
+            border: 1px solid #e0e0e0 !important;
         }
         
         /* Enlace alternativo */
@@ -136,7 +137,7 @@
                             <p>Por favor, verificá tu correo electrónico para completar tu registro y poder ingresar a la plataforma de MaldaGym. Hacé click en el siguiente botón y listo!</p>
                             
                             <div style="text-align: center;">
-                                <a href="{{ .ConfirmationURL }}" class="confirm-button">
+                                <a href="{{ .ConfirmationURL }}" class="confirm-button" style="display: inline-block; background-color: #ffffff !important; color: #000000 !important; text-decoration: none; padding: 16px 40px; border-radius: 8px; font-weight: 600; font-size: 16px; text-align: center; margin: 30px 0; border: 1px solid #e0e0e0 !important;">
                                     Confirmar email
                                 </a>
                             </div>
