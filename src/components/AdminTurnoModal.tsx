@@ -32,6 +32,8 @@ interface AdminUser {
   full_name: string;
   email: string;
   role: string;
+  tipo?: string;
+  cancelado?: boolean;
 }
 
 interface AdminTurnoModalProps {
@@ -119,13 +121,32 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         console.error('Error cargando turnos variables:', errorVariables);
       }
 
-      // 3. Combinar ambas listas
+      // 3. Buscar turnos cancelados para este horario
+      const { data: turnosCancelados, error: errorCancelados } = await supabase
+        .from('turnos_cancelados')
+        .select(`
+          cliente_id,
+          profiles:cliente_id(id, full_name, email)
+        `)
+        .eq('turno_fecha', turno.fecha)
+        .eq('turno_hora_inicio', turno.hora_inicio)
+        .eq('turno_hora_fin', turno.hora_fin);
+
+      if (errorCancelados) {
+        console.error('Error cargando turnos cancelados:', errorCancelados);
+      }
+
+      // 4. Crear un Set de IDs de clientes cancelados para verificar duplicados
+      const clientesCanceladosIds = new Set((turnosCancelados || []).map((tc: any) => tc.cliente_id));
+
+      // 5. Combinar todas las listas, marcando los cancelados
       const clientesReservadosNormales = (reservasNormales || []).map((reserva: any) => ({
         id: reserva.profiles.id,
         full_name: reserva.profiles.full_name,
         email: reserva.profiles.email,
         role: 'client',
-        tipo: 'normal'
+        tipo: 'normal',
+        cancelado: false
       }));
 
       const clientesReservadosVariables = (turnosVariables || []).map((turno: any) => ({
@@ -133,16 +154,40 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         full_name: turno.profiles.full_name,
         email: turno.profiles.email,
         role: 'client',
-        tipo: 'variable'
+        tipo: 'variable',
+        cancelado: clientesCanceladosIds.has(turno.profiles.id)
       }));
 
-      const todosLosClientes = [...clientesReservadosNormales, ...clientesReservadosVariables];
+      const clientesCancelados = (turnosCancelados || []).map((cancelado: any) => {
+        const profile = Array.isArray(cancelado.profiles) ? cancelado.profiles[0] : cancelado.profiles;
+        return {
+          id: profile.id,
+          full_name: profile.full_name,
+          email: profile.email,
+          role: 'client',
+          tipo: 'cancelado',
+          cancelado: true
+        };
+      }).filter((cliente: any) => 
+        // Solo incluir cancelados que no estén ya en las otras listas
+        !clientesReservadosNormales.some(c => c.id === cliente.id) &&
+        !clientesReservadosVariables.some(c => c.id === cliente.id)
+      );
+
+      // Combinar todas las listas
+      const todosLosClientes = [
+        ...clientesReservadosNormales,
+        ...clientesReservadosVariables,
+        ...clientesCancelados
+      ];
 
       setClientesReservados(todosLosClientes);
 
       // Calcular capacidad disponible usando capacidad global
+      // Solo contar clientes activos (no cancelados)
+      const clientesActivos = todosLosClientes.filter(c => !c.cancelado);
       const maxAlumnos = obtenerCapacidadActual() || 4;
-      setCapacidadDisponible(Math.max(0, maxAlumnos - todosLosClientes.length));
+      setCapacidadDisponible(Math.max(0, maxAlumnos - clientesActivos.length));
     } catch (error) {
       console.error('Error cargando reservas:', error);
     }
@@ -689,7 +734,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Capacidad</Label>
               <p className="font-medium">
-                {clientesReservados.length} / {turno.max_alumnos || 1} alumnos
+                {clientesReservados.filter(c => !c.cancelado).length} / {turno.max_alumnos || 1} alumnos
               </p>
             </div>
           </div>
@@ -706,27 +751,47 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
               <div className="space-y-2">
                 {clientesReservados.map((cliente) => (
-                  <div key={cliente.id} className="flex items-center justify-between p-2 bg-white dark:bg-blue-900 rounded border">
+                  <div 
+                    key={cliente.id} 
+                    className={`flex items-center justify-between p-2 rounded border ${
+                      cliente.cancelado 
+                        ? 'bg-red-50 dark:bg-red-900/30 border-red-300 dark:border-red-700' 
+                        : 'bg-white dark:bg-blue-900 border-blue-200 dark:border-blue-800'
+                    }`}
+                  >
                     <div className="flex items-center space-x-3">
-                      <User className="h-4 w-4 text-blue-600" />
+                      <User className={`h-4 w-4 ${cliente.cancelado ? 'text-red-600' : 'text-blue-600'}`} />
                       <div>
-                        <p className="font-medium text-blue-900 dark:text-blue-100">
+                        <p className={`font-medium ${
+                          cliente.cancelado 
+                            ? 'text-red-900 dark:text-red-100' 
+                            : 'text-blue-900 dark:text-blue-100'
+                        }`}>
                           {cliente.full_name}
+                          {cliente.cancelado && (
+                            <span className="ml-2 text-xs text-red-600 dark:text-red-400">(Cancelado)</span>
+                          )}
                         </p>
-                        <p className="text-sm text-blue-700 dark:text-blue-300">
+                        <p className={`text-sm ${
+                          cliente.cancelado 
+                            ? 'text-red-700 dark:text-red-300' 
+                            : 'text-blue-700 dark:text-blue-300'
+                        }`}>
                           {cliente.email}
                         </p>
                       </div>
                     </div>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => handleCancelarClick(cliente.id, cliente.full_name)}
-                      disabled={loading}
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Cancelar
-                    </Button>
+                    {!cliente.cancelado && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleCancelarClick(cliente.id, cliente.full_name)}
+                        disabled={loading}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Cancelar
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>

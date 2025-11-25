@@ -138,6 +138,27 @@ export const TurnoReservation = () => {
     try {
       setConfirmingReservation(true);
       
+      // Verificar si el usuario está inactivo
+      const { data: perfilUsuario, error: errorPerfil } = await supabase
+        .from('profiles')
+        .select('is_active, fecha_desactivacion')
+        .eq('id', user?.id)
+        .single();
+
+      if (errorPerfil) {
+        console.error('Error verificando estado del usuario:', errorPerfil);
+      }
+
+      const hoy = new Date().toISOString().split('T')[0];
+      const estaInactivo = perfilUsuario?.is_active === false || 
+        (perfilUsuario?.fecha_desactivacion && perfilUsuario.fecha_desactivacion <= hoy);
+
+      if (estaInactivo) {
+        showError('Usuario inactivo', 'Tu cuenta está inactiva. No puedes realizar nuevas reservas.');
+        setConfirmingReservation(false);
+        return;
+      }
+      
       // Verificar que el usuario no tenga ya una reserva para este día
       const { data: reservasExistentes, error: errorVerificacion } = await supabase
         .from('turnos')

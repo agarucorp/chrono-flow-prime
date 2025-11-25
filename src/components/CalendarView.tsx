@@ -524,6 +524,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             const horaInicio = (turno.turno_hora_inicio || '').substring(0, 5);
             const horaFin = (turno.turno_hora_fin || '').substring(0, 5);
 
+            // Verificar si este turno variable está cancelado
+            const claveVariable = `${turno.cliente_id}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+            const estaCancelado = turnosCanceladosHoy.has(claveVariable);
+
             // Verificar si ya existe este usuario para esta hora (evitar duplicados)
             const yaExiste = todosAlumnos.some(alumno =>
               alumno.usuario_id === turno.cliente_id &&
@@ -536,7 +540,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 nombre: getProfileFullName(profile),
                 email: profile.email || '',
                 telefono: profile.phone,
-                tipo: 'variable',
+                tipo: estaCancelado ? 'cancelado' : 'variable',
                 hora_inicio: horaInicio,
                 hora_fin: horaFin,
                 fecha: turno.turno_fecha,
