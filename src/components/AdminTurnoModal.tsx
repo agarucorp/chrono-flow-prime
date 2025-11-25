@@ -104,7 +104,23 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         console.error('Error cargando reservas normales:', errorNormales);
       }
 
-      // 2. Buscar turnos variables que coincidan con este horario
+      // 2. Buscar reservas en reservas_turnos (reservas creadas desde el panel admin)
+      const { data: reservasTurnos, error: errorReservasTurnos } = await supabase
+        .from('reservas_turnos')
+        .select(`
+          cliente_id,
+          estado,
+          turno_id,
+          profiles:cliente_id(id, full_name, email)
+        `)
+        .eq('turno_id', turno.id)
+        .eq('estado', 'confirmada');
+
+      if (errorReservasTurnos) {
+        console.error('Error cargando reservas_turnos:', errorReservasTurnos);
+      }
+
+      // 3. Buscar turnos variables que coincidan con este horario
       const { data: turnosVariables, error: errorVariables } = await supabase
         .from('turnos_variables')
         .select(`
@@ -121,7 +137,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         console.error('Error cargando turnos variables:', errorVariables);
       }
 
-      // 3. Buscar turnos cancelados para este horario
+      // 4. Buscar turnos cancelados para este horario
       const { data: turnosCancelados, error: errorCancelados } = await supabase
         .from('turnos_cancelados')
         .select(`
@@ -136,10 +152,10 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         console.error('Error cargando turnos cancelados:', errorCancelados);
       }
 
-      // 4. Crear un Set de IDs de clientes cancelados para verificar duplicados
+      // 5. Crear un Set de IDs de clientes cancelados para verificar duplicados
       const clientesCanceladosIds = new Set((turnosCancelados || []).map((tc: any) => tc.cliente_id));
 
-      // 5. Combinar todas las listas, marcando los cancelados
+      // 6. Combinar todas las listas, marcando los cancelados
       const clientesReservadosNormales = (reservasNormales || []).map((reserva: any) => ({
         id: reserva.profiles.id,
         full_name: reserva.profiles.full_name,
@@ -147,6 +163,15 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
         role: 'client',
         tipo: 'normal',
         cancelado: false
+      }));
+
+      const clientesReservadosTurnos = (reservasTurnos || []).map((reserva: any) => ({
+        id: reserva.profiles.id,
+        full_name: reserva.profiles.full_name,
+        email: reserva.profiles.email,
+        role: 'client',
+        tipo: 'reserva_turno',
+        cancelado: clientesCanceladosIds.has(reserva.profiles.id)
       }));
 
       const clientesReservadosVariables = (turnosVariables || []).map((turno: any) => ({
@@ -171,12 +196,14 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
       }).filter((cliente: any) => 
         // Solo incluir cancelados que no estén ya en las otras listas
         !clientesReservadosNormales.some(c => c.id === cliente.id) &&
+        !clientesReservadosTurnos.some(c => c.id === cliente.id) &&
         !clientesReservadosVariables.some(c => c.id === cliente.id)
       );
 
       // Combinar todas las listas
       const todosLosClientes = [
         ...clientesReservadosNormales,
+        ...clientesReservadosTurnos,
         ...clientesReservadosVariables,
         ...clientesCancelados
       ];
@@ -243,6 +270,19 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
     try {
       setLoading(true);
       const loadingToast = showLoading('Cancelando reserva...');
+
+      // 0. Primero, eliminar de reservas_turnos si existe (reservas creadas desde panel admin)
+      const { error: errorEliminarReserva } = await supabase
+        .from('reservas_turnos')
+        .delete()
+        .eq('turno_id', turno.id)
+        .eq('cliente_id', clienteId)
+        .eq('estado', 'confirmada');
+
+      if (errorEliminarReserva) {
+        console.error('Error eliminando reserva_turnos (puede no existir):', errorEliminarReserva);
+        // No bloquear el flujo si no existe en reservas_turnos
+      }
 
       // 1. Determinar el tipo de turno
       const esTurnoVariable = turno.id.startsWith('variable_');

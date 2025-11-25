@@ -246,8 +246,6 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             ? true
             : cuota?.anio === nextYear && cuota?.mes === nextMonthNum;
 
-          const clases = Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
-          
           // Para el mes actual, usar siempre la tarifa del perfil actual (no la de la cuota)
           // porque el plan puede haber cambiado después de generar la cuota
           let unitPrice: number;
@@ -270,10 +268,68 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             // Para meses pasados o futuros, usar la tarifa de la cuota
             unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
           }
+
+          // Si es el mes actual y no hay clases en la cuota (o es 0), calcular basándose en horarios recurrentes
+          let clases = Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
+          let montoRecalculado = false;
           
-          const totalBase = cuota?.monto_total !== undefined ? Number(cuota.monto_total) : clases * unitPrice;
-          const totalConDescuento =
-            cuota?.monto_con_descuento !== undefined ? Number(cuota.monto_con_descuento) : totalBase;
+          if (isCurrent && clases === 0 && horariosUsuarioData && horariosUsuarioData.length > 0) {
+            // Calcular clases del mes actual basándose en horarios recurrentes
+            const lastDayCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
+            const schedule = horariosUsuarioData.map((item) => ({
+              diaSemana: Number(item.dia_semana),
+              claseNumero: item.clase_numero !== null && item.clase_numero !== undefined
+                ? Number(item.clase_numero)
+                : null,
+            }));
+
+            let clasesCalculadas = 0;
+            for (let dia = 1; dia <= lastDayCurrentMonth; dia++) {
+              const fecha = new Date(currentYear, currentMonthNum - 1, dia);
+              const diaSemanaJS = fecha.getDay();
+
+              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+
+              // Verificar si está bloqueado por ausencia del admin
+              const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
+                const inicio = getDateOnly(ausencia.fecha_inicio);
+                const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
+                const fechaCheck = getDateOnly(fecha.toISOString().split('T')[0]);
+                return fechaCheck >= inicio && fechaCheck <= fin;
+              });
+
+              if (tieneHorario && !bloqueado) {
+                clasesCalculadas++;
+              }
+            }
+
+            // Agregar turnos variables del mes actual
+            if (vacantesData) {
+              clasesCalculadas += vacantesData.length;
+            }
+
+            if (clasesCalculadas > 0) {
+              clases = clasesCalculadas;
+              montoRecalculado = true;
+            }
+          }
+          
+          // Si recalculamos las clases, también recalcular el monto
+          const totalBase = montoRecalculado 
+            ? clases * unitPrice 
+            : (cuota?.monto_total !== undefined ? Number(cuota.monto_total) : clases * unitPrice);
+          
+          // Si recalculamos el monto base, también recalcular el monto con descuento
+          // pero mantener el descuento porcentual si existe
+          let totalConDescuento: number;
+          if (montoRecalculado && cuota?.descuento_porcentaje !== undefined && Number(cuota.descuento_porcentaje) > 0) {
+            // Si hay descuento, aplicarlo al nuevo monto base
+            const descuentoPorcentaje = Number(cuota.descuento_porcentaje);
+            totalConDescuento = totalBase * (1 - descuentoPorcentaje / 100);
+          } else {
+            // Usar el monto con descuento de la cuota si existe, sino usar el total base
+            totalConDescuento = cuota?.monto_con_descuento !== undefined ? Number(cuota.monto_con_descuento) : totalBase;
+          }
           const descuento = totalBase - totalConDescuento;
           const descuentoPorcentaje = cuota?.descuento_porcentaje !== undefined
             ? Number(cuota.descuento_porcentaje)
@@ -400,20 +456,61 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const hasCurrentEntry = entries.some((entry) => entry.isCurrent);
         if (!hasCurrentEntry) {
-          entries.push({
-            clases: 0,
-            precioUnitario: baseUnitPrice,
-            descuento: 0,
-            descuentoPorcentaje: 0,
-            total: 0,
-            totalConDescuento: 0,
-            mesNombre: monthNames[currentMonthNum - 1],
-            anio: currentYear,
-            mesNumero: currentMonthNum,
-            estadoPago: undefined,
-            isCurrent: true,
-            isNext: false,
-          });
+          // Si no hay cuota para el mes actual, calcular basándose en horarios recurrentes
+          const lastDayCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
+          
+          // Reutilizar horariosUsuarioData que ya se cargó antes
+          let clasesEstimadas = 0;
+          
+          if (horariosUsuarioData && horariosUsuarioData.length > 0) {
+            const schedule = horariosUsuarioData.map((item) => ({
+              diaSemana: Number(item.dia_semana),
+              claseNumero: item.clase_numero !== null && item.clase_numero !== undefined
+                ? Number(item.clase_numero)
+                : null,
+            }));
+
+            for (let dia = 1; dia <= lastDayCurrentMonth; dia++) {
+              const fecha = new Date(currentYear, currentMonthNum - 1, dia);
+              const diaSemanaJS = fecha.getDay();
+
+              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+
+              // Verificar si está bloqueado por ausencia del admin
+              const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
+                const inicio = getDateOnly(ausencia.fecha_inicio);
+                const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
+                const fechaCheck = getDateOnly(fecha.toISOString().split('T')[0]);
+                return fechaCheck >= inicio && fechaCheck <= fin;
+              });
+
+              if (tieneHorario && !bloqueado) {
+                clasesEstimadas++;
+              }
+            }
+          }
+
+          // Agregar turnos variables del mes actual
+          if (vacantesData) {
+            clasesEstimadas += vacantesData.length;
+          }
+
+          const totalEstimado = clasesEstimadas * baseUnitPrice;
+
+          entries.push(
+            buildEntry(
+              {
+                clases_a_cobrar: clasesEstimadas,
+                tarifa_unitaria: baseUnitPrice,
+                monto_total: totalEstimado,
+                monto_con_descuento: totalEstimado,
+                mes: currentMonthNum,
+                anio: currentYear,
+                estado_pago: null,
+              },
+              { forceNext: false }
+            )
+          );
         }
 
         entries.sort((a, b) => {
@@ -431,7 +528,20 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             snapshotToUse.mesNumero !== currentFromLoad.mesNumero;
 
           if (shouldUpdateSnapshot) {
+            // Crear nuevo snapshot con todos los valores del mes actual
             snapshotToUse = { ...currentFromLoad };
+            lockedCurrentSnapshotRef.current = snapshotToUse;
+          } else if (snapshotToUse && currentFromLoad) {
+            // Si el snapshot existe y es del mismo mes, solo actualizar el descuento
+            // Mantener bloqueados: clases, monto_total, precioUnitario
+            // Permitir actualizar: descuento, descuentoPorcentaje, monto_con_descuento, totalConDescuento
+            snapshotToUse = {
+              ...snapshotToUse,
+              descuento: currentFromLoad.descuento,
+              descuentoPorcentaje: currentFromLoad.descuentoPorcentaje,
+              totalConDescuento: currentFromLoad.totalConDescuento,
+              estadoPago: currentFromLoad.estadoPago, // También permitir actualizar estado de pago
+            };
             lockedCurrentSnapshotRef.current = snapshotToUse;
           }
         } else if (snapshotToUse) {
