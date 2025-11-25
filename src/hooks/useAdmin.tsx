@@ -12,7 +12,6 @@ export interface AdminUser {
   role: 'client' | 'admin';
   created_at: string;
   is_active?: boolean;
-  fecha_desactivacion?: string | null;
   horarios_recurrentes?: {
     turno_nombre: string;
     dias_semana: string[];
@@ -76,6 +75,16 @@ export const useAdmin = () => {
 
       try {
         const { data: session, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError || !session || !session?.user) {
+          console.warn('⚠️ Problema con sesión, usando fallback por email');
+          const isAdminByEmail = checkAdminByEmail(user.email || '');
+          setIsAdmin(isAdminByEmail);
+          setIsLoading(false);
+          return;
+        }
+        
+        console.log('✅ Sesión activa:', session.user.email);
 
         // Intentar consulta por ID
         const { data, error } = await supabase
@@ -96,26 +105,31 @@ export const useAdmin = () => {
 
           if (!emailError && emailData) {
             const isUserAdmin = emailData.role === 'admin';
+            console.log('✅ Rol obtenido por email:', emailData.role, '-> isAdmin:', isUserAdmin);
             setIsAdmin(isUserAdmin);
           } else {
             console.error('❌ Error en ambas consultas:', { error, emailError });
-            // Fallback: verificar admin por email
+            // Fallback: verificar admin por email (SIEMPRE usar fallback si las consultas fallan)
             const isAdminByEmail = checkAdminByEmail(user.email || '');
+            console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
             setIsAdmin(isAdminByEmail);
           }
         } else if (!error && data) {
           const isUserAdmin = data.role === 'admin';
+          console.log('✅ Rol obtenido por ID:', data.role, '-> isAdmin:', isUserAdmin);
           setIsAdmin(isUserAdmin);
         } else {
           console.error('❌ Error verificando rol de admin:', error);
-          // Fallback: verificar admin por email
+          // Fallback: verificar admin por email (SIEMPRE usar fallback si hay error)
           const isAdminByEmail = checkAdminByEmail(user.email || '');
+          console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
           setIsAdmin(isAdminByEmail);
         }
       } catch (err) {
         console.error('❌ Error inesperado verificando admin:', err);
-        // Fallback final: verificar admin por email
+        // Fallback final: verificar admin por email (SIEMPRE usar fallback en caso de error)
         const isAdminByEmail = checkAdminByEmail(user?.email || '');
+        console.log('⚠️ Fallback final checkAdminByEmail:', user?.email, '-> isAdmin:', isAdminByEmail);
         setIsAdmin(isAdminByEmail);
       } finally {
         setIsLoading(false);
@@ -155,11 +169,23 @@ export const useAdmin = () => {
   // Obtener todos los usuarios (solo para admins)
   const fetchAllUsers = useCallback(async () => {
     if (!isAdmin) {
+      console.warn('⚠️ fetchAllUsers llamado pero isAdmin es false');
       return;
     }
-
+    
+    console.log('🔄 Iniciando fetchAllUsers...');
+    
+    // Verificar sesión antes de hacer la consulta
+    const { data: sessionCheck } = await supabase.auth.getSession();
+    if (!sessionCheck?.session) {
+      console.error('❌ No hay sesión activa al intentar fetchAllUsers');
+      setAllUsers([]);
+      return;
+    }
+    console.log('✅ Sesión verificada:', sessionCheck.session.user.email);
 
     try {
+      console.log('📡 Consultando profiles...');
       const [{ data, error }, horariosMap] = await Promise.all([
         supabase
         .from('profiles')
@@ -171,14 +197,25 @@ export const useAdmin = () => {
 
       if (error) {
         console.error('❌ Error obteniendo usuarios:', error);
+        console.error('❌ Detalles del error:', {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        });
+        console.error('❌ Esto generalmente indica un problema de RLS o permisos');
+        setAllUsers([]);
         return;
       }
 
       if (!data || data.length === 0) {
         console.warn('⚠️ No se encontraron usuarios en la base de datos');
+        console.warn('⚠️ Verifica las políticas RLS en Supabase');
         setAllUsers([]);
         return;
       }
+      
+      console.log('✅ Usuarios cargados:', data.length);
 
         const clientes = data.filter(u => u.role === 'client');
 
@@ -355,11 +392,10 @@ export const useAdmin = () => {
       const primerDiaMesSiguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
       const fechaDesactivacion = primerDiaMesSiguiente.toISOString().split('T')[0]; // Formato YYYY-MM-DD
 
-      // Actualizar el perfil: marcar como inactivo y establecer fecha de desactivación
+      // Actualizar el perfil: establecer fecha de desactivación (el usuario seguirá activo hasta esa fecha)
       const { error } = await supabase
         .from('profiles')
         .update({
-          is_active: false,
           fecha_desactivacion: fechaDesactivacion,
           updated_at: new Date().toISOString()
         })
@@ -384,16 +420,19 @@ export const useAdmin = () => {
   // Verificar si un email puede ser configurado como admin
   const canBeAdmin = (email: string): boolean => {
     const adminEmails = [
-      'gastondigilio@gmail.com',
-      'fede.rz87@gmail.com',
-      'agaru.corp@gmail.com' // ✅ Email admin principal
+      'agaru.corp@gmail.com', // ✅ Email admin principal
+      'lucasmaldacena@gmail.com' // ✅ Admin recientemente creado
     ];
     return adminEmails.includes(email.toLowerCase());
   };
 
   // Función de emergencia para verificar admin por email
   const checkAdminByEmail = (email: string): boolean => {
-    return email === 'agaru.corp@gmail.com';
+    const adminEmails = [
+      'agaru.corp@gmail.com',
+      'lucasmaldacena@gmail.com'
+    ];
+    return adminEmails.includes(email?.toLowerCase() || '');
   };
 
   // ==================== FUNCIONES DE AUSENCIAS ====================

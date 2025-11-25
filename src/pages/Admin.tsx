@@ -535,11 +535,11 @@ export default function Admin() {
   // Confirmar eliminación
   const handleConfirmDeleteUser = async () => {
     if (!deleteTarget) return;
-    const loadingToast = showLoading('Eliminando usuario...');
+      const loadingToast = showLoading('Desactivando usuario...');
     const result = await deleteUser(deleteTarget.id);
     dismissToast(loadingToast);
     if (result.success) {
-      showSuccess('Usuario eliminado', 'El usuario ha sido eliminado exitosamente');
+      showSuccess('Usuario desactivado', 'El usuario quedará inactivo a partir del próximo mes');
       setConfirmDeleteOpen(false);
       setDeleteTarget(null);
     } else {
