@@ -351,16 +351,16 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex flex-col items-center bg-black p-4 min-h-screen">
+    <div className="flex flex-col items-center bg-black p-2 pt-1 pb-1 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-hidden">
       {/* Contenido principal centrado */}
       <div className="flex-1 flex flex-col items-center w-full pt-0">
         <div className="hidden md:flex justify-center mb-0">
           <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
         </div>
-        <div className="w-full max-w-md space-y-8 mt-0 mb-8 flex-1 flex flex-col justify-center">
+        <div className="w-full max-w-md space-y-4 md:space-y-8 mt-1 mb-3 md:mb-8 flex-1 flex flex-col justify-center">
           {/* Login/Register Card */}
           <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
-          <CardHeader className="space-y-1">
+          <CardHeader className="space-y-1 p-3 md:p-6">
             <CardTitle className="text-lg md:text-xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
@@ -381,7 +381,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               </div>
             )}
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-3 md:p-6 md:pt-0">
             {error && (
               <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
                 {error}
@@ -687,9 +687,9 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       </div>
 
       {/* Footer - Visible en desktop */}
-      <footer className="w-full pt-2 pb-4 flex-shrink-0">
+      <footer className="w-full pt-1 pb-1 md:pt-2 md:pb-4 flex-shrink-0 bg-black">
         <div className="flex items-center justify-center gap-2">
-          <p className="text-xs text-white/70">© Powered by</p>
+          <p className="text-xs text-white/70">Powered by</p>
           <a 
             href="https://www.agarucorp.com" 
             target="_blank" 
