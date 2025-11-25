@@ -272,19 +272,34 @@ export const useAdmin = () => {
   }, []);
 
   // Actualizar estado_pago por usuario (persistir en BD)
+  // Si el mes seleccionado es el mes actual, redirige automáticamente al mes siguiente
   const updateCuotaEstadoPago = useCallback(async (usuarioId: string, anio: number, mes: number, estado: 'pendiente' | 'abonada' | 'vencida') => {
     try {
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      
+      // Si el mes seleccionado es el mes actual, redirigir al mes siguiente
+      let targetAnio = anio;
+      let targetMes = mes;
+      
+      if (anio === currentYear && mes === currentMonth) {
+        // Redirigir al mes siguiente
+        targetMes = currentMonth === 12 ? 1 : currentMonth + 1;
+        targetAnio = currentMonth === 12 ? currentYear + 1 : currentYear;
+      }
+      
       const { error } = await supabase
         .from('cuotas_mensuales')
         .update({ estado_pago: estado, generado_el: new Date().toISOString() })
         .eq('usuario_id', usuarioId)
-        .eq('anio', anio)
-        .eq('mes', mes);
+        .eq('anio', targetAnio)
+        .eq('mes', targetMes);
       if (error) {
         console.error('Error actualizando estado_pago:', error);
-        return { success: false, error: error.message };
+        return { success: false, error: error.message, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
       }
-      return { success: true };
+      return { success: true, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
     } catch (err) {
       console.error('Error inesperado actualizando estado_pago:', err);
       return { success: false, error: 'Error inesperado' };
@@ -292,23 +307,59 @@ export const useAdmin = () => {
   }, []);
 
   // Actualizar descuento de una cuota mensual
+  // Si el mes seleccionado es el mes actual, redirige automáticamente al mes siguiente
   const updateCuotaDescuento = useCallback(async (usuarioId: string, anio: number, mes: number, descuentoPorcentaje: number) => {
     try {
-      // Primero obtenemos el monto_total actual
+      const now = new Date();
+      const currentYear = now.getFullYear();
+      const currentMonth = now.getMonth() + 1;
+      
+      // Los descuentos SIEMPRE se aplican al mes seleccionado (incluso si es el mes actual)
+      // porque son abonos en efectivo que se aplican al mes corriente
+      let targetAnio = anio;
+      let targetMes = mes;
+      
+      // Primero obtenemos el monto_total actual (o creamos la cuota si no existe)
       const { data: cuotaActual, error: fetchError } = await supabase
         .from('cuotas_mensuales')
         .select('monto_total')
         .eq('usuario_id', usuarioId)
-        .eq('anio', anio)
-        .eq('mes', mes)
-        .single();
+        .eq('anio', targetAnio)
+        .eq('mes', targetMes)
+        .maybeSingle();
 
-      if (fetchError) {
+      if (fetchError && fetchError.code !== 'PGRST116') {
         console.error('Error obteniendo cuota actual:', fetchError);
         return { success: false, error: fetchError.message };
       }
 
-      const montoTotal = Number(cuotaActual.monto_total) || 0;
+      // Si no existe la cuota, necesitamos obtenerla del mes actual o calcularla
+      let montoTotal = 0;
+      if (!cuotaActual) {
+        // Si es el mes actual y no existe cuota, intentar obtener del mes actual
+        if (anio === currentYear && mes === currentMonth) {
+          const { data: cuotaActualMes } = await supabase
+            .from('cuotas_mensuales')
+            .select('monto_total')
+            .eq('usuario_id', usuarioId)
+            .eq('anio', currentYear)
+            .eq('mes', currentMonth)
+            .maybeSingle();
+          
+          if (cuotaActualMes) {
+            montoTotal = Number(cuotaActualMes.monto_total) || 0;
+          } else {
+            // Si no hay cuota, no podemos aplicar descuento
+            return { success: false, error: 'No se encontró la cuota para aplicar el descuento' };
+          }
+        } else {
+          // Si no es el mes actual y no existe cuota, no podemos aplicar descuento
+          return { success: false, error: 'No se encontró la cuota para aplicar el descuento' };
+        }
+      } else {
+        montoTotal = Number(cuotaActual.monto_total) || 0;
+      }
+
       const montoConDescuento = montoTotal * (1 - descuentoPorcentaje / 100);
 
       // Actualizamos el descuento y el monto con descuento
@@ -319,13 +370,16 @@ export const useAdmin = () => {
           monto_con_descuento: montoConDescuento
         })
         .eq('usuario_id', usuarioId)
-        .eq('anio', anio)
-        .eq('mes', mes);
+        .eq('anio', targetAnio)
+        .eq('mes', targetMes);
 
       if (error) {
         console.error('Error actualizando descuento:', error);
         return { success: false, error: error.message };
       }
+
+      // Disparar evento para actualizar el balance del usuario
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
 
       return { success: true };
     } catch (err) {

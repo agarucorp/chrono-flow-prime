@@ -459,6 +459,12 @@ export default function Admin() {
     }
   }, [showUserDetails]);
 
+  // Determinar si el mes seleccionado es el mes actual
+  const isCurrentMonth = () => {
+    const now = new Date();
+    return selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
+  };
+
   // Cargar cuotas del periodo seleccionado y mapear por usuario
   useEffect(() => {
     (async () => {
@@ -843,23 +849,7 @@ export default function Admin() {
                   </div>
                 </div>
                 
-                {sortedUsers.length === 0 && (
-                  <div className="text-center py-8 px-4">
-                    <Users className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-lg font-medium mb-2">No se encontraron clientes</p>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      {allUsers.length === 0 
-                        ? 'No hay usuarios registrados en la base de datos'
-                        : `Se encontraron ${allUsers.length} usuarios totales (todos son administradores)`
-                      }
-                    </p>
-                    <div className="text-xs text-muted-foreground space-y-1 max-w-md mx-auto">
-                      <p>• Revisa la consola del navegador para más detalles</p>
-                      <p>• Verifica las políticas RLS en Supabase</p>
-                      <p>• Asegúrate de que hay usuarios con role='client'</p>
-                    </div>
-                  </div>
-                )}
+                {/* Tabla vacía sin mensajes cuando no hay usuarios */}
               </CardContent>
             </Card>
           </TabsContent>

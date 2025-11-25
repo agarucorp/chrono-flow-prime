@@ -834,9 +834,22 @@ const Dashboard = () => {
                               )}
                               <div className="border-t pt-2 flex items-center justify-between font-semibold">
                                 <span>Total</span>
-                                <span className="text-green-600">
-                                  ${formatCurrency(entry.totalConDescuento)}
-                                </span>
+                                <div className="text-right">
+                                  {entry.descuentoPorcentaje > 0 && entry.total > entry.totalConDescuento ? (
+                                    <>
+                                      <span className="text-muted-foreground line-through block text-sm">
+                                        ${formatCurrency(entry.total)}
+                                      </span>
+                                      <span className="text-green-600">
+                                        ${formatCurrency(entry.totalConDescuento)}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-green-600">
+                                      ${formatCurrency(entry.totalConDescuento)}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                               {entry.estadoPago && !entry.isCurrent && (
                                 <div className="text-xs text-muted-foreground">
