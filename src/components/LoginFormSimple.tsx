@@ -351,7 +351,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex flex-col items-center bg-black p-2 pt-16 pb-0 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-hidden">
+    <div className="flex flex-col items-center bg-black p-2 pt-32 pb-0 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-hidden">
       {/* Contenido principal centrado */}
       <div className="flex-1 flex flex-col items-center w-full pt-0 pb-0 md:pt-0">
         <div className="hidden md:flex justify-center mb-0">
@@ -359,7 +359,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         </div>
         {/* Grupo modal + footer para mobile */}
         <div className="w-full max-w-md flex flex-col md:space-y-8 mt-0 md:mt-0 md:mb-8 flex-1 md:flex-none md:justify-center justify-start md:justify-center pb-0 md:pb-0">
-          <div className="space-y-4 md:space-y-8 mb-4 md:mb-0">
+          <div className="space-y-4 md:space-y-8 mb-6 md:mb-0">
           {/* Login/Register Card */}
           <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
           <CardHeader className="space-y-1 p-3 md:p-6">
