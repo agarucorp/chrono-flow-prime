@@ -351,13 +351,15 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-black p-4 relative">
-      <div className="hidden md:flex justify-center mb-8">
-        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
-      </div>
-      <div className="w-full max-w-md space-y-8">
-        {/* Login/Register Card */}
-        <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
+    <div className="flex flex-col items-center bg-black p-4 min-h-screen">
+      {/* Contenido principal centrado */}
+      <div className="flex-1 flex flex-col items-center w-full pt-0">
+        <div className="hidden md:flex justify-center mb-0">
+          <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+        </div>
+        <div className="w-full max-w-md space-y-8 mt-0 mb-8 flex-1 flex flex-col justify-center">
+          {/* Login/Register Card */}
+          <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
           <CardHeader className="space-y-1">
             <CardTitle className="text-lg md:text-xl text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
@@ -681,28 +683,28 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             </div>
           </CardContent>
         </Card>
-
-        {/* Footer */}
-        <div className="text-center mt-8">
-          <div className="flex items-center justify-center gap-2">
-            <p className="text-xs text-muted-foreground">© Powered by</p>
-            <a 
-              href="https://www.agarucorp.com" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="inline-block"
-            >
-              <img 
-                src="/agarucorp-logo.svg" 
-                alt="AgaruCorp" 
-                className="h-[17px] w-auto sm:h-6 md:h-7 opacity-70 hover:opacity-100 transition-opacity"
-                style={{ maxWidth: '120px' }}
-              />
-            </a>
-          </div>
         </div>
-
       </div>
+
+      {/* Footer - Visible en desktop */}
+      <footer className="w-full pt-2 pb-4 flex-shrink-0">
+        <div className="flex items-center justify-center gap-2">
+          <p className="text-xs text-white/70">© Powered by</p>
+          <a 
+            href="https://www.agarucorp.com" 
+            target="_blank" 
+            rel="noopener noreferrer"
+            className="inline-block"
+          >
+            <img 
+              src="/agarucorp-logo.svg" 
+              alt="AgaruCorp" 
+              className="h-[17px] w-auto opacity-70 hover:opacity-100 transition-opacity"
+              style={{ maxWidth: '120px' }}
+            />
+          </a>
+        </div>
+      </footer>
     </div>
   );
 };
