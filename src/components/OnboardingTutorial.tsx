@@ -44,6 +44,9 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
     : false
   const onlyDesktopImages = hasImages && !hasMobileImage
   const onlyMobileImages = hasImages && !hasDesktopImage
+  const isSlide4 = currentIndex === 3 // Slide 4 (Vacantes) - centrar imagen en desktop
+  const isSlide5 = currentIndex === 4 // Slide 5 (Información) - centrar imagen en desktop
+  const shouldCenterImage = isSlide4 || isSlide5 // Slides 4 y 5 deben tener imágenes centradas
 
   const renderDots = () => (
     <div className="flex items-center gap-2">
@@ -81,7 +84,7 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
             <div className="text-white/70">{renderDots()}</div>
           </div>
 
-          <div className="relative w-full overflow-hidden flex-1 flex items-center justify-center sm:items-start sm:justify-start">
+          <div className={`relative w-full overflow-hidden flex-1 flex items-center justify-center ${shouldCenterImage ? 'sm:items-center sm:justify-center' : 'sm:items-start sm:justify-start'}`}>
             <div
               key={`${currentIndex}-${direction}`}
               className="w-full transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
@@ -90,7 +93,7 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                 animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
               }}
             >
-              <div className="flex flex-col items-center sm:items-start">
+              <div className={`flex flex-col items-center ${shouldCenterImage ? 'sm:items-center' : 'sm:items-start'}`}>
                 {currentSlide.images?.length ? (
                   <>
                     {currentSlide.images.map((image, index) => {
@@ -105,12 +108,12 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                       return (
                         <div
                           key={`${image.src}-${index}`}
-                          className={`relative overflow-hidden flex justify-center sm:justify-start ${extraClass} ${visibilityClass}`}
+                          className={`relative overflow-hidden flex justify-center w-full ${shouldCenterImage ? 'sm:justify-center' : 'sm:justify-start'} ${extraClass} ${visibilityClass}`}
                         >
                           <img
                             src={image.src}
                             alt={image.alt}
-                            className="mx-auto sm:mx-0 h-[220px] sm:h-48 w-auto rounded-2xl object-contain"
+                            className={`mx-auto h-[220px] sm:h-48 w-auto rounded-2xl object-contain ${shouldCenterImage ? 'sm:mx-auto' : 'sm:mx-0'}`}
                             loading="lazy"
                           />
                         </div>
@@ -133,10 +136,10 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                   </div>
                 )}
 
-                <div className="relative overflow-hidden mt-6 sm:mt-0 w-full flex flex-col items-center sm:items-start">
+                <div className={`relative overflow-hidden mt-8 sm:mt-8 w-full flex flex-col items-center ${shouldCenterImage ? 'sm:items-center' : 'sm:items-start'}`}>
                   <div
                     key={`content-${currentIndex}-${direction}`}
-                    className="space-y-0 sm:space-y-0 flex flex-col items-center sm:items-start text-center sm:text-left"
+                    className={`space-y-0 sm:space-y-0 flex flex-col items-center ${shouldCenterImage ? 'sm:items-center text-center sm:text-center' : 'sm:items-start text-center sm:text-left'}`}
                     style={{
                       animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
                     }}
@@ -151,39 +154,24 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                 </div>
               </div>
             </div>
-
-            <div className="hidden sm:flex sm:justify-end sm:gap-6">
-              <button
-                type="button"
-                onClick={handleBack}
-                disabled={isFirstSlide}
-                className={`text-[10px] sm:text-[10px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                Volver
-              </button>
-              <button
-                type="button"
-                onClick={handleNext}
-                className="text-[10px] sm:text-[10px] uppercase tracking-[0.3em] text-white hover:text-white/90 transition-colors"
-              >
-                {isLastSlide ? 'Ingresar' : 'Siguiente'}
-              </button>
-            </div>
           </div>
         </div>
-        <div className="flex sm:hidden justify-between items-center px-4 py-6">
+        <div className="flex justify-between items-center px-4 py-6 sm:px-10 sm:py-6 border-t border-white/10">
           <button
             type="button"
             onClick={handleBack}
             disabled={isFirstSlide}
-            className={`text-[12px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`text-[12px] sm:text-[10px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             Volver
           </button>
+          <div className="hidden sm:flex sm:justify-center sm:flex-1">
+            <div className="text-white/70">{renderDots()}</div>
+          </div>
           <button
             type="button"
             onClick={handleNext}
-            className="text-[12px] uppercase tracking-[0.3em] text-white hover:text-white/90 transition-colors"
+            className="text-[12px] sm:text-[10px] uppercase tracking-[0.3em] text-white hover:text-white/90 transition-colors sm:ml-auto"
           >
             {isLastSlide ? 'Ingresar' : 'Siguiente'}
           </button>

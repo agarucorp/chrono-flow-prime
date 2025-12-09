@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -46,6 +46,14 @@ export const useAdmin = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1..12
 
+  // Caché para verificación de admin (evitar recargas innecesarias)
+  const adminCheckCacheRef = useRef<{ userId: string | null; isAdmin: boolean | null; timestamp: number }>({ 
+    userId: null, 
+    isAdmin: null, 
+    timestamp: 0 
+  });
+  const ADMIN_CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutos en caché
+
   // Utilidad de ocultamiento local (soft-delete en interfaz)
   const getHiddenUserIds = (): string[] => {
     try {
@@ -64,11 +72,22 @@ export const useAdmin = () => {
     localStorage.setItem('adminHiddenUsers', JSON.stringify(Array.from(curr)));
   };
 
-  // Verificar si el usuario actual es administrador
+  // Verificar si el usuario actual es administrador (con caché)
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
         setIsAdmin(false);
+        setIsLoading(false);
+        adminCheckCacheRef.current = { userId: null, isAdmin: false, timestamp: 0 };
+        return;
+      }
+
+      const now = Date.now();
+      const cached = adminCheckCacheRef.current;
+      
+      // Si ya tenemos un resultado en caché para este usuario y no ha expirado, usar caché
+      if (cached.userId === user.id && cached.isAdmin !== null && (now - cached.timestamp) < ADMIN_CACHE_DURATION_MS) {
+        setIsAdmin(cached.isAdmin);
         setIsLoading(false);
         return;
       }
@@ -80,6 +99,7 @@ export const useAdmin = () => {
           console.warn('⚠️ Problema con sesión, usando fallback por email');
           const isAdminByEmail = checkAdminByEmail(user.email || '');
           setIsAdmin(isAdminByEmail);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
           setIsLoading(false);
           return;
         }
@@ -107,23 +127,27 @@ export const useAdmin = () => {
             const isUserAdmin = emailData.role === 'admin';
             console.log('✅ Rol obtenido por email:', emailData.role, '-> isAdmin:', isUserAdmin);
             setIsAdmin(isUserAdmin);
+            adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
           } else {
             console.error('❌ Error en ambas consultas:', { error, emailError });
             // Fallback: verificar admin por email (SIEMPRE usar fallback si las consultas fallan)
             const isAdminByEmail = checkAdminByEmail(user.email || '');
             console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
             setIsAdmin(isAdminByEmail);
+            adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
           }
         } else if (!error && data) {
           const isUserAdmin = data.role === 'admin';
           console.log('✅ Rol obtenido por ID:', data.role, '-> isAdmin:', isUserAdmin);
           setIsAdmin(isUserAdmin);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
         } else {
           console.error('❌ Error verificando rol de admin:', error);
           // Fallback: verificar admin por email (SIEMPRE usar fallback si hay error)
           const isAdminByEmail = checkAdminByEmail(user.email || '');
           console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
           setIsAdmin(isAdminByEmail);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
         }
       } catch (err) {
         console.error('❌ Error inesperado verificando admin:', err);
@@ -131,6 +155,7 @@ export const useAdmin = () => {
         const isAdminByEmail = checkAdminByEmail(user?.email || '');
         console.log('⚠️ Fallback final checkAdminByEmail:', user?.email, '-> isAdmin:', isAdminByEmail);
         setIsAdmin(isAdminByEmail);
+        adminCheckCacheRef.current = { userId: user?.id || null, isAdmin: isAdminByEmail, timestamp: Date.now() };
       } finally {
         setIsLoading(false);
       }
@@ -162,6 +187,34 @@ export const useAdmin = () => {
       }, {});
     } catch (err) {
       console.error('❌ Error inesperado obteniendo horarios recurrentes:', err);
+      return {};
+    }
+  }, []);
+
+  // Nueva función para obtener horarios con horas de inicio
+  const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string }>>> => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select('usuario_id, dia_semana, hora_inicio, activo')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('❌ Error obteniendo horarios con horas:', error);
+        return {};
+      }
+
+      return (data || []).reduce<Record<string, Array<{ dia: string; hora_inicio: string }>>>((acc, row: any) => {
+        const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
+        if (!diaNombre) return acc;
+        if (!acc[row.usuario_id]) {
+          acc[row.usuario_id] = [];
+        }
+        acc[row.usuario_id].push({ dia: diaNombre, hora_inicio: row.hora_inicio });
+        return acc;
+      }, {});
+    } catch (err) {
+      console.error('❌ Error inesperado obteniendo horarios con horas:', err);
       return {};
     }
   }, []);
@@ -629,6 +682,7 @@ export const useAdmin = () => {
     updateCuotaEstadoPago,
     updateCuotaDescuento,
     canBeAdmin,
+    fetchHorariosConHoras,
     // Funciones de ausencias
     fetchAusencias,
     createAusenciaUnica,

@@ -351,7 +351,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex flex-col items-center bg-black p-2 pt-32 pb-0 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-hidden">
+    <div className="flex flex-col items-center bg-black p-2 pt-32 pb-0 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-x-hidden">
       {/* Contenido principal centrado */}
       <div className="flex-1 flex flex-col items-center w-full pt-0 pb-0 md:pt-0">
         <div className="hidden md:flex justify-center mb-0">
