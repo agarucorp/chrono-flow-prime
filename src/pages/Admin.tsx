@@ -366,6 +366,12 @@ export default function Admin() {
     }
   };
   
+  // Redirigir usuarios no-admin al dashboard de usuario
+  useEffect(() => {
+    if (!isLoading && !isAdmin) {
+      navigate('/user', { replace: true });
+    }
+  }, [isLoading, isAdmin, navigate]);
 
   // Sincronizar phones desde auth.users al cargar Admin
   useEffect(() => {
@@ -692,28 +698,25 @@ export default function Admin() {
     );
   }
 
-  // Si no es admin después de verificar, mostrar mensaje de acceso denegado
+  // Mostrar loading mientras se verifica el rol
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Verificando permisos...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Si no es admin, mostrar loading mientras se redirige (el useEffect manejará la redirección)
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center max-w-md">
-          <Shield className="w-16 h-16 text-red-500 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-foreground mb-2">Acceso Denegado</h1>
-          <p className="text-muted-foreground">No tienes permisos para acceder a esta sección.</p>
-          <div className="text-sm text-muted-foreground mt-4 space-y-1">
-            <p>Usuario: {user?.email}</p>
-            <p>Estado: {isLoading ? 'Verificando...' : 'Verificación completada'}</p>
-            <p>Rol en BD: {isAdmin ? 'Admin' : 'No es admin'}</p>
-          </div>
-          <div className="mt-6">
-            <Button 
-              onClick={() => window.location.reload()} 
-              variant="outline"
-              size="sm"
-            >
-              Recargar página
-            </Button>
-          </div>
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Redirigiendo...</p>
         </div>
       </div>
     );

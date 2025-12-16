@@ -613,9 +613,11 @@ const Dashboard = () => {
   }, [user?.id]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background bg-[url('/gymobile-background.png')] sm:bg-[url('/gymdesktop-background.png')] bg-cover bg-center bg-no-repeat relative">
+      {/* Overlay oscuro solo en desktop */}
+      <div className="hidden sm:block absolute inset-0 bg-black/40 pointer-events-none"></div>
       {/* Header restaurado */}
-      <header className="bg-black shadow-card">
+      <header className="relative z-10 bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex-1 flex items-center">
@@ -721,7 +723,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
         {firstTimeLoading || loadingHorarios ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
