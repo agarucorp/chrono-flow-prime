@@ -325,34 +325,57 @@ export const useAdmin = () => {
   }, []);
 
   // Actualizar estado_pago por usuario (persistir en BD)
-  // Si el mes seleccionado es el mes actual, redirige automáticamente al mes siguiente
+  // Actualiza directamente el mes seleccionado, sin redirecciones
   const updateCuotaEstadoPago = useCallback(async (usuarioId: string, anio: number, mes: number, estado: 'pendiente' | 'abonada' | 'vencida') => {
     try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
+      // Verificar primero si existe el registro antes de actualizar
+      const { data: existingData, error: checkError } = await supabase
+        .from('cuotas_mensuales')
+        .select('id, estado_pago')
+        .eq('usuario_id', usuarioId)
+        .eq('anio', anio)
+        .eq('mes', mes)
+        .maybeSingle();
       
-      // Si el mes seleccionado es el mes actual, redirigir al mes siguiente
-      let targetAnio = anio;
-      let targetMes = mes;
-      
-      if (anio === currentYear && mes === currentMonth) {
-        // Redirigir al mes siguiente
-        targetMes = currentMonth === 12 ? 1 : currentMonth + 1;
-        targetAnio = currentMonth === 12 ? currentYear + 1 : currentYear;
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error verificando cuota antes de actualizar:', checkError);
+        return { success: false, error: checkError.message };
       }
       
-      const { error } = await supabase
+      if (!existingData) {
+        console.warn(`⚠️ No se encontró cuota para usuario ${usuarioId}, año ${anio}, mes ${mes}`);
+        return { success: false, error: 'No se encontró la cuota a actualizar' };
+      }
+      
+      // Actualizar el estado de pago en la base de datos
+      const { error, data } = await supabase
         .from('cuotas_mensuales')
         .update({ estado_pago: estado, generado_el: new Date().toISOString() })
         .eq('usuario_id', usuarioId)
-        .eq('anio', targetAnio)
-        .eq('mes', targetMes);
+        .eq('anio', anio)
+        .eq('mes', mes)
+        .select('id, estado_pago');
+        
       if (error) {
         console.error('Error actualizando estado_pago:', error);
-        return { success: false, error: error.message, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
+        return { success: false, error: error.message };
       }
-      return { success: true, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
+      
+      // Verificar que realmente se actualizó
+      if (!data || data.length === 0) {
+        console.error('⚠️ No se actualizó ningún registro en la BD');
+        return { success: false, error: 'No se pudo actualizar el registro en la base de datos' };
+      }
+      
+      // Verificar que el estado se actualizó correctamente
+      const registroActualizado = data[0];
+      if (registroActualizado.estado_pago !== estado) {
+        console.error(`⚠️ El estado no coincide: esperado ${estado}, obtenido ${registroActualizado.estado_pago}`);
+        return { success: false, error: 'El estado no se actualizó correctamente en la base de datos' };
+      }
+      
+      console.log(`✅ Estado de pago actualizado correctamente: usuario ${usuarioId}, año ${anio}, mes ${mes}, estado: ${estado}`);
+      return { success: true };
     } catch (err) {
       console.error('Error inesperado actualizando estado_pago:', err);
       return { success: false, error: 'Error inesperado' };

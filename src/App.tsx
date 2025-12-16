@@ -1161,6 +1161,24 @@ const Dashboard = () => {
 };
 
 const App = () => {
+  const { loading } = useAuthContext();
+  
+  // Pantalla de carga inicial mientras se verifica la autenticación
+  if (loading) {
+    return (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem={false}
+        disableTransitionOnChange
+      >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+          <img src="/biglogo.png" alt="Logo" className="max-w-xs md:max-w-md" />
+        </div>
+      </ThemeProvider>
+    );
+  }
+  
   return (
     <ThemeProvider
       attribute="class"

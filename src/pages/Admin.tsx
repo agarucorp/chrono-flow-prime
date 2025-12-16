@@ -616,7 +616,7 @@ export default function Admin() {
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
     })();
-  }, [selectedYear, selectedMonth, allUsers, tipoPagoMap, fetchCuotasMensuales, isUpdatingPayment]);
+  }, [selectedYear, selectedMonth, allUsers, tipoPagoMap, fetchCuotasMensuales]);
 
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -1113,9 +1113,19 @@ export default function Admin() {
                                 skipNextReload.current = true; // Evitar que el useEffect se ejecute
                                 
                                 const nuevoEstadoDb = (v === 'pagado') ? 'abonada' : 'pendiente';
-                                const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
                                 
-                                if (res.success) {
+                                try {
+                                  const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
+                                  
+                                  if (!res.success) {
+                                    console.error('Error en updateCuotaEstadoPago:', res.error);
+                                    showError(`Error al actualizar el estado de pago: ${res.error || 'Error desconocido'}`);
+                                    setIsUpdatingPayment(false);
+                                    skipNextReload.current = false;
+                                    return;
+                                  }
+                                  
+                                  
                                   // Actualizar solo la fila específica en lugar de recargar toda la lista
                                   setBalanceRows(prevRows => 
                                     prevRows.map(r => 
@@ -1139,12 +1149,15 @@ export default function Admin() {
                                   
                                   showSuccess(`Estado de pago actualizado a ${v === 'pagado' ? 'pagado' : 'pendiente'}`);
                                   
-                                  // No necesitamos recargar desde la BD ya que actualizamos el estado local
-                                  // Solo resetear los flags
-                                  setIsUpdatingPayment(false);
-                                  skipNextReload.current = false;
-                                } else {
-                                  showError('Error al actualizar el estado de pago');
+                                  // Resetear los flags después de un delay para asegurar que la BD se sincronizó
+                                  // y evitar que el useEffect recargue antes de tiempo
+                                  setTimeout(() => {
+                                    setIsUpdatingPayment(false);
+                                    skipNextReload.current = false;
+                                  }, 500);
+                                } catch (error) {
+                                  console.error('Error inesperado actualizando estado de pago:', error);
+                                  showError('Error inesperado al actualizar el estado de pago');
                                   setIsUpdatingPayment(false);
                                   skipNextReload.current = false;
                                 }

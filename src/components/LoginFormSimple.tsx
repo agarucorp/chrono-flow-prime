@@ -345,7 +345,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   if (showSplash) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:hidden">
-        <img src="/tutorial/m-alda.png" alt="Logo" className="max-w-xs" />
+        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
       </div>
     );
   }
