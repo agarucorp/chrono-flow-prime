@@ -42,7 +42,7 @@ export const AuthForm: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50">
+    <div className="flex flex-col items-center min-h-screen bg-gray-50 py-8 md:justify-center">
       <div className="hidden md:flex justify-center mb-8">
         <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
       </div>

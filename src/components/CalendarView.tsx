@@ -194,13 +194,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const ch1 = supabase
       .channel('rt_turnos_variables')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
-        fetchAlumnosHorarios();
+        // Agregar delay para asegurar que los cambios se reflejen
+        setTimeout(() => {
+          fetchAlumnosHorarios();
+        }, 200);
       })
       .subscribe();
     const ch2 = supabase
       .channel('rt_horarios_recurrentes_usuario')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario' }, () => {
-        fetchAlumnosHorarios();
+        // Agregar delay para asegurar que los cambios se reflejen
+        setTimeout(() => {
+          fetchAlumnosHorarios();
+        }, 200);
       })
       .subscribe();
     const chSlots = supabase
@@ -212,7 +218,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     const ch3 = supabase
       .channel('rt_turnos_cancelados')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_cancelados' }, () => {
-        fetchAlumnosHorarios();
+        // Agregar delay para asegurar que los cambios se reflejen
+        setTimeout(() => {
+          fetchAlumnosHorarios();
+        }, 200);
       })
       .subscribe();
     return () => {
@@ -247,7 +256,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
     const handleAlumnosHorariosUpdated = async () => {
       // Recargar alumnos para actualizar contadores
-      await fetchAlumnosHorarios();
+      // Agregar un pequeño delay para asegurar que los cambios en BD se reflejen
+      setTimeout(async () => {
+        await fetchAlumnosHorarios();
+      }, 300);
     };
 
     window.addEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
@@ -447,6 +459,13 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       // Combinar todos los datos
       const todosAlumnos: AlumnoHorario[] = [];
 
+      // Helper para normalizar formato de hora (HH:mm:ss -> HH:mm)
+      const normalizeHora = (hora: string) => {
+        if (!hora) return '';
+        // Si tiene formato HH:mm:ss, tomar solo HH:mm
+        return hora.substring(0, 5);
+      };
+
       // Crear un Set de turnos cancelados para esta fecha específica
       const turnosCanceladosHoy = new Set<string>();
       if (turnosCancelados && turnosCancelados.length > 0) {
@@ -454,8 +473,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            // Crear clave única: usuario_id + hora_inicio + hora_fin
-            const claveCancelado = `${turno.cliente_id}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+            // Crear clave única normalizada: usuario_id + hora_inicio (normalizada) + hora_fin (normalizada)
+            const horaInicioNorm = normalizeHora(turno.turno_hora_inicio || '');
+            const horaFinNorm = normalizeHora(turno.turno_hora_fin || '');
+            const claveCancelado = `${turno.cliente_id}-${horaInicioNorm}-${horaFinNorm}`;
             turnosCanceladosHoy.add(claveCancelado);
 
             todosAlumnos.push({
@@ -464,8 +485,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               email: profile.email || '',
               telefono: profile.phone || '',
               tipo: 'cancelado',
-              hora_inicio: (turno.turno_hora_inicio || '').substring(0, 5),
-              hora_fin: (turno.turno_hora_fin || '').substring(0, 5),
+              hora_inicio: horaInicioNorm,
+              hora_fin: horaFinNorm,
               fecha: turno.turno_fecha,
               usuario_id: turno.cliente_id
             });
@@ -474,15 +495,18 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }
 
       // Agregar horarios recurrentes (excluyendo admins y los que están cancelados)
+      // NO agregar los que están cancelados porque ya se agregaron desde turnos_cancelados
       if (horariosRecurrentes && horariosRecurrentes.length > 0) {
         horariosRecurrentes.forEach(horario => {
           const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            // Crear clave única para verificar si está cancelado
-            const claveRecurrente = `${horario.usuario_id}-${horario.hora_inicio}-${horario.hora_fin}`;
+            // Crear clave única normalizada para verificar si está cancelado
+            const horaInicioNorm = normalizeHora(horario.hora_inicio || '');
+            const horaFinNorm = normalizeHora(horario.hora_fin || '');
+            const claveRecurrente = `${horario.usuario_id}-${horaInicioNorm}-${horaFinNorm}`;
 
-            // Agregar siempre, pero marcar como cancelado si existe en turnosCanceladosHoy
+            // Solo agregar si NO está cancelado (los cancelados ya están en la lista desde turnos_cancelados)
             if (!turnosCanceladosHoy.has(claveRecurrente)) {
               todosAlumnos.push({
                 id: horario.id,
@@ -490,42 +514,30 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
                 email: profile.email || '',
                 telefono: profile.phone,
                 tipo: 'recurrente',
-                hora_inicio: (horario.hora_inicio || '').substring(0, 5),
-                hora_fin: (horario.hora_fin || '').substring(0, 5),
-                fecha: fechaActual,
-                activo: horario.activo,
-                usuario_id: horario.usuario_id
-              });
-            } else {
-              // Mostrar también pero marcado como cancelado para que quede visible en rojo
-              todosAlumnos.push({
-                id: horario.id,
-                nombre: getProfileFullName(profile),
-                email: profile.email || '',
-                telefono: profile.phone,
-                tipo: 'cancelado',
-                hora_inicio: (horario.hora_inicio || '').substring(0, 5),
-                hora_fin: (horario.hora_fin || '').substring(0, 5),
+                hora_inicio: horaInicioNorm,
+                hora_fin: horaFinNorm,
                 fecha: fechaActual,
                 activo: horario.activo,
                 usuario_id: horario.usuario_id
               });
             }
+            // NO agregar los cancelados aquí porque ya están en turnos_cancelados
           }
         });
       }
 
       // Agregar turnos variables (excluyendo admins y duplicados)
+      // NO agregar los que están cancelados porque ya se agregaron desde turnos_cancelados
       if (turnosVariables && turnosVariables.length > 0) {
         turnosVariables.forEach(turno => {
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            const horaInicio = (turno.turno_hora_inicio || '').substring(0, 5);
-            const horaFin = (turno.turno_hora_fin || '').substring(0, 5);
+            const horaInicio = normalizeHora(turno.turno_hora_inicio || '');
+            const horaFin = normalizeHora(turno.turno_hora_fin || '');
 
-            // Verificar si este turno variable está cancelado
-            const claveVariable = `${turno.cliente_id}-${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+            // Verificar si este turno variable está cancelado usando clave normalizada
+            const claveVariable = `${turno.cliente_id}-${horaInicio}-${horaFin}`;
             const estaCancelado = turnosCanceladosHoy.has(claveVariable);
 
             // Verificar si ya existe este usuario para esta hora (evitar duplicados)
@@ -534,13 +546,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
               alumno.hora_inicio === horaInicio
             );
 
-            if (!yaExiste) {
+            // Solo agregar si NO está cancelado (los cancelados ya están en la lista desde turnos_cancelados)
+            if (!yaExiste && !estaCancelado) {
               todosAlumnos.push({
                 id: turno.id,
                 nombre: getProfileFullName(profile),
                 email: profile.email || '',
                 telefono: profile.phone,
-                tipo: estaCancelado ? 'cancelado' : 'variable',
+                tipo: 'variable',
                 hora_inicio: horaInicio,
                 hora_fin: horaFin,
                 fecha: turno.turno_fecha,

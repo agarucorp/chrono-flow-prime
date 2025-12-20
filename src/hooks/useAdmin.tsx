@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 
@@ -46,6 +46,14 @@ export const useAdmin = () => {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1..12
 
+  // Caché para verificación de admin (evitar recargas innecesarias)
+  const adminCheckCacheRef = useRef<{ userId: string | null; isAdmin: boolean | null; timestamp: number }>({ 
+    userId: null, 
+    isAdmin: null, 
+    timestamp: 0 
+  });
+  const ADMIN_CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutos en caché
+
   // Utilidad de ocultamiento local (soft-delete en interfaz)
   const getHiddenUserIds = (): string[] => {
     try {
@@ -64,11 +72,22 @@ export const useAdmin = () => {
     localStorage.setItem('adminHiddenUsers', JSON.stringify(Array.from(curr)));
   };
 
-  // Verificar si el usuario actual es administrador
+  // Verificar si el usuario actual es administrador (con caché)
   useEffect(() => {
     const checkAdminStatus = async () => {
       if (!user) {
         setIsAdmin(false);
+        setIsLoading(false);
+        adminCheckCacheRef.current = { userId: null, isAdmin: false, timestamp: 0 };
+        return;
+      }
+
+      const now = Date.now();
+      const cached = adminCheckCacheRef.current;
+      
+      // Si ya tenemos un resultado en caché para este usuario y no ha expirado, usar caché
+      if (cached.userId === user.id && cached.isAdmin !== null && (now - cached.timestamp) < ADMIN_CACHE_DURATION_MS) {
+        setIsAdmin(cached.isAdmin);
         setIsLoading(false);
         return;
       }
@@ -80,6 +99,7 @@ export const useAdmin = () => {
           console.warn('⚠️ Problema con sesión, usando fallback por email');
           const isAdminByEmail = checkAdminByEmail(user.email || '');
           setIsAdmin(isAdminByEmail);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
           setIsLoading(false);
           return;
         }
@@ -107,23 +127,27 @@ export const useAdmin = () => {
             const isUserAdmin = emailData.role === 'admin';
             console.log('✅ Rol obtenido por email:', emailData.role, '-> isAdmin:', isUserAdmin);
             setIsAdmin(isUserAdmin);
+            adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
           } else {
             console.error('❌ Error en ambas consultas:', { error, emailError });
             // Fallback: verificar admin por email (SIEMPRE usar fallback si las consultas fallan)
             const isAdminByEmail = checkAdminByEmail(user.email || '');
             console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
             setIsAdmin(isAdminByEmail);
+            adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
           }
         } else if (!error && data) {
           const isUserAdmin = data.role === 'admin';
           console.log('✅ Rol obtenido por ID:', data.role, '-> isAdmin:', isUserAdmin);
           setIsAdmin(isUserAdmin);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
         } else {
           console.error('❌ Error verificando rol de admin:', error);
           // Fallback: verificar admin por email (SIEMPRE usar fallback si hay error)
           const isAdminByEmail = checkAdminByEmail(user.email || '');
           console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
           setIsAdmin(isAdminByEmail);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
         }
       } catch (err) {
         console.error('❌ Error inesperado verificando admin:', err);
@@ -131,6 +155,7 @@ export const useAdmin = () => {
         const isAdminByEmail = checkAdminByEmail(user?.email || '');
         console.log('⚠️ Fallback final checkAdminByEmail:', user?.email, '-> isAdmin:', isAdminByEmail);
         setIsAdmin(isAdminByEmail);
+        adminCheckCacheRef.current = { userId: user?.id || null, isAdmin: isAdminByEmail, timestamp: Date.now() };
       } finally {
         setIsLoading(false);
       }
@@ -162,6 +187,34 @@ export const useAdmin = () => {
       }, {});
     } catch (err) {
       console.error('❌ Error inesperado obteniendo horarios recurrentes:', err);
+      return {};
+    }
+  }, []);
+
+  // Nueva función para obtener horarios con horas de inicio
+  const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string }>>> => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select('usuario_id, dia_semana, hora_inicio, activo')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('❌ Error obteniendo horarios con horas:', error);
+        return {};
+      }
+
+      return (data || []).reduce<Record<string, Array<{ dia: string; hora_inicio: string }>>>((acc, row: any) => {
+        const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
+        if (!diaNombre) return acc;
+        if (!acc[row.usuario_id]) {
+          acc[row.usuario_id] = [];
+        }
+        acc[row.usuario_id].push({ dia: diaNombre, hora_inicio: row.hora_inicio });
+        return acc;
+      }, {});
+    } catch (err) {
+      console.error('❌ Error inesperado obteniendo horarios con horas:', err);
       return {};
     }
   }, []);
@@ -272,34 +325,57 @@ export const useAdmin = () => {
   }, []);
 
   // Actualizar estado_pago por usuario (persistir en BD)
-  // Si el mes seleccionado es el mes actual, redirige automáticamente al mes siguiente
+  // Actualiza directamente el mes seleccionado, sin redirecciones
   const updateCuotaEstadoPago = useCallback(async (usuarioId: string, anio: number, mes: number, estado: 'pendiente' | 'abonada' | 'vencida') => {
     try {
-      const now = new Date();
-      const currentYear = now.getFullYear();
-      const currentMonth = now.getMonth() + 1;
+      // Verificar primero si existe el registro antes de actualizar
+      const { data: existingData, error: checkError } = await supabase
+        .from('cuotas_mensuales')
+        .select('id, estado_pago')
+        .eq('usuario_id', usuarioId)
+        .eq('anio', anio)
+        .eq('mes', mes)
+        .maybeSingle();
       
-      // Si el mes seleccionado es el mes actual, redirigir al mes siguiente
-      let targetAnio = anio;
-      let targetMes = mes;
-      
-      if (anio === currentYear && mes === currentMonth) {
-        // Redirigir al mes siguiente
-        targetMes = currentMonth === 12 ? 1 : currentMonth + 1;
-        targetAnio = currentMonth === 12 ? currentYear + 1 : currentYear;
+      if (checkError && checkError.code !== 'PGRST116') { // PGRST116 = no rows returned
+        console.error('Error verificando cuota antes de actualizar:', checkError);
+        return { success: false, error: checkError.message };
       }
       
-      const { error } = await supabase
+      if (!existingData) {
+        console.warn(`⚠️ No se encontró cuota para usuario ${usuarioId}, año ${anio}, mes ${mes}`);
+        return { success: false, error: 'No se encontró la cuota a actualizar' };
+      }
+      
+      // Actualizar el estado de pago en la base de datos
+      const { error, data } = await supabase
         .from('cuotas_mensuales')
         .update({ estado_pago: estado, generado_el: new Date().toISOString() })
         .eq('usuario_id', usuarioId)
-        .eq('anio', targetAnio)
-        .eq('mes', targetMes);
+        .eq('anio', anio)
+        .eq('mes', mes)
+        .select('id, estado_pago');
+        
       if (error) {
         console.error('Error actualizando estado_pago:', error);
-        return { success: false, error: error.message, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
+        return { success: false, error: error.message };
       }
-      return { success: true, redirected: targetAnio !== anio || targetMes !== mes, targetAnio, targetMes };
+      
+      // Verificar que realmente se actualizó
+      if (!data || data.length === 0) {
+        console.error('⚠️ No se actualizó ningún registro en la BD');
+        return { success: false, error: 'No se pudo actualizar el registro en la base de datos' };
+      }
+      
+      // Verificar que el estado se actualizó correctamente
+      const registroActualizado = data[0];
+      if (registroActualizado.estado_pago !== estado) {
+        console.error(`⚠️ El estado no coincide: esperado ${estado}, obtenido ${registroActualizado.estado_pago}`);
+        return { success: false, error: 'El estado no se actualizó correctamente en la base de datos' };
+      }
+      
+      console.log(`✅ Estado de pago actualizado correctamente: usuario ${usuarioId}, año ${anio}, mes ${mes}, estado: ${estado}`);
+      return { success: true };
     } catch (err) {
       console.error('Error inesperado actualizando estado_pago:', err);
       return { success: false, error: 'Error inesperado' };
@@ -629,6 +705,7 @@ export const useAdmin = () => {
     updateCuotaEstadoPago,
     updateCuotaDescuento,
     canBeAdmin,
+    fetchHorariosConHoras,
     // Funciones de ausencias
     fetchAusencias,
     createAusenciaUnica,

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -134,10 +134,29 @@ const Dashboard = () => {
     }
   };
 
-  // Verificar SIEMPRE si el usuario tiene horarios recurrentes configurados
+  // Verificar si el usuario tiene horarios recurrentes configurados (con caché)
+  const hasHorariosCheckRef = useRef<{ userId: string | null; hasHorarios: boolean | null; timestamp: number }>({ 
+    userId: null, 
+    hasHorarios: null, 
+    timestamp: 0 
+  });
+  const CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutos en caché
+  
   useEffect(() => {
     if (!user) {
       setHasHorarios(null);
+      setLoadingHorarios(false);
+      hasHorariosCheckRef.current = { userId: null, hasHorarios: null, timestamp: 0 };
+      return;
+    }
+    
+    const now = Date.now();
+    const cached = hasHorariosCheckRef.current;
+    
+    // Si ya tenemos un resultado en caché para este usuario y no ha expirado, usar caché
+    if (cached.userId === user.id && cached.hasHorarios !== null && (now - cached.timestamp) < CACHE_DURATION_MS) {
+      setHasHorarios(cached.hasHorarios);
+      setHasCompletedSetup(cached.hasHorarios);
       setLoadingHorarios(false);
       return;
     }
@@ -155,18 +174,22 @@ const Dashboard = () => {
           console.warn('Error verificando horarios recurrentes:', error);
           setHasHorarios(false);
           setHasCompletedSetup(false);
+          hasHorariosCheckRef.current = { userId: user.id, hasHorarios: false, timestamp: Date.now() };
           setLoadingHorarios(false);
           return;
         }
         
-        // Verificar si tiene horarios (SIEMPRE, no solo en primera vez)
+        // Verificar si tiene horarios
         const tieneHorarios = data && data.length > 0;
         setHasHorarios(tieneHorarios);
         setHasCompletedSetup(tieneHorarios);
+        // Guardar en caché
+        hasHorariosCheckRef.current = { userId: user.id, hasHorarios: tieneHorarios, timestamp: Date.now() };
       } catch (err) {
         console.error('Error inesperado verificando horarios:', err);
         setHasHorarios(false);
         setHasCompletedSetup(false);
+        hasHorariosCheckRef.current = { userId: user.id, hasHorarios: false, timestamp: Date.now() };
       } finally {
         setLoadingHorarios(false);
       }
@@ -496,9 +519,20 @@ const Dashboard = () => {
     };
   }, []);
 
-  // Cargar contador de vacantes disponibles (siempre, en background)
+  // Cargar contador de vacantes disponibles (con caché, solo cuando sea necesario)
+  const vacantesCountCacheRef = useRef<{ userId: string | null; count: number; timestamp: number }>({ 
+    userId: null, 
+    count: 0, 
+    timestamp: 0 
+  });
+  const VACANTES_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
+  
   useEffect(() => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      setVacantesCount(0);
+      vacantesCountCacheRef.current = { userId: null, count: 0, timestamp: 0 };
+      return;
+    }
 
     const cargarVacantesCount = async () => {
       try {
@@ -529,24 +563,47 @@ const Dashboard = () => {
 
         const idsReservados = new Set(turnosReservados?.map(r => r.creado_desde_disponible_id) || []);
         const disponibles = (turnosDisponibles || []).filter(t => !idsReservados.has(t.id));
+        const count = disponibles.length;
         
-        setVacantesCount(disponibles.length);
+        setVacantesCount(count);
+        // Guardar en caché
+        vacantesCountCacheRef.current = { userId: user.id, count, timestamp: Date.now() };
       } catch (error) {
         console.error('Error calculando contador de vacantes:', error);
       }
     };
 
-    // Cargar inmediatamente
-    cargarVacantesCount();
+    // Solo cargar si no hay caché válido
+    const nowVacantes = Date.now();
+    const cachedVacantes = vacantesCountCacheRef.current;
+    if (cachedVacantes.userId !== user.id || (nowVacantes - cachedVacantes.timestamp) >= VACANTES_CACHE_DURATION_MS || cachedVacantes.count === 0) {
+      cargarVacantesCount();
+    } else {
+      setVacantesCount(cachedVacantes.count);
+    }
 
-    // Suscripción en tiempo real a cambios
+    // Suscripción en tiempo real a cambios (solo si la página está visible)
     const channel = supabase
       .channel('vacantes_count_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
-        cargarVacantesCount();
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          const nowTime = Date.now();
+          const cachedTime = vacantesCountCacheRef.current;
+          // Solo recargar si ha pasado más de 1 minuto desde la última carga
+          if (!cachedTime.timestamp || (nowTime - cachedTime.timestamp) > 60000) {
+            cargarVacantesCount();
+          }
+        }
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
-        cargarVacantesCount();
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          const nowTime2 = Date.now();
+          const cachedTime2 = vacantesCountCacheRef.current;
+          // Solo recargar si ha pasado más de 1 minuto desde la última carga
+          if (!cachedTime2.timestamp || (nowTime2 - cachedTime2.timestamp) > 60000) {
+            cargarVacantesCount();
+          }
+        }
       })
       .subscribe();
 
@@ -556,9 +613,11 @@ const Dashboard = () => {
   }, [user?.id]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background bg-[url('/gymobile-background.png')] sm:bg-[url('/gymdesktop-background.png')] bg-cover bg-center bg-no-repeat relative">
+      {/* Overlay oscuro solo en desktop */}
+      <div className="hidden sm:block absolute inset-0 bg-black/40 pointer-events-none"></div>
       {/* Header restaurado */}
-      <header className="bg-black shadow-card">
+      <header className="relative z-10 bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex-1 flex items-center">
@@ -664,7 +723,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
+      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 sm:py-8">
         {firstTimeLoading || loadingHorarios ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
@@ -733,9 +792,6 @@ const Dashboard = () => {
                           }`}
                         >
                           Vacantes
-                          <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
-                            {vacantesCount}
-                          </Badge>
                         </button>
                         <button
                           onClick={() => setBalanceSubView('balance')}
@@ -918,15 +974,7 @@ const Dashboard = () => {
                       }`}
                       aria-current={activeTab === 'vacantes'}
                     >
-                      <div className="relative">
-                        <Zap className={`h-5 w-5 ${activeTab === 'vacantes' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                        <Badge 
-                          variant="default" 
-                          className="absolute -top-2 -right-2 h-4 min-w-4 px-1 text-[9px] font-bold flex items-center justify-center"
-                        >
-                          {vacantesCount}
-                        </Badge>
-                      </div>
+                      <Zap className={`h-5 w-5 ${activeTab === 'vacantes' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
                       {activeTab === 'vacantes' && <span className="leading-none">Vacantes</span>}
                       {activeTab === 'vacantes' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
                     </button>
@@ -1115,6 +1163,8 @@ const Dashboard = () => {
 };
 
 const App = () => {
+  const { loading } = useAuthContext();
+
   return (
     <ThemeProvider
       attribute="class"
@@ -1150,6 +1200,13 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
           </Routes>
         </BrowserRouter>
+
+        {/* Overlay de carga global: NO desmonta el router (evita volver a /login después del login) */}
+        {loading && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+            <img src="/biglogo.png" alt="Logo" className="max-w-xs md:max-w-md" />
+          </div>
+        )}
       </TooltipProvider>
     </ThemeProvider>
 );

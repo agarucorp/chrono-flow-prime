@@ -75,6 +75,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // Refs para rastrear qué vistas ya han sido cargadas (persisten entre renders)
   const misClasesLoadedRef = useRef<boolean>(false);
   const turnosDisponiblesLoadedRef = useRef<boolean>(false);
+  const initialLoadDoneRef = useRef<boolean>(false);
   
   // Actualizar vista cuando cambie initialView desde fuera
   useEffect(() => {
@@ -100,15 +101,34 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [clasesDelMes, setClasesDelMes] = useState<any[]>([]);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   const [loadingMonth, setLoadingMonth] = useState(false);
-  const pageVisibleRef = React.useRef<boolean>(true);
+  const pageVisibleRef = useRef<boolean>(true);
+  const lastReloadTimeRef = useRef<number>(0); // Inicializar en 0 para forzar primera carga
+  const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
+  const clasesDelMesCacheRef = useRef<{ monthKey: string; timestamp: number }>({ monthKey: '', timestamp: 0 });
+  const CLASSES_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
+  const prevMonthRef = useRef<string>('');
+  
   useEffect(() => {
     pageVisibleRef.current = typeof document !== 'undefined' ? document.visibilityState === 'visible' : true;
     const onVisibility = () => {
+      const wasHidden = !pageVisibleRef.current;
       pageVisibleRef.current = document.visibilityState === 'visible';
-      if (pageVisibleRef.current) {
-        // Refrescar silenciosamente al volver al foco
-        cargarClasesDelMes(false);
-        cargarTurnosCancelados(false);
+      
+      // Solo recargar si la página estaba oculta y vuelve a ser visible
+      // Y si ha pasado más tiempo que el caché permite
+      if (pageVisibleRef.current && wasHidden && lastReloadTimeRef.current > 0) {
+        const timeSinceLastReload = Date.now() - lastReloadTimeRef.current;
+        
+        // Solo recargar si ha pasado más de 5 minutos desde la última carga
+        if (timeSinceLastReload > CACHE_DURATION_MS) {
+          console.log('Recargando datos después de', Math.round(timeSinceLastReload / 1000), 'segundos');
+          lastReloadTimeRef.current = Date.now();
+          // Refrescar silenciosamente al volver al foco (solo si es necesario)
+          cargarClasesDelMes(false);
+          cargarTurnosCancelados(false);
+        } else {
+          console.log('Datos en caché, no recargando. Última carga hace', Math.round(timeSinceLastReload / 1000), 'segundos');
+        }
       }
     };
     document.addEventListener('visibilitychange', onVisibility);
@@ -120,6 +140,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+  // Caché para ausencias del admin
+  const ausenciasAdminCacheRef = useRef<{ timestamp: number }>({ timestamp: 0 });
+  const AUSENCIAS_CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutos
   const userStartDate = (() => {
     if (!user?.created_at) return null;
     const created = new Date(user.created_at);
@@ -209,6 +232,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     if (!signOut || loggingOut) return;
     try {
       setLoggingOut(true);
+      // Resetear refs de caché al cerrar sesión
+      misClasesLoadedRef.current = false;
+      turnosDisponiblesLoadedRef.current = false;
+      initialLoadDoneRef.current = false;
+      lastReloadTimeRef.current = 0;
       const result = await signOut();
       if (!result.success) {
         console.error('Error al cerrar sesión:', result.error);
@@ -269,6 +297,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }
 
       setAusenciasAdmin(data || []);
+      // Actualizar timestamp del caché
+      ausenciasAdminCacheRef.current = { timestamp: Date.now() };
     } catch (error) {
       console.error('❌ Error inesperado al cargar ausencias:', error);
       setAusenciasAdmin([]);
@@ -339,6 +369,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       setHorariosRecurrentes(data || []);
       setLastLoadTime(Date.now());
+      lastReloadTimeRef.current = Date.now(); // Actualizar timestamp de última carga
       
       // Cargar clases del mes y mantener loading hasta que termine
       try {
@@ -359,6 +390,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const cargarTurnosCancelados = async (forceReload = false, showLoading = false) => {
     if (!user?.id) {
       return;
+    }
+    
+    // Actualizar timestamp cuando se cargan datos
+    if (forceReload || !turnosCancelados.length) {
+      lastReloadTimeRef.current = Date.now();
     }
 
     // Mostrar loading solo si se solicita explícitamente o si se fuerza recarga y estamos en la vista de vacantes
@@ -567,14 +603,20 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   };
 
-  // Cargar datos iniciales
+  // Cargar datos iniciales solo una vez
   useEffect(() => {
-    if (user?.id) {
-      // Cargar datos iniciales con loading visible
+    if (user?.id && !initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      // Cargar datos iniciales con loading visible solo la primera vez
       // cargarHorariosRecurrentes maneja su propio setLoading(false)
       cargarHorariosRecurrentes();
       cargarDatosPerfil();
-      cargarAusenciasAdmin(); // Cargar ausencias del admin (no bloquea, solo carga en background)
+      // Cargar ausencias del admin solo si no hay caché válido
+      const now = Date.now();
+      const cached = ausenciasAdminCacheRef.current;
+      if (!cached.timestamp || (now - cached.timestamp) >= AUSENCIAS_CACHE_DURATION_MS) {
+        cargarAusenciasAdmin(); // Cargar ausencias del admin (no bloquea, solo carga en background)
+      }
       
       // Timeout de seguridad para evitar loading infinito
       const timeoutId = setTimeout(() => {
@@ -583,10 +625,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }, 10000);
       
       return () => clearTimeout(timeoutId);
-    } else {
-      // Si no hay usuario, ocultar loading
+    } else if (!user?.id) {
+      // Si no hay usuario, resetear refs y ocultar loading
+      misClasesLoadedRef.current = false;
+      turnosDisponiblesLoadedRef.current = false;
+      initialLoadDoneRef.current = false;
+      lastReloadTimeRef.current = 0;
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   // Forzar recarga del perfil al entrar en la vista de Perfil
@@ -596,57 +643,67 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   }, [activeView, user?.id]);
 
-  // Escuchar actualización desde el modal y recargar inmediatamente
+  // Escuchar actualización desde el modal y recargar inmediatamente (solo si la página está visible)
   useEffect(() => {
     const handler = async () => {
-      // Primero cargar los horarios recurrentes
-      await cargarHorariosRecurrentes(true);
-      
-      // Luego cargar las clases del mes con los nuevos horarios
-      // Forzamos una pequeña espera para asegurar que el estado se actualizó
-      setTimeout(() => {
-        cargarClasesDelMes(true);
-      }, 100);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        // Primero cargar los horarios recurrentes
+        await cargarHorariosRecurrentes(true);
+        
+        // Luego cargar las clases del mes con los nuevos horarios
+        // Forzamos una pequeña espera para asegurar que el estado se actualizó
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
+      }
     };
     window.addEventListener('horariosRecurrentes:updated', handler);
     return () => window.removeEventListener('horariosRecurrentes:updated', handler);
   }, []);
 
-  // Escuchar cambios en ausencias del admin
+  // Escuchar cambios en ausencias del admin (solo si la página está visible)
   useEffect(() => {
     const handler = async () => {
-      await cargarAusenciasAdmin();
-      // Recargar clases del mes para aplicar los cambios
-      setTimeout(() => {
-        cargarClasesDelMes(true);
-      }, 100);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        await cargarAusenciasAdmin();
+        // Recargar clases del mes para aplicar los cambios
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
+      }
     };
     window.addEventListener('ausenciasAdmin:updated', handler);
     return () => window.removeEventListener('ausenciasAdmin:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos cancelados (desde admin)
+  // Escuchar cambios en turnos cancelados (desde admin) - solo si la página está visible
   useEffect(() => {
     const handler = async () => {
-      await cargarTurnosCancelados(true);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        await cargarTurnosCancelados(true);
+      }
     };
     window.addEventListener('turnosCancelados:updated', handler);
     return () => window.removeEventListener('turnosCancelados:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos variables (desde admin)
+  // Escuchar cambios en turnos variables (desde admin) - solo si la página está visible
   useEffect(() => {
     const handler = async () => {
-      await cargarClasesDelMes(true);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        await cargarClasesDelMes(true);
+      }
     };
     window.addEventListener('turnosVariables:updated', handler);
     return () => window.removeEventListener('turnosVariables:updated', handler);
   }, []);
 
-  // Escuchar cambios en clases del mes (desde admin)
+  // Escuchar cambios en clases del mes (desde admin) - solo si la página está visible
   useEffect(() => {
     const handler = async () => {
-      await cargarClasesDelMes(true);
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        await cargarClasesDelMes(true);
+      }
     };
     window.addEventListener('clasesDelMes:updated', handler);
     return () => window.removeEventListener('clasesDelMes:updated', handler);
@@ -660,7 +717,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const cachedKey = `clasesDelMes_${monthKey}`;
     const lastLoadKey = `lastClasesLoadTime_${monthKey}`;
     
-    // Siempre recargar para evitar problemas de cache compartido
+    // Actualizar timestamp cuando se cargan datos
+    if (forceReload || !clasesDelMes.length) {
+      lastReloadTimeRef.current = Date.now();
+    }
 
     // Si aún no contamos con horarios y no se exige recarga, evitar barrer datos existentes
     if (!forceReload && (!horariosRecurrentes || horariosRecurrentes.length === 0)) {
@@ -742,61 +802,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         todasLasClases.push(...clasesVariables);
       }
 
-      // Cargar turnos cancelados del mes (incluyendo turnos variables cancelados)
-      const { data: turnosCancelados, error: errorCancelados } = await supabase
-        .from('turnos_cancelados')
-        .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
-        .eq('cliente_id', user.id)
-        .gte('turno_fecha', format(startOfMonth(currentMonth), 'yyyy-MM-dd'))
-        .lte('turno_fecha', format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
-
-      if (errorCancelados) {
-        console.error('Error al cargar turnos cancelados:', errorCancelados);
-      } else if (turnosCancelados) {
-        // Crear un Set de turnos variables activos para evitar duplicados
-        const turnosVariablesSet = new Set(
-          turnosVariables?.map(tv => `${tv.turno_fecha}-${tv.turno_hora_inicio}-${tv.turno_hora_fin}`) || []
-        );
-
-        // Convertir turnos cancelados a formato de clase (solo los que no están ya en turnos variables)
-        const clasesCanceladas = turnosCancelados
-          .map<ClaseDelDia | null>(cancelado => {
-            const claveCancelado = `${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}-${cancelado.turno_hora_fin}`;
-            
-            // Si ya está en turnos variables, no duplicar (se marcará como cancelada en getClasesDelDia)
-            if (turnosVariablesSet.has(claveCancelado)) {
-              return null;
-            }
-
-            // Crear fecha correcta sin problemas de zona horaria
-            const fechaParts = cancelado.turno_fecha.split('-');
-            const fechaCorrecta = new Date(parseInt(fechaParts[0]), parseInt(fechaParts[1]) - 1, parseInt(fechaParts[2]));
-            const fechaNormalizada = startOfDay(fechaCorrecta);
-            
-            if (userStartDate && fechaNormalizada < userStartDate) {
-              return null;
-            }
-          
-            return {
-              id: `cancelado-${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}`,
-              dia: fechaCorrecta,
-              horario: {
-                id: `cancelado-${cancelado.turno_fecha}-${cancelado.turno_hora_inicio}`,
-                dia_semana: fechaCorrecta.getDay(),
-                hora_inicio: cancelado.turno_hora_inicio,
-                hora_fin: cancelado.turno_hora_fin,
-                activo: false,
-                cancelada: true,
-                esVariable: true // Marcar como turno variable cancelado
-              }
-            };
-          })
-          .filter((clase): clase is ClaseDelDia => clase !== null);
-        
-        todasLasClases.push(...clasesCanceladas);
-      }
+      // NO cargar turnos cancelados como líneas separadas
+      // Las cancelaciones de clases recurrentes ya se marcan en getClasesDelDia
+      // Las cancelaciones de turnos variables ya se manejan eliminando el turno_variable
+      // Por lo tanto, NO necesitamos agregar líneas adicionales desde turnos_cancelados
 
       setClasesDelMes(todasLasClases);
+      // Actualizar timestamp del caché
+      const monthKey = format(currentMonth, 'yyyy-MM');
+      clasesDelMesCacheRef.current = { monthKey, timestamp: Date.now() };
     } catch (error) {
       console.error('Error al cargar clases del mes:', error);
     } finally {
@@ -804,17 +818,38 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   };
 
-  // Cargar clases del mes cuando cambien los horarios, el mes o las ausencias del admin
+  // Cargar clases del mes cuando cambien los horarios, el mes o las ausencias del admin (con caché)
   useEffect(() => {
     if (activeView === 'mis-clases') {
-      cargarClasesDelMes();
+      const monthKey = format(currentMonth, 'yyyy-MM');
+      const now = Date.now();
+      const cached = clasesDelMesCacheRef.current;
+      const monthChanged = prevMonthRef.current !== monthKey;
+      
+      // Solo recargar si:
+      // 1. Cambió el mes, O
+      // 2. No hay caché válido para este mes, O
+      // 3. La caché expiró
+      if (monthChanged || cached.monthKey !== monthKey || (now - cached.timestamp) >= CLASSES_CACHE_DURATION_MS) {
+        prevMonthRef.current = monthKey;
+        cargarClasesDelMes(false);
+        // El timestamp se actualiza dentro de cargarClasesDelMes
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [horariosRecurrentes, currentMonth, ausenciasAdmin, activeView]);
 
-  // Recargar ausencias cuando cambie el mes
+  // Recargar ausencias cuando cambie el mes (con caché)
   useEffect(() => {
-    cargarAusenciasAdmin();
+    const now = Date.now();
+    const cached = ausenciasAdminCacheRef.current;
+    
+    // Solo recargar si ha pasado más de 10 minutos desde la última carga
+    if (!cached.timestamp || (now - cached.timestamp) >= AUSENCIAS_CACHE_DURATION_MS) {
+      cargarAusenciasAdmin();
+      ausenciasAdminCacheRef.current = { timestamp: Date.now() };
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMonth]);
 
   // Generar días del mes actual
@@ -1020,15 +1055,18 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }
 
       // Recargar las clases del mes para reflejar el cambio (forzar recarga)
-      await cargarClasesDelMes(true);
-      
-      // Recargar turnos disponibles para actualizar vacantes
-      await cargarTurnosCancelados(true);
+      // Usar un pequeño delay para asegurar que la DB se actualizó
+      setTimeout(async () => {
+        await cargarClasesDelMes(true);
+        
+        // Recargar turnos disponibles para actualizar vacantes
+        await cargarTurnosCancelados(true);
 
-      // Disparar eventos para actualizar vistas relacionadas y el balance
-      window.dispatchEvent(new Event('turnosCancelados:updated'));
-      window.dispatchEvent(new Event('turnosVariables:updated'));
-      window.dispatchEvent(new CustomEvent('balance:refresh'));
+        // Disparar eventos para actualizar vistas relacionadas y el balance
+        // NO disparar turnosVariables:updated porque puede causar recargas innecesarias
+        window.dispatchEvent(new Event('turnosCancelados:updated'));
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
+      }, 300);
 
       setShowModal(false);
       setConfirmOpen(false);
@@ -1207,17 +1245,6 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               }`}
             >
               Vacantes
-              {(() => {
-                const turnosDisponibles = turnosCancelados.filter(turno => {
-                  const fecha = new Date(turno.turno_fecha);
-                  return !turno.reservado && !estaClaseBloqueada(fecha, turno.clase_numero);
-                });
-                return (
-                  <Badge variant="default" className="h-5 px-1.5 text-xs font-bold">
-                    {turnosDisponibles.length}
-                  </Badge>
-                );
-              })()}
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('nav:balance'))}
@@ -1351,7 +1378,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                               }`}>
                                 {formatTime(clase.horario.hora_inicio)} - {formatTime(clase.horario.hora_fin)}
                               </span>
-                              {clase.horario.esVariable && (
+                              {clase.horario.esVariable && !clase.horario.cancelada && (
                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium">
                                   Nueva clase
                                 </div>

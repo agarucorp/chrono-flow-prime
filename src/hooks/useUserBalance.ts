@@ -72,9 +72,26 @@ export const useUserBalance = (): UseUserBalanceReturn => {
   })();
   const userStartMonth = userStartDate ? startOfMonth(userStartDate) : null;
 
+  // Caché para datos de balance (evitar recargas innecesarias)
+  const balanceCacheRef = useRef<{ userId: string | null; timestamp: number }>({ 
+    userId: null, 
+    timestamp: 0 
+  });
+  const BALANCE_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
+  
   useEffect(() => {
     if (!user?.id) {
       setHistory([]);
+      setLoading(false);
+      balanceCacheRef.current = { userId: null, timestamp: 0 };
+      return;
+    }
+
+    const nowBalance = Date.now();
+    const cachedBalance = balanceCacheRef.current;
+    
+    // Si ya tenemos datos en caché para este usuario y no han expirado, no recargar
+    if (cachedBalance.userId === user.id && (nowBalance - cachedBalance.timestamp) < BALANCE_CACHE_DURATION_MS && history.length > 0) {
       setLoading(false);
       return;
     }
@@ -579,49 +596,67 @@ export const useUserBalance = (): UseUserBalanceReturn => {
       }
     };
 
-    // Primera carga con spinner
-    loadBalance(true);
+    // Solo cargar si no hay caché válido
+    if (cachedBalance.userId !== user.id || (nowBalance - cachedBalance.timestamp) >= BALANCE_CACHE_DURATION_MS || history.length === 0) {
+      // Primera carga con spinner
+      loadBalance(true);
+    } else {
+      setLoading(false);
+    }
 
-    // Refrescar ante eventos manuales
-    const manualHandler = () => loadBalance(false);
+    // Refrescar ante eventos manuales (solo si la página está visible)
+    const manualHandler = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadBalance(false);
+        balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
+      }
+    };
     window.addEventListener('balance:refresh', manualHandler);
 
     // Suscripciones en tiempo real a todas las fuentes que impactan el balance
     const channel = supabase.channel(`balance-realtime-${user.id}`);
 
+    // Función helper para recargar solo si la página está visible
+    const reloadIfVisible = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        loadBalance(false);
+        balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
+      }
+    };
+
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'cuotas_mensuales', filter: `usuario_id=eq.${user.id}` },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Cancelaciones del usuario (afectan conteo de cancelaciones)
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Turnos variables reservados por el usuario (afectan vacantes/ajustes)
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'turnos_variables', filter: `cliente_id=eq.${user.id}` },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Cambios en vista de horarios (cuando se crean/activan horarios recurrentes)
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario', filter: `usuario_id=eq.${user.id}` },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Cambios de perfil que alteran combo/tarifa personalizada
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Cambios globales de configuración de combos
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'configuracion_admin' },
-      () => loadBalance(false)
+      reloadIfVisible
     );
 
     // Ausencias del admin (bloqueos) impactan estimación de próximas clases
