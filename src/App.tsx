@@ -23,6 +23,7 @@ import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
 import { ProtectedRoute } from "./components/ProtectedRoute";
 import NotFound from "./pages/NotFound";
+import LandingPage from "./pages/LandingPage";
 import { useUserBalance } from "./hooks/useUserBalance";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { supabase } from "./lib/supabase";
@@ -1177,7 +1178,7 @@ const App = () => {
         <SonnerToaster />
         <BrowserRouter>
           <Routes>
-              <Route path="/" element={<Navigate to="/login" replace />} />
+              <Route path="/" element={<LandingPage />} />
               <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
               <Route path="/reset-password" element={<ResetPasswordForm />} />
               <Route 

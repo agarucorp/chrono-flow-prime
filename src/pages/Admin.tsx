@@ -34,6 +34,7 @@ import { useAdmin, AdminUser } from '@/hooks/useAdmin';
 import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
+import { FeriadosConfigModal } from '@/components/FeriadosConfigModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -136,7 +137,8 @@ export default function Admin() {
     });
   };
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
-  
+  const [showFeriadosModal, setShowFeriadosModal] = useState(false);
+  const [fechaSeleccionadaFeriado, setFechaSeleccionadaFeriado] = useState<Date | null>(null);
 
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -1384,7 +1386,22 @@ export default function Admin() {
 
           {/* Tab de Calendario */}
           <TabsContent value="calendario" className="mt-6 w-full max-w-full pb-20 md:pb-8">
-            <CalendarView isAdminView={true} />
+            <div className="mb-4 flex justify-end">
+              <Button onClick={() => {
+                setFechaSeleccionadaFeriado(null);
+                setShowFeriadosModal(true);
+              }}>
+                <Calendar className="h-4 w-4 mr-2" />
+                Gestionar Feriados
+              </Button>
+            </div>
+            <CalendarView 
+              isAdminView={true}
+              onDateLongPress={(date) => {
+                setFechaSeleccionadaFeriado(date);
+                setShowFeriadosModal(true);
+              }}
+            />
           </TabsContent>
         </Tabs>
       </div>
@@ -1585,6 +1602,19 @@ export default function Admin() {
           </button>
         </div>
       </nav>
+
+      {/* Modal de Configuración de Feriados */}
+      <FeriadosConfigModal
+        open={showFeriadosModal}
+        onClose={() => {
+          setShowFeriadosModal(false);
+          setFechaSeleccionadaFeriado(null);
+        }}
+        fechaSeleccionada={fechaSeleccionadaFeriado}
+        onFeriadoGuardado={() => {
+          // Recargar datos si es necesario
+        }}
+      />
 
     </div>
   );

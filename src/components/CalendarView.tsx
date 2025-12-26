@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar, ChevronLeft, ChevronRight, Grid, Clock, AlertTriangle, User, ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -47,9 +47,10 @@ interface AlumnoHorario {
 interface CalendarViewProps {
   onTurnoReservado?: () => void; // Callback para notificar cuando se reserva un turno
   isAdminView?: boolean; // Nueva prop para identificar si es vista de admin
+  onDateLongPress?: (date: Date) => void; // Callback para long press o click derecho en una fecha
 }
 
-export const CalendarView = ({ onTurnoReservado, isAdminView = false }: CalendarViewProps) => {
+export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLongPress }: CalendarViewProps) => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const { isAdmin } = useAdmin();
@@ -70,6 +71,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const [alumnosHorarios, setAlumnosHorarios] = useState<AlumnoHorario[]>([]);
   const [loadingAlumnos, setLoadingAlumnos] = useState(false);
   const [adminSlots, setAdminSlots] = useState<{ horaInicio: string; horaFin: string; capacidad: number }[]>([]);
+  
+  // Estado para feriados
+  const [feriados, setFeriados] = useState<Array<{
+    fecha: string;
+    tipo: 'dia_habil_feriado' | 'fin_semana_habilitado';
+    horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string }> | null;
+    activo: boolean;
+  }>>([]);
 
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
@@ -82,6 +91,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
   const [addingUser, setAddingUser] = useState(false);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Formatear fecha local a YYYY-MM-DD para evitar TZ
   const formatLocalDate = (d: Date) => {
@@ -166,10 +176,59 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
 
 
+  // Función helper para obtener rango de fechas
+  const getDateRange = () => {
+    const start = new Date(currentDate);
+    start.setDate(1);
+    const end = new Date(currentDate);
+    end.setMonth(end.getMonth() + 1);
+    end.setDate(0);
+    return { startDate: start, endDate: end };
+  };
+
+  // Cargar feriados
+  const cargarFeriados = async () => {
+    try {
+      const { startDate, endDate } = getDateRange();
+      const { data, error } = await supabase
+        .from('feriados')
+        .select('fecha, tipo, horarios_personalizados, activo')
+        .eq('activo', true)
+        .gte('fecha', formatLocalDate(startDate))
+        .lte('fecha', formatLocalDate(endDate));
+
+      if (error) {
+        console.error('Error cargando feriados:', error);
+        return;
+      }
+
+      setFeriados(data || []);
+    } catch (error) {
+      console.error('Error inesperado cargando feriados:', error);
+    }
+  };
+
+  // Verificar si una fecha es feriado
+  const esFeriado = (fecha: Date): { esFeriado: boolean; tipo?: 'dia_habil_feriado' | 'fin_semana_habilitado'; horarios?: Array<{ hora_inicio: string; hora_fin: string }> | null } => {
+    const fechaStr = formatLocalDate(fecha);
+    const feriado = feriados.find(f => f.fecha === fechaStr && f.activo);
+    
+    if (feriado) {
+      return {
+        esFeriado: true,
+        tipo: feriado.tipo,
+        horarios: feriado.horarios_personalizados || null
+      };
+    }
+    
+    return { esFeriado: false };
+  };
+
   // Obtener turnos desde Supabase
   useEffect(() => {
     fetchTurnos();
     cargarAusenciasAdmin(); // Cargar ausencias del admin
+    cargarFeriados(); // Cargar feriados
     if (isAdminView) {
       fetchAlumnosHorarios();
       fetchAdminSlots();
@@ -262,11 +321,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       }, 300);
     };
 
+    const handleFeriadosUpdated = async () => {
+      await cargarFeriados();
+      await fetchAdminSlots();
+      if (isAdminView) {
+        await fetchAlumnosHorarios();
+      }
+    };
+
     window.addEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
     window.addEventListener('turnosVariables:updated', handleTurnosVariablesUpdated);
     window.addEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
     window.addEventListener('capacidad:updated', handleCapacidadUpdated);
     window.addEventListener('alumnosHorarios:updated', handleAlumnosHorariosUpdated);
+    window.addEventListener('feriados:updated', handleFeriadosUpdated);
 
     return () => {
       window.removeEventListener('turnosCancelados:updated', handleTurnosCanceladosUpdated);
@@ -274,17 +342,47 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
       window.removeEventListener('clasesDelMes:updated', handleClasesDelMesUpdated);
       window.removeEventListener('capacidad:updated', handleCapacidadUpdated);
       window.removeEventListener('alumnosHorarios:updated', handleAlumnosHorariosUpdated);
+      window.removeEventListener('feriados:updated', handleFeriadosUpdated);
     };
   }, []);
 
-  // Cargar slots configurados por admin desde horarios_semanales
+
+  // Cargar slots configurados por admin desde horarios_semanales o feriados
   const fetchAdminSlots = async () => {
     try {
-      const diaSemana = currentDate.getDay() === 0 ? 7 : currentDate.getDay();
+      const fechaStr = formatLocalDate(currentDate);
+      const feriadoInfo = esFeriado(currentDate);
+      
+      // Si es feriado con horarios personalizados, usar esos horarios
+      if (feriadoInfo.esFeriado && feriadoInfo.horarios && feriadoInfo.horarios.length > 0) {
+        const slots = feriadoInfo.horarios.map((h: any) => ({
+          horaInicio: (h.hora_inicio || '').substring(0, 5),
+          horaFin: (h.hora_fin || '').substring(0, 5),
+          capacidad: obtenerCapacidadActual(), // Usar capacidad actual del sistema
+        }));
+        setAdminSlots(slots);
+        return;
+      }
+      
+      // Si es día hábil feriado sin horarios personalizados, no hay slots (pero admin puede ver el día)
+      if (feriadoInfo.esFeriado && feriadoInfo.tipo === 'dia_habil_feriado' && (!feriadoInfo.horarios || feriadoInfo.horarios.length === 0)) {
+        setAdminSlots([]);
+        return;
+      }
+      
+      // Si es fin de semana y NO está habilitado, no hay slots
+      const diaSemana = currentDate.getDay();
+      if ((diaSemana === 0 || diaSemana === 6) && !feriadoInfo.esFeriado) {
+        setAdminSlots([]);
+        return;
+      }
+      
+      // Cargar horarios normales desde horarios_semanales
+      const diaSemanaDB = diaSemana === 0 ? 7 : diaSemana;
       const { data, error } = await supabase
         .from('horarios_semanales')
         .select('hora_inicio, hora_fin, capacidad, dia_semana, activo')
-        .eq('dia_semana', diaSemana)
+        .eq('dia_semana', diaSemanaDB)
         .eq('activo', true)
         .order('hora_inicio', { ascending: true });
       if (error) {
@@ -949,16 +1047,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
     }
   };
 
-  const getDateRange = () => {
-    const year = currentDate.getFullYear();
-    const month = currentDate.getMonth();
-
-    return {
-      startDate: new Date(year, month, 1),
-      endDate: new Date(year, month + 1, 0)
-    };
-  };
-
   const navigateDate = (direction: 'prev' | 'next') => {
     const newDate = new Date(currentDate);
     newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
@@ -1056,7 +1144,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
           const dayTurnos = getTurnosForDate(date);
           const isToday = date.toDateString() === today.toDateString();
           const isSelected = date.toDateString() === currentDate.toDateString();
-          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
+          const diaSemana = date.getDay();
+          const isWeekend = diaSemana === 0 || diaSemana === 6;
+          const feriadoInfo = esFeriado(date);
+          const esFeriadoDia = feriadoInfo.esFeriado && feriadoInfo.tipo === 'dia_habil_feriado';
+          const esFinSemanaHabilitado = isWeekend && feriadoInfo.esFeriado && feriadoInfo.tipo === 'fin_semana_habilitado';
 
           // Si no es del mes actual, mostrar celda vacía
           if (!isCurrentMonth) {
@@ -1068,17 +1160,56 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
             );
           }
 
+          // Handlers para long press y click derecho
+          const handleLongPressStart = () => {
+            if (!isAdminView || !onDateLongPress) return;
+            longPressTimerRef.current = setTimeout(() => {
+              onDateLongPress(date);
+            }, 2000); // 2 segundos
+          };
+          const handleLongPressEnd = () => {
+            if (longPressTimerRef.current) {
+              clearTimeout(longPressTimerRef.current);
+              longPressTimerRef.current = null;
+            }
+          };
+          const handleContextMenu = (e: React.MouseEvent) => {
+            if (!isAdminView || !onDateLongPress) return;
+            e.preventDefault();
+            onDateLongPress(date);
+          };
+
           return (
             <div
               key={index}
-              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 bg-muted/40 hover:bg-muted/60 ${isWeekend ? 'opacity-40 cursor-not-allowed' : 'hover:bg-muted/70'
-                }`}
-              onClick={() => !isWeekend && handleDateSelect(date)}
+              className={`relative min-h-[48px] p-2 border border-border/50 rounded-lg transition-all duration-200 text-center cursor-pointer min-w-0 bg-muted/40 hover:bg-muted/60 ${
+                (isWeekend && !esFinSemanaHabilitado) 
+                  ? 'opacity-40 cursor-not-allowed' 
+                  : 'hover:bg-muted/70'
+              } ${esFeriadoDia ? 'border-amber-500/50 bg-amber-500/10' : ''} ${esFinSemanaHabilitado ? 'border-green-500/50 bg-green-500/10' : ''}`}
+              onClick={() => {
+                // Permitir click en todos los días excepto fines de semana no habilitados
+                if (isWeekend && !esFinSemanaHabilitado) return;
+                // Los feriados siempre son accesibles (admin puede verlos y gestionarlos)
+                handleDateSelect(date);
+              }}
+              onMouseDown={isAdminView && onDateLongPress ? handleLongPressStart : undefined}
+              onMouseUp={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
+              onMouseLeave={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
+              onTouchStart={isAdminView && onDateLongPress ? handleLongPressStart : undefined}
+              onTouchEnd={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
+              onContextMenu={isAdminView && onDateLongPress ? handleContextMenu : undefined}
             >
               <SelectedDayMarker isSelected={isSelected} />
               <div className="font-light relative z-10 truncate text-foreground" style={{ fontSize: '10px' }}>
                 {date.getDate()}
               </div>
+              {esFeriadoDia && (
+                <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-amber-500" title="Feriado" />
+              )}
+              {esFinSemanaHabilitado && (
+                <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-green-500" title="Fin de semana habilitado" />
+              )}
             </div>
           );
         })}
@@ -1088,15 +1219,33 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false }: Calendar
 
   // Función para renderizar los horarios disponibles como CTAs
   const renderAvailableTimeSlots = () => {
-    const isWeekend = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+    const diaSemana = currentDate.getDay();
+    const isWeekend = diaSemana === 0 || diaSemana === 6;
+    const feriadoInfo = esFeriado(currentDate);
 
-    if (isWeekend) {
+    // Si es fin de semana y NO está habilitado como feriado
+    if (isWeekend && !feriadoInfo.esFeriado) {
       return (
         <div className="text-center py-8">
           <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No hay disponibilidad los fines de semana</p>
         </div>
       );
+    }
+
+    // Si es día hábil feriado sin horarios personalizados, mostrar mensaje solo para usuarios no admin
+    if (feriadoInfo.esFeriado && feriadoInfo.tipo === 'dia_habil_feriado' && (!feriadoInfo.horarios || feriadoInfo.horarios.length === 0)) {
+      if (!isAdminView) {
+        return (
+          <div className="text-center py-8">
+            <Calendar className="w-12 h-12 text-muted-foreground mx-auto mb-4" />
+            <p className="text-muted-foreground">Día feriado - No hay disponibilidad</p>
+          </div>
+        );
+      }
+      // Si es admin, continuar con el flujo normal para que pueda ver el día y gestionarlo
+      // Mostrar slots vacíos pero permitir gestión (puede agregar horarios después)
+      // Continuar con el flujo para mostrar la vista normal del admin
     }
 
     if (loadingAlumnos) {
