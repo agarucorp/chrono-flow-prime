@@ -170,7 +170,10 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
         if (!result.success || !result.user) {
           const message = result.error || 'Error al iniciar sesión';
-          console.error('Error en login:', message);
+          // No loguear errores de conexión para evitar spam en consola
+          if (!message.includes('Conexión con la base de datos')) {
+            console.error('Error en login:', message);
+          }
           setError(message);
           return;
         }

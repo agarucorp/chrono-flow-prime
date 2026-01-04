@@ -16,53 +16,86 @@ export const useAuth = () => {
   })
 
   useEffect(() => {
+    let mounted = true;
+
     // Obtener sesión inicial
     const getInitialSession = async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession()
         if (error) throw error
         
-        setAuthState({
-          user: session?.user || null,
-          loading: false,
-          error: null
-        })
+        if (mounted) {
+          setAuthState({
+            user: session?.user || null,
+            loading: false,
+            error: null
+          })
+        }
       } catch (error) {
-        setAuthState({
-          user: null,
-          loading: false,
-          error: error instanceof Error ? error.message : 'Error desconocido'
-        })
+        // Solo loguear errores de red una vez para evitar spam en consola
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido'
+        const isNetworkError = errorMessage.includes('Failed to fetch') || 
+                               errorMessage.includes('ERR_NAME_NOT_RESOLVED') ||
+                               errorMessage.includes('NetworkError')
+        
+        
+        if (mounted) {
+          setAuthState({
+            user: null,
+            loading: false,
+            error: isNetworkError ? null : errorMessage // No mostrar errores de red como error del estado
+          })
+        }
+
+        // Solo loguear errores de red una vez
+        if (isNetworkError && mounted) {
+          console.warn('⚠️ Error de conexión con Supabase. Sesión local limpiada para evitar intentos de refresh.')
+        }
       }
     }
 
     getInitialSession()
 
     // Escuchar cambios en la autenticación
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'TOKEN_REFRESHED') {
-          setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
-          return
-        }
-        if (event === 'SIGNED_OUT') {
-          setAuthState({ user: null, loading: false, error: null })
-          return
-        }
-        if (event === 'USER_UPDATED') {
-          setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
-          return
-        }
-        if (event === 'SIGNED_IN') {
-          setAuthState({ user: session?.user || null, loading: false, error: null })
-          return
-        }
-        // Fallback para otros eventos
-        setAuthState({ user: session?.user || null, loading: false, error: null })
-      }
-    )
+    let subscription: { unsubscribe: () => void } | null = null;
+    
+    try {
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (!mounted) return;
 
-    return () => subscription.unsubscribe()
+          if (event === 'TOKEN_REFRESHED') {
+            setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+            return
+          }
+          if (event === 'SIGNED_OUT') {
+            setAuthState({ user: null, loading: false, error: null })
+            return
+          }
+          if (event === 'USER_UPDATED') {
+            setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+            return
+          }
+          if (event === 'SIGNED_IN') {
+            setAuthState({ user: session?.user || null, loading: false, error: null })
+            return
+          }
+          // Fallback para otros eventos
+          setAuthState({ user: session?.user || null, loading: false, error: null })
+        }
+      )
+      subscription = sub;
+    } catch (error) {
+      // Si falla la suscripción, continuar sin ella
+      console.warn('No se pudo establecer la suscripción a cambios de autenticación')
+    }
+
+    return () => {
+      mounted = false;
+      if (subscription) {
+        subscription.unsubscribe()
+      }
+    }
   }, [])
 
   const signIn = async (email: string, password: string) => {
@@ -96,8 +129,19 @@ export const useAuth = () => {
       return { success: true, user: data.user }
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Error al iniciar sesión'
-      setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }))
-      return { success: false, error: errorMessage }
+      
+      // Detectar errores de conexión/red
+      const isNetworkError = errorMessage.includes('Failed to fetch') || 
+                             errorMessage.includes('ERR_NAME_NOT_RESOLVED') ||
+                             errorMessage.includes('NetworkError') ||
+                             (error instanceof TypeError && errorMessage.includes('fetch'))
+      
+      const finalErrorMessage = isNetworkError 
+        ? 'Conexión con la base de datos caída. Inténtalo de nuevo más tarde'
+        : errorMessage
+      
+      setAuthState(prev => ({ ...prev, loading: false, error: finalErrorMessage }))
+      return { success: false, error: finalErrorMessage }
     }
   }
 

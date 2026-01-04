@@ -1177,40 +1177,52 @@ const App = () => {
         <Toaster />
         <SonnerToaster />
         <BrowserRouter>
-          <Routes>
-              <Route path="/" element={<LandingPage />} />
-              <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
-              <Route path="/reset-password" element={<ResetPasswordForm />} />
-              <Route 
-                path="/user" 
-                element={
-                  <ProtectedRoute>
-                    <Dashboard />
-                  </ProtectedRoute>
-                } 
-              />
-              <Route 
-                path="/admin" 
-                element={
-                  <ProtectedRoute>
-                    <Admin />
-                  </ProtectedRoute>
-                } 
-              />
-              {/* Ruta 404 - debe estar al final */}
-              <Route path="*" element={<NotFound />} />
-          </Routes>
+          <AppContent loading={loading} />
         </BrowserRouter>
-
-        {/* Overlay de carga global: NO desmonta el router (evita volver a /login después del login) */}
-        {loading && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-            <img src="/biglogo.png" alt="Logo" className="max-w-xs md:max-w-md" />
-          </div>
-        )}
       </TooltipProvider>
     </ThemeProvider>
 );
+};
+
+const AppContent = ({ loading }: { loading: boolean }) => {
+  const location = useLocation();
+  const publicRoutes = ['/', '/login', '/reset-password'];
+  const isPublicRoute = publicRoutes.includes(location.pathname);
+
+  return (
+    <>
+      <Routes>
+        <Route path="/" element={<LandingPage />} />
+        <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
+        <Route path="/reset-password" element={<ResetPasswordForm />} />
+        <Route 
+          path="/user" 
+          element={
+            <ProtectedRoute>
+              <Dashboard />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/admin" 
+          element={
+            <ProtectedRoute>
+              <Admin />
+            </ProtectedRoute>
+          } 
+        />
+        {/* Ruta 404 - debe estar al final */}
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+
+      {/* Overlay de carga global: solo para rutas protegidas */}
+      {loading && !isPublicRoute && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+          <img src="/biglogo.png" alt="Logo" className="max-w-xs md:max-w-md" />
+        </div>
+      )}
+    </>
+  );
 };
 
 export default App;
