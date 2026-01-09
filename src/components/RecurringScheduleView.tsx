@@ -34,6 +34,7 @@ interface HorarioRecurrente {
   bloqueada?: boolean;
   nombre_clase?: string;
   esVariable?: boolean; // Para identificar turnos variables
+  tipoCancelacion?: 'usuario' | 'admin' | 'sistema'; // Tipo de cancelación para mostrar correctamente
 }
 
 interface ClaseDelDia {
@@ -676,38 +677,61 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     return () => window.removeEventListener('ausenciasAdmin:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos cancelados (desde admin) - solo si la página está visible
+  // Escuchar cambios en turnos cancelados (desde admin, especialmente feriados) - refrescar clases del mes, turnos disponibles y balance
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        console.log('📢 [RECURRING_VIEW] Evento turnosCancelados:updated recibido, recargando datos...');
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        // Recargar horarios recurrentes primero para asegurar datos frescos
+        await cargarHorariosRecurrentes(true);
+        // Recargar turnos cancelados y clases del mes
         await cargarTurnosCancelados(true);
+        // Pequeño delay para asegurar que los horarios se actualizaron
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
       }
     };
     window.addEventListener('turnosCancelados:updated', handler);
     return () => window.removeEventListener('turnosCancelados:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos variables (desde admin) - solo si la página está visible
+  // Escuchar cambios en turnos variables (desde admin) - refrescar clases del mes y balance
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
         await cargarClasesDelMes(true);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
       }
     };
     window.addEventListener('turnosVariables:updated', handler);
     return () => window.removeEventListener('turnosVariables:updated', handler);
   }, []);
 
-  // Escuchar cambios en clases del mes (desde admin) - solo si la página está visible
+  // Escuchar cambios en clases del mes (desde admin, especialmente feriados) - solo si la página está visible
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        await cargarClasesDelMes(true);
+        console.log('📢 [RECURRING_VIEW] Evento clasesDelMes:updated recibido, recargando datos...');
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        // Recargar horarios recurrentes primero para asegurar datos frescos
+        await cargarHorariosRecurrentes(true);
+        // Pequeño delay para asegurar que los horarios se actualizaron
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
       }
     };
     window.addEventListener('clasesDelMes:updated', handler);
     return () => window.removeEventListener('clasesDelMes:updated', handler);
   }, []);
+
 
   // Cargar clases del mes (horarios recurrentes + turnos variables)
   const cargarClasesDelMes = async (forceReload = false) => {
@@ -864,44 +888,122 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     if (userStartDate && startOfDay(dia) < userStartDate) {
       return [];
     }
-    const diaSemana = dia.getDay();
+    // Convertir día de la semana: JS (0=domingo, 6=sábado) -> DB (1=lunes, 7=domingo)
+    const diaSemanaJS = dia.getDay();
+    const diaSemanaDB = diaSemanaJS === 0 ? 7 : diaSemanaJS;
     const horariosAFiltrar = horariosParaUsar || horariosRecurrentes;
-    const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemana);
+    const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemanaDB);
     
-    // Debug temporal para ver qué días se están procesando
-    if (format(dia, 'yyyy-MM-dd') === '2025-10-22' || format(dia, 'yyyy-MM-dd') === '2025-10-23') {
-      // Debug temporal removido
+    const fechaFormateada = format(dia, 'yyyy-MM-dd');
+    
+    // Debug para feriados
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🔍 [GET_CLASES] Fecha:', fechaFormateada);
+      console.log('📅 [GET_CLASES] Día semana JS:', diaSemanaJS, 'DB:', diaSemanaDB);
+      console.log('📋 [GET_CLASES] Horarios filtrados:', horariosDelDia.length);
+      if (horariosDelDia.length > 0) {
+        console.log('📝 [GET_CLASES] Horarios encontrados:', horariosDelDia.map(h => ({
+          id: h.id,
+          hora_inicio: h.hora_inicio,
+          hora_fin: h.hora_fin,
+          dia_semana: h.dia_semana
+        })));
+      }
     }
     
     if (horariosDelDia.length === 0) return [];
 
-    // Obtener todas las cancelaciones del día de una sola vez
-    const { data: cancelaciones } = await supabase
+    // Obtener todas las cancelaciones del día de una sola vez (incluyendo tipo_cancelacion)
+    // También obtener todas las cancelaciones sin filtrar por cliente para debug
+    const { data: cancelaciones, error: errorCancelaciones } = await supabase
       .from('turnos_cancelados')
-      .select('turno_hora_inicio, turno_hora_fin')
+      .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
       .eq('cliente_id', user?.id)
-      .eq('turno_fecha', format(dia, 'yyyy-MM-dd'));
+      .eq('turno_fecha', fechaFormateada);
 
-    // Crear un Set para búsqueda rápida de cancelaciones
-    const cancelacionesSet = new Set(
-      cancelaciones?.map(c => `${c.turno_hora_inicio}-${c.turno_hora_fin}`) || []
+    if (errorCancelaciones) {
+      console.error('❌ [GET_CLASES] Error obteniendo cancelaciones:', errorCancelaciones);
+    }
+
+    // Debug para feriados: también buscar todas las cancelaciones de ese día sin filtrar por cliente
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🔍 [GET_CLASES] Buscando cancelaciones para:', {
+        fecha: fechaFormateada,
+        cliente_id: user?.id
+      });
+      console.log('🚫 [GET_CLASES] Cancelaciones encontradas (filtradas por cliente):', cancelaciones?.length || 0);
+      if (cancelaciones && cancelaciones.length > 0) {
+        console.log('📝 [GET_CLASES] Cancelaciones:', cancelaciones.map(c => ({
+          hora_inicio: c.turno_hora_inicio,
+          hora_fin: c.turno_hora_fin,
+          tipo: c.tipo_cancelacion,
+          cliente_id: c.cliente_id
+        })));
+      }
+      
+      // También buscar todas las cancelaciones del día para ver si existen pero con otro cliente_id
+      const { data: todasCancelaciones } = await supabase
+        .from('turnos_cancelados')
+        .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
+        .eq('turno_fecha', fechaFormateada)
+        .eq('tipo_cancelacion', 'sistema');
+      
+      console.log('🔍 [GET_CLASES] Todas las cancelaciones del día (sistema):', todasCancelaciones?.length || 0);
+      if (todasCancelaciones && todasCancelaciones.length > 0) {
+        console.log('📝 [GET_CLASES] Todas las cancelaciones sistema:', todasCancelaciones.map(c => ({
+          hora_inicio: c.turno_hora_inicio,
+          hora_fin: c.turno_hora_fin,
+          tipo: c.tipo_cancelacion,
+          cliente_id: c.cliente_id
+        })));
+      }
+    }
+
+    // Crear un Map para búsqueda rápida de cancelaciones con su tipo
+    // Normalizar horas a formato HH:MM para comparación consistente
+    const cancelacionesMap = new Map(
+      (cancelaciones || []).map(c => {
+        const horaInicioNorm = formatTime(c.turno_hora_inicio);
+        const horaFinNorm = formatTime(c.turno_hora_fin);
+        const clave = `${horaInicioNorm}-${horaFinNorm}`;
+        return [clave, c.tipo_cancelacion || 'usuario'];
+      })
     );
+
+    // Debug para feriados
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🗺️ [GET_CLASES] Mapa de cancelaciones:', Array.from(cancelacionesMap.entries()));
+    }
 
     // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
     const clasesConCancelaciones = horariosDelDia
       .map((horario) => {
-        const claveCancelacion = `${horario.hora_inicio}-${horario.hora_fin}`;
+        const horaInicioNorm = formatTime(horario.hora_inicio);
+        const horaFinNorm = formatTime(horario.hora_fin);
+        const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
+        const estaCancelada = cancelacionesMap.has(claveCancelacion);
+        const tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
         const estaBloqueada = estaClaseBloqueada(dia, horario.clase_numero);
         
-        
+        // Debug para feriados
+        if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+          console.log(`🔄 [GET_CLASES] Horario ${horaInicioNorm}-${horaFinNorm}:`, {
+            claveCancelacion,
+            estaCancelada,
+            tipoCancelacion,
+            horaInicioOriginal: horario.hora_inicio,
+            horaFinOriginal: horario.hora_fin
+          });
+        }
         
         return {
-          id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+          id: `${horario.id}-${fechaFormateada}`,
           dia,
           horario: {
             ...horario,
-            cancelada: cancelacionesSet.has(claveCancelacion),
-            bloqueada: estaBloqueada
+            cancelada: estaCancelada,
+            bloqueada: estaBloqueada,
+            tipoCancelacion: tipoCancelacion as 'usuario' | 'admin' | 'sistema' | undefined
           }
         };
       });
@@ -1213,7 +1315,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80"></div>
       </div>
     );
   }
@@ -1263,8 +1365,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-sm text-muted-foreground">Cargando tus clases...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80 mx-auto mb-4"></div>
+                <p className="text-sm text-white/90">Cargando tus clases...</p>
               </div>
             </div>
           ) : (
@@ -1319,8 +1421,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         <tr>
                           <td colSpan={4} className="px-4 py-8 text-center">
                             <div className="flex flex-col items-center">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
-                              <p className="text-sm text-muted-foreground">Cargando mes...</p>
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white/80 mb-2"></div>
+                              <p className="text-sm text-white/90">Cargando mes...</p>
                             </div>
                           </td>
                         </tr>
@@ -1356,8 +1458,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                 {format(dia, 'EEEE', { locale: es })}
                               </div>
                               {clase.horario.cancelada && (
-                                <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
-                                  CANCELADA
+                                <div className={`text-[10px] sm:text-xs font-medium ${
+                                  clase.horario.tipoCancelacion === 'sistema'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {clase.horario.tipoCancelacion === 'sistema' ? 'FERIADO' : 'CANCELADA'}
                                 </div>
                               )}
                               {clase.horario.bloqueada && (
@@ -1369,7 +1475,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <span className={`text-xs sm:text-sm font-medium ${
                                 clase.horario.cancelada 
-                                  ? 'text-red-600 dark:text-red-400 line-through' 
+                                  ? clase.horario.tipoCancelacion === 'sistema'
+                                    ? 'text-amber-600 dark:text-amber-400 line-through'
+                                    : 'text-red-600 dark:text-red-400 line-through'
                                   : clase.horario.bloqueada
                                     ? 'text-yellow-600 dark:text-yellow-400'
                                     : clase.horario.esVariable
@@ -1499,8 +1607,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             </div>
             {loadingTurnosCancelados ? (
               <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Cargando vacantes...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80 mx-auto mb-4"></div>
+                <p className="text-white/90">Cargando vacantes...</p>
               </div>
             ) : turnosConEstado.length === 0 ? (
               <div className="p-8 text-center text-muted-foreground">

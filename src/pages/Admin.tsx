@@ -856,7 +856,7 @@ export default function Admin() {
                                   )}
                                   {user.fecha_desactivacion && user.fecha_desactivacion > new Date().toISOString().split('T')[0] && (
                                     <Badge variant="outline" className="text-xs">
-                                      Se desactiva: {new Date(user.fecha_desactivacion).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' })}
+                                      Se desactiva: {new Date(user.fecha_desactivacion as string).toLocaleDateString('es-AR', { month: 'short', day: 'numeric' })}
                                     </Badge>
                                   )}
                                 </div>
@@ -1387,10 +1387,13 @@ export default function Admin() {
           {/* Tab de Calendario */}
           <TabsContent value="calendario" className="mt-6 w-full max-w-full pb-20 md:pb-8">
             <div className="mb-4 flex justify-end">
-              <Button onClick={() => {
-                setFechaSeleccionadaFeriado(null);
-                setShowFeriadosModal(true);
-              }}>
+              <Button 
+                onClick={() => {
+                  setFechaSeleccionadaFeriado(null);
+                  setShowFeriadosModal(true);
+                }}
+                className="bg-white text-gray-900 hover:bg-gray-100 border border-white"
+              >
                 <Calendar className="h-4 w-4 mr-2" />
                 Gestionar Feriados
               </Button>

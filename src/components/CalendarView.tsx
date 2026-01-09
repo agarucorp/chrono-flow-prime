@@ -78,6 +78,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     tipo: 'dia_habil_feriado' | 'fin_semana_habilitado';
     horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string }> | null;
     activo: boolean;
+    motivo?: string | null;
   }>>([]);
 
   // Estado para ausencias del admin
@@ -192,7 +193,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       const { startDate, endDate } = getDateRange();
       const { data, error } = await supabase
         .from('feriados')
-        .select('fecha, tipo, horarios_personalizados, activo')
+        .select('fecha, tipo, horarios_personalizados, activo, motivo')
         .eq('activo', true)
         .gte('fecha', formatLocalDate(startDate))
         .lte('fecha', formatLocalDate(endDate));
@@ -209,7 +210,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
   };
 
   // Verificar si una fecha es feriado
-  const esFeriado = (fecha: Date): { esFeriado: boolean; tipo?: 'dia_habil_feriado' | 'fin_semana_habilitado'; horarios?: Array<{ hora_inicio: string; hora_fin: string }> | null } => {
+  const esFeriado = (fecha: Date): { esFeriado: boolean; tipo?: 'dia_habil_feriado' | 'fin_semana_habilitado'; horarios?: Array<{ hora_inicio: string; hora_fin: string }> | null; motivo?: string | null } => {
     const fechaStr = formatLocalDate(fecha);
     const feriado = feriados.find(f => f.fecha === fechaStr && f.activo);
     
@@ -217,7 +218,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       return {
         esFeriado: true,
         tipo: feriado.tipo,
-        horarios: feriado.horarios_personalizados || null
+        horarios: feriado.horarios_personalizados || null,
+        motivo: feriado.motivo || null
       };
     }
     
@@ -1001,7 +1003,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
   // Función para manejar selección de fecha en el calendario compacto
   const handleDateSelect = (date: Date) => {
-    setCurrentDate(date);
+    // Normalizar la fecha para evitar problemas de zona horaria
+    const normalizedDate = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    normalizedDate.setHours(0, 0, 0, 0);
+    setCurrentDate(normalizedDate);
   };
 
   // Función para manejar clic en horario para reserva
@@ -1048,8 +1053,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
   };
 
   const navigateDate = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(newDate.getMonth() + (direction === 'next' ? 1 : -1));
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    const newDate = new Date(year, month + (direction === 'next' ? 1 : -1), 1);
+    newDate.setHours(0, 0, 0, 0);
     setCurrentDate(newDate);
   };
 
@@ -1115,26 +1122,37 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
   // Nueva función para renderizar el calendario compacto
   const renderCompactCalendar = () => {
-    const { startDate, endDate } = getDateRange();
-    const firstDay = new Date(startDate);
-    const lastDay = new Date(endDate);
+    // Calcular el primer y último día del mes basándose en currentDate
+    const year = currentDate.getFullYear();
+    const month = currentDate.getMonth();
+    
+    // Primer día del mes (día 1)
+    const firstDay = new Date(year, month, 1);
+    firstDay.setHours(0, 0, 0, 0);
+    
+    // Último día del mes: primer día del mes siguiente menos 1 día
+    const lastDay = new Date(year, month + 1, 0);
+    lastDay.setHours(0, 0, 0, 0);
+    
     const daysInMonth = lastDay.getDate();
     const firstDayOfWeek = firstDay.getDay();
 
     const days = [];
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     // Agregar días del mes anterior para completar la primera semana
     for (let i = 0; i < firstDayOfWeek; i++) {
       const prevDate = new Date(firstDay);
       prevDate.setDate(firstDay.getDate() - (firstDayOfWeek - i));
+      prevDate.setHours(0, 0, 0, 0);
       days.push({ date: prevDate, isCurrentMonth: false });
     }
 
     // Agregar días del mes actual
     for (let i = 1; i <= daysInMonth; i++) {
-      const dayDate = new Date(firstDay);
-      dayDate.setDate(i);
+      const dayDate = new Date(year, month, i);
+      dayDate.setHours(0, 0, 0, 0);
       days.push({ date: dayDate, isCurrentMonth: true });
     }
 
@@ -1460,12 +1478,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           {timeSlots.length === 0 && (
             <div className="text-center py-12">
               <Calendar className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-muted-foreground mb-2">
-                No hay horarios configurados para este día
-              </h3>
-              <p className="text-sm text-muted-foreground">
-                Configura los horarios desde el panel de administración para este día.
-              </p>
+              {feriadoInfo.esFeriado && feriadoInfo.tipo === 'dia_habil_feriado' && (!feriadoInfo.horarios || feriadoInfo.horarios.length === 0) ? (
+                <>
+                  <h3 className="text-lg font-medium text-amber-600 dark:text-amber-400 mb-2">
+                    Día Feriado
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    {feriadoInfo.motivo ? feriadoInfo.motivo : 'Este día está marcado como feriado. No hay horarios disponibles.'}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <h3 className="text-lg font-medium text-muted-foreground mb-2">
+                    No hay horarios configurados para este día
+                  </h3>
+                  <p className="text-sm text-muted-foreground">
+                    Configura los horarios desde el panel de administración para este día.
+                  </p>
+                </>
+              )}
             </div>
           )}
         </div>

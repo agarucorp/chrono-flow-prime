@@ -159,7 +159,11 @@ export const FeriadosConfigModal = ({
       setLoading(true);
       showLoading('Guardando feriado...');
 
-      const diaSemana = new Date(fecha).getDay();
+      // Parsear la fecha manualmente para evitar problemas de zona horaria
+      const fechaParts = fecha.split('T')[0].split('-').map(Number);
+      const fechaObjValidacion = new Date(fechaParts[0], fechaParts[1] - 1, fechaParts[2]);
+      fechaObjValidacion.setHours(0, 0, 0, 0);
+      const diaSemana = fechaObjValidacion.getDay();
       const esFinSemana = diaSemana === 0 || diaSemana === 6;
 
       // Validar que el tipo coincida con el día
@@ -186,6 +190,7 @@ export const FeriadosConfigModal = ({
         turnos_cancelados: false,
       };
 
+      let feriadoId: string | undefined;
       let error;
       if (editandoFeriado?.id) {
         // Actualizar
@@ -194,19 +199,31 @@ export const FeriadosConfigModal = ({
           .update(datosFeriado)
           .eq('id', editandoFeriado.id);
         error = updateError;
+        feriadoId = editandoFeriado.id;
       } else {
-        // Crear
-        const { error: insertError } = await supabase
+        // Crear - obtener el ID del feriado creado
+        const { data: insertData, error: insertError } = await supabase
           .from('feriados')
-          .insert(datosFeriado);
+          .insert(datosFeriado)
+          .select('id')
+          .single();
         error = insertError;
+        feriadoId = insertData?.id;
       }
 
       if (error) throw error;
 
       // Si es día hábil feriado, cancelar turnos
-      if (tipo === 'dia_habil_feriado' && !editandoFeriado?.turnos_cancelados) {
-        await cancelarTurnosDia(fecha);
+      // Para nuevos feriados siempre cancelar, para editados solo si aún no se cancelaron
+      if (tipo === 'dia_habil_feriado' && (!editandoFeriado || !editandoFeriado.turnos_cancelados)) {
+        console.log('📌 [FERIADO] Llamando a cancelarTurnosDia con:', { fecha, feriadoId, horariosPersonalizados: horariosPersonalizados.length });
+        try {
+          await cancelarTurnosDia(fecha, feriadoId, horariosPersonalizados);
+          console.log('✅ [FERIADO] cancelarTurnosDia completado');
+        } catch (cancelacionError) {
+          console.error('❌ [FERIADO] Error en cancelarTurnosDia:', cancelacionError);
+          // No lanzar error aquí para que el feriado se guarde, pero loguear el error
+        }
       }
 
       showSuccess('Feriado guardado correctamente');
@@ -225,74 +242,309 @@ export const FeriadosConfigModal = ({
     }
   };
 
-  const cancelarTurnosDia = async (fechaStr: string) => {
+  const cancelarTurnosDia = async (fechaStr: string, feriadoIdParam?: string, horariosPersonalizadosParam?: HorarioPersonalizado[]) => {
     try {
-      const fechaObj = new Date(fechaStr);
+      console.log('🚀 [FERIADO] Iniciando cancelación de turnos para:', fechaStr);
+      console.log('📋 [FERIADO] Parámetros recibidos:', { feriadoIdParam, horariosPersonalizadosParam: horariosPersonalizadosParam?.length || 0 });
+      
+      // Asegurar formato correcto de fecha (YYYY-MM-DD)
+      const fechaFormateada = fechaStr.split('T')[0]; // En caso de que venga con hora
+      console.log('📅 [FERIADO] Fecha formateada:', fechaFormateada);
+      
+      // Parsear la fecha manualmente para evitar problemas de zona horaria
+      const [year, month, day] = fechaFormateada.split('-').map(Number);
+      const fechaObj = new Date(year, month - 1, day); // month - 1 porque Date usa 0-11 para meses
+      fechaObj.setHours(0, 0, 0, 0); // Normalizar a medianoche
+      
       const diaSemana = fechaObj.getDay(); // 0=domingo, 6=sábado
       const diaSemanaDB = diaSemana === 0 ? 7 : diaSemana; // Convertir a formato DB (1=lunes, 7=domingo)
+      
+      const nombresDias = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+      console.log('📆 [FERIADO] Día de la semana:', { 
+        diaSemana, 
+        diaSemanaDB, 
+        nombreDia: nombresDias[diaSemana],
+        fecha: fechaObj.toISOString(),
+        fechaLocal: fechaObj.toLocaleDateString('es-ES')
+      });
 
-      // Cancelar turnos recurrentes del día específico
-      const { error: errorRecurrentes } = await supabase
+      // Si no se pasaron los parámetros, intentar obtener el feriado de la base de datos
+      let feriadoId = feriadoIdParam;
+      let horariosPersonalizados = horariosPersonalizadosParam || [];
+
+      if (!feriadoId || !horariosPersonalizadosParam) {
+        const { data: feriadoData } = await supabase
+          .from('feriados')
+          .select('id, horarios_personalizados')
+          .eq('fecha', fechaFormateada) // Usar fecha formateada
+          .eq('tipo', 'dia_habil_feriado')
+          .eq('activo', true)
+          .maybeSingle();
+
+        if (feriadoData) {
+          feriadoId = feriadoId || feriadoData.id;
+          horariosPersonalizados = horariosPersonalizadosParam || (feriadoData.horarios_personalizados || []);
+        } else {
+          console.log('⚠️ [FERIADO] No se encontró el feriado en la base de datos con fecha:', fechaFormateada);
+        }
+      }
+
+      console.log('📅 [FERIADO] Feriado:', { feriadoId, horariosPersonalizados: horariosPersonalizados.length });
+
+      // 1. Obtener horarios recurrentes activos para este día de la semana
+      console.log('🔍 [FERIADO] Buscando horarios recurrentes para día_semana:', diaSemanaDB);
+      const { data: horariosRecurrentes, error: errorHorariosRecurrentes } = await supabase
         .from('horarios_recurrentes_usuario')
-        .update({ activo: false })
+        .select('id, usuario_id, hora_inicio, hora_fin, dia_semana')
         .eq('dia_semana', diaSemanaDB)
         .eq('activo', true);
 
-      if (errorRecurrentes) {
-        console.error('Error cancelando turnos recurrentes:', errorRecurrentes);
+      if (errorHorariosRecurrentes) {
+        console.error('❌ [FERIADO] Error obteniendo horarios recurrentes:', errorHorariosRecurrentes);
+        throw errorHorariosRecurrentes; // Lanzar error para que se capture en el try-catch
+      } else {
+        console.log('📋 [FERIADO] Horarios recurrentes encontrados:', horariosRecurrentes?.length || 0);
+        if (horariosRecurrentes && horariosRecurrentes.length > 0) {
+          console.log('📝 [FERIADO] Muestra de horarios:', horariosRecurrentes.slice(0, 3));
+        }
       }
 
-      // Cancelar turnos variables del día específico y crear registros en turnos_cancelados
+      // 2. Crear cancelaciones para horarios recurrentes (verificar duplicados primero)
+      if (horariosRecurrentes && horariosRecurrentes.length > 0) {
+        // Verificar cancelaciones existentes para evitar duplicados
+        const { data: cancelacionesExistentes } = await supabase
+          .from('turnos_cancelados')
+          .select('cliente_id, turno_hora_inicio, turno_hora_fin')
+          .eq('turno_fecha', fechaFormateada) // Usar fecha formateada
+          .eq('tipo_cancelacion', 'sistema');
+        
+        console.log('🔍 [FERIADO] Cancelaciones existentes encontradas:', cancelacionesExistentes?.length || 0);
+
+        const cancelacionesExistentesSet = new Set(
+          (cancelacionesExistentes || []).map(c => 
+            `${c.cliente_id}-${c.turno_hora_inicio}-${c.turno_hora_fin}`
+          )
+        );
+
+        const nuevasCancelaciones = horariosRecurrentes
+          .filter(hr => {
+            const clave = `${hr.usuario_id}-${hr.hora_inicio}-${hr.hora_fin}`;
+            const yaExiste = cancelacionesExistentesSet.has(clave);
+            if (yaExiste) {
+              console.log('⚠️ [FERIADO] Cancelación ya existe para:', clave);
+            }
+            return !yaExiste;
+          })
+          .map(hr => {
+            // Asegurar formato correcto de hora (HH:MM:SS)
+            let horaInicio = hr.hora_inicio;
+            let horaFin = hr.hora_fin;
+            
+            // Si viene sin segundos, agregarlos
+            if (horaInicio && horaInicio.split(':').length === 2) {
+              horaInicio = `${horaInicio}:00`;
+            }
+            if (horaFin && horaFin.split(':').length === 2) {
+              horaFin = `${horaFin}:00`;
+            }
+            
+            console.log('📝 [FERIADO] Procesando horario:', {
+              usuario_id: hr.usuario_id,
+              hora_inicio_original: hr.hora_inicio,
+              hora_inicio_procesada: horaInicio,
+              hora_fin_original: hr.hora_fin,
+              hora_fin_procesada: horaFin,
+              dia_semana: hr.dia_semana
+            });
+            
+            return {
+              cliente_id: hr.usuario_id,
+              turno_fecha: fechaFormateada, // Usar fecha formateada
+              turno_hora_inicio: horaInicio,
+              turno_hora_fin: horaFin,
+              tipo_cancelacion: 'sistema',
+              motivo_cancelacion: 'Día feriado',
+              cancelacion_tardia: false
+            };
+          });
+
+        if (nuevasCancelaciones.length > 0) {
+          console.log('➕ [FERIADO] Creando', nuevasCancelaciones.length, 'cancelaciones para horarios recurrentes');
+          const detallesCancelaciones = nuevasCancelaciones.slice(0, 5).map(c => ({
+            cliente_id: c.cliente_id,
+            turno_fecha: c.turno_fecha,
+            turno_hora_inicio: c.turno_hora_inicio,
+            turno_hora_fin: c.turno_hora_fin,
+            tipo_cancelacion: c.tipo_cancelacion
+          }));
+          console.log('📝 [FERIADO] Detalle completo de cancelaciones a crear (primeras 5):', detallesCancelaciones);
+          const { data: cancelacionesInsertadas, error: errorCancelacionesRecurrentes } = await supabase
+            .from('turnos_cancelados')
+            .insert(nuevasCancelaciones)
+            .select('id, cliente_id, turno_fecha, turno_hora_inicio, turno_hora_fin, tipo_cancelacion');
+
+          if (errorCancelacionesRecurrentes) {
+            console.error('❌ [FERIADO] Error creando cancelaciones recurrentes:', errorCancelacionesRecurrentes);
+            console.error('❌ [FERIADO] Detalles completos del error:', JSON.stringify(errorCancelacionesRecurrentes, null, 2));
+            throw errorCancelacionesRecurrentes; // Lanzar error
+          } else {
+            console.log('✅ [FERIADO] Cancelaciones recurrentes creadas exitosamente:', cancelacionesInsertadas?.length || 0);
+            if (cancelacionesInsertadas && cancelacionesInsertadas.length > 0) {
+              const detallesInsertadas = cancelacionesInsertadas.slice(0, 5).map(c => ({
+                id: c.id,
+                cliente_id: c.cliente_id,
+                turno_fecha: c.turno_fecha,
+                turno_hora_inicio: c.turno_hora_inicio,
+                turno_hora_fin: c.turno_hora_fin,
+                tipo_cancelacion: c.tipo_cancelacion
+              }));
+              console.log('📋 [FERIADO] Cancelaciones insertadas (primeras 5):', detallesInsertadas);
+            } else {
+              console.warn('⚠️ [FERIADO] No se devolvieron cancelaciones insertadas en el SELECT (pero insert podría haber funcionado)');
+            }
+          }
+        } else {
+          console.log('ℹ️ [FERIADO] No hay nuevas cancelaciones recurrentes que crear (todas ya existen)');
+        }
+      } else {
+        console.log('⚠️ [FERIADO] No se encontraron horarios recurrentes para este día de la semana');
+      }
+
+      // 3. Cancelar turnos variables del día específico
       const { data: turnosVariables, error: errorSelect } = await supabase
         .from('turnos_variables')
         .select('id, cliente_id, turno_hora_inicio, turno_hora_fin')
-        .eq('turno_fecha', fechaStr)
+        .eq('turno_fecha', fechaFormateada) // Usar fecha formateada
         .eq('estado', 'confirmada');
 
       if (errorSelect) {
-        console.error('Error obteniendo turnos variables:', errorSelect);
-      } else if (turnosVariables && turnosVariables.length > 0) {
-        // Crear registros en turnos_cancelados para cada turno cancelado
-        const cancelaciones = turnosVariables.map(turno => ({
-          cliente_id: turno.cliente_id,
-          turno_fecha: fechaStr,
-          turno_hora_inicio: turno.turno_hora_inicio,
-          turno_hora_fin: turno.turno_hora_fin,
-          tipo_cancelacion: 'sistema',
-          cancelacion_tardia: false
-        }));
+        console.error('❌ [FERIADO] Error obteniendo turnos variables:', errorSelect);
+      } else {
+        console.log('📋 [FERIADO] Turnos variables encontrados:', turnosVariables?.length || 0);
+      }
 
-        const { error: errorCancelaciones } = await supabase
+      if (turnosVariables && turnosVariables.length > 0) {
+        // Verificar cancelaciones existentes para turnos variables
+        const { data: cancelacionesVariablesExistentes } = await supabase
           .from('turnos_cancelados')
-          .insert(cancelaciones);
+          .select('cliente_id, turno_hora_inicio, turno_hora_fin')
+          .eq('turno_fecha', fechaFormateada) // Usar fecha formateada
+          .eq('tipo_cancelacion', 'sistema');
 
-        if (errorCancelaciones) {
-          console.error('Error creando registros de cancelación:', errorCancelaciones);
+        const cancelacionesVariablesSet = new Set(
+          (cancelacionesVariablesExistentes || []).map(c => 
+            `${c.cliente_id}-${c.turno_hora_inicio}-${c.turno_hora_fin}`
+          )
+        );
+
+        const nuevasCancelacionesVariables = turnosVariables
+          .filter(tv => {
+            const clave = `${tv.cliente_id}-${tv.turno_hora_inicio}-${tv.turno_hora_fin}`;
+            return !cancelacionesVariablesSet.has(clave);
+          })
+          .map(turno => ({
+            cliente_id: turno.cliente_id,
+            turno_fecha: fechaFormateada, // Usar fecha formateada
+            turno_hora_inicio: turno.turno_hora_inicio,
+            turno_hora_fin: turno.turno_hora_fin,
+            tipo_cancelacion: 'sistema',
+            motivo_cancelacion: 'Día feriado',
+            cancelacion_tardia: false
+          }));
+
+        if (nuevasCancelacionesVariables.length > 0) {
+          console.log('➕ [FERIADO] Creando', nuevasCancelacionesVariables.length, 'cancelaciones para turnos variables');
+          const { error: errorCancelacionesVariables } = await supabase
+            .from('turnos_cancelados')
+            .insert(nuevasCancelacionesVariables);
+
+          if (errorCancelacionesVariables) {
+            console.error('❌ [FERIADO] Error creando cancelaciones variables:', errorCancelacionesVariables);
+          } else {
+            console.log('✅ [FERIADO] Cancelaciones variables creadas exitosamente');
+          }
         }
 
         // Actualizar estado de turnos variables a cancelada
         const { error: errorVariables } = await supabase
           .from('turnos_variables')
           .update({ estado: 'cancelada' })
-          .eq('turno_fecha', fechaStr)
+          .eq('turno_fecha', fechaFormateada) // Usar fecha formateada
           .eq('estado', 'confirmada');
 
         if (errorVariables) {
-          console.error('Error cancelando turnos variables:', errorVariables);
+          console.error('❌ [FERIADO] Error cancelando turnos variables:', errorVariables);
+        } else {
+          console.log('✅ [FERIADO] Turnos variables actualizados a cancelada');
         }
       }
 
-      // Marcar que los turnos fueron cancelados
-      await supabase
+      // 4. Si hay horarios personalizados, crear turnos disponibles
+      if (horariosPersonalizados.length > 0 && feriadoId) {
+        console.log('⏰ [FERIADO] Creando turnos disponibles para horarios personalizados');
+        
+        for (const horario of horariosPersonalizados) {
+          // Crear cancelación dummy (sin cliente_id) para poder crear turno disponible
+          const { data: cancelacionDummy, error: errorDummy } = await supabase
+            .from('turnos_cancelados')
+            .insert({
+              cliente_id: null,
+              turno_fecha: fechaFormateada, // Usar fecha formateada
+              turno_hora_inicio: horario.hora_inicio,
+              turno_hora_fin: horario.hora_fin,
+              tipo_cancelacion: 'sistema',
+              motivo_cancelacion: 'Turno disponible desde feriado'
+            })
+            .select('id')
+            .single();
+
+          if (!errorDummy && cancelacionDummy) {
+            // Crear turno disponible
+            const { error: errorDisponible } = await supabase
+              .from('turnos_disponibles')
+              .insert({
+                turno_fecha: fechaFormateada, // Usar fecha formateada
+                turno_hora_inicio: horario.hora_inicio,
+                turno_hora_fin: horario.hora_fin,
+                creado_desde_cancelacion_id: cancelacionDummy.id,
+                creado_desde_feriado_id: feriadoId
+              });
+
+            if (errorDisponible) {
+              console.error('❌ [FERIADO] Error creando turno disponible:', errorDisponible);
+            } else {
+              console.log('✅ [FERIADO] Turno disponible creado:', horario);
+            }
+          }
+        }
+      }
+
+      // 5. Marcar que los turnos fueron cancelados
+      const { error: errorUpdateFeriado } = await supabase
         .from('feriados')
         .update({ turnos_cancelados: true })
-        .eq('fecha', fechaStr)
+        .eq('fecha', fechaFormateada) // Usar fecha formateada
         .eq('tipo', 'dia_habil_feriado');
 
-      // Disparar evento para actualizar la vista
-      window.dispatchEvent(new CustomEvent('feriados:updated'));
+      if (errorUpdateFeriado) {
+        console.error('❌ [FERIADO] Error actualizando feriado:', errorUpdateFeriado);
+      } else {
+        console.log('✅ [FERIADO] Feriado marcado como turnos cancelados');
+      }
+
+      // 6. Disparar eventos para actualizar vistas (con delay para asegurar que la DB se actualizó)
+      setTimeout(() => {
+        console.log('📢 [FERIADO] Disparando eventos de actualización');
+        window.dispatchEvent(new CustomEvent('feriados:updated'));
+        window.dispatchEvent(new CustomEvent('turnosCancelados:updated'));
+        window.dispatchEvent(new CustomEvent('turnosVariables:updated'));
+        window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
+      }, 500);
+
+      console.log('✅ [FERIADO] Proceso de cancelación completado');
     } catch (error) {
-      console.error('Error cancelando turnos:', error);
+      console.error('❌ [FERIADO] Error cancelando turnos:', error);
     }
   };
 
@@ -355,7 +607,7 @@ export const FeriadosConfigModal = ({
           </DialogTitle>
           <DialogDescription>
             {fechaSeleccionada 
-              ? `Configura el feriado para ${format(new Date(fechaSeleccionada), 'dd/MM/yyyy', { locale: es })}`
+              ? `Configura el feriado para ${format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}`
               : 'Visualiza y gestiona todos los feriados configurados. Usa click derecho en un día del calendario para crear nuevos feriados.'
             }
           </DialogDescription>
@@ -416,7 +668,7 @@ export const FeriadosConfigModal = ({
           {!mostrarFormulario && fechaSeleccionada && (
             <Button onClick={() => setMostrarFormulario(true)} className="w-full">
               <Plus className="h-4 w-4 mr-2" />
-              Crear Feriado para {format(new Date(fechaSeleccionada), 'dd/MM/yyyy', { locale: es })}
+              Crear Feriado para {format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}
             </Button>
           )}
 
@@ -522,7 +774,11 @@ export const FeriadosConfigModal = ({
                 </div>
 
                 <div className="flex gap-2">
-                  <Button onClick={guardarFeriado} disabled={loading} className="flex-1">
+                  <Button 
+                    onClick={guardarFeriado} 
+                    disabled={loading} 
+                    className="flex-1 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                  >
                     {editandoFeriado ? 'Actualizar' : 'Guardar'}
                   </Button>
                   <Button onClick={resetearFormulario} variant="outline">
@@ -557,7 +813,12 @@ export const FeriadosConfigModal = ({
                             {feriado.tipo === 'dia_habil_feriado' ? 'Día hábil feriado' : 'Fin de semana habilitado'}
                           </Badge>
                           <span className="font-medium">
-                            {format(new Date(feriado.fecha), 'dd/MM/yyyy', { locale: es })}
+                            {(() => {
+                              // Parsear la fecha manualmente para evitar problemas de zona horaria
+                              const [year, month, day] = feriado.fecha.split('-').map(Number);
+                              const fechaCorrecta = new Date(year, month - 1, day);
+                              return format(fechaCorrecta, 'dd/MM/yyyy', { locale: es });
+                            })()}
                           </span>
                           {!feriado.activo && (
                             <Badge variant="secondary">Inactivo</Badge>

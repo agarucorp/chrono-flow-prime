@@ -615,8 +615,8 @@ const Dashboard = () => {
 
   return (
     <div className="min-h-screen bg-background bg-[url('/gymobile-background.png')] sm:bg-[url('/gymdesktop-background.png')] bg-cover bg-center bg-no-repeat relative">
-      {/* Overlay oscuro solo en desktop */}
-      <div className="hidden sm:block absolute inset-0 bg-black/40 pointer-events-none"></div>
+      {/* Overlay oscuro en mobile y desktop */}
+      <div className="absolute inset-0 bg-black/50 sm:bg-black/60 pointer-events-none"></div>
       {/* Header restaurado */}
       <header className="relative z-10 bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
