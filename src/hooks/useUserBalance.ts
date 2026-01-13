@@ -338,13 +338,16 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           }
           
           // Calcular el monto base
-          // Para el mes actual: usar clases_previstas como base, luego se ajustará con cancelaciones y vacantes
+          // Para el mes actual: usar monto_total original de la cuota (el alumno ya pagó)
+          // NO aplicar ajustes dinámicos al mes actual
           // Para otros meses: usar monto_total de la cuota
           let totalBase: number;
           if (isCurrent) {
-            // Calcular desde clases previstas (base sin ajustes)
-            const montoBaseClasesPrevistas = clasesPrevistas * unitPrice;
-            totalBase = montoBaseClasesPrevistas;
+            // Usar el monto_total original de la cuota - el alumno ya pagó por esto
+            // NO modificar dinámicamente con cancelaciones o vacantes
+            totalBase = cuota?.monto_total !== undefined 
+              ? Number(cuota.monto_total) 
+              : clasesPrevistas * unitPrice;
           } else {
             // Para meses pasados/futuros, usar monto_total de la cuota
             totalBase = montoRecalculado 
@@ -390,21 +393,16 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             isNext,
           };
 
-          // Para el mes actual, agregar ajustes con cancelaciones y vacantes del mes actual
-          // y actualizar el total sumando las vacantes y restando las cancelaciones
+          // Para el mes actual, NO modificar el total dinámicamente
+          // El alumno ya pagó por las clases que le corresponden
+          // Solo mostrar información de cancelaciones y vacantes para referencia
           if (entry.isCurrent) {
-            // Calcular el monto de vacantes del mes actual
-            const montoVacantesActual = vacantesCount * unitPrice;
+            // NO modificar el total - usar el monto_total original de la cuota
+            // El total ya está calculado correctamente desde la base de datos
             
-            // Actualizar el total: restar cancelaciones y sumar vacantes
-            const totalConAjustes = totalBase - montoCancelacionesAnticipadas + montoVacantesActual;
-            const totalConDescuentoYAjustes = totalConDescuento - montoCancelacionesAnticipadas + montoVacantesActual;
-            
-            entry.total = totalConAjustes;
-            entry.totalConDescuento = totalConDescuentoYAjustes;
-            
-            // Solo mostrar ajustes si hay cancelaciones o vacantes
+            // Solo mostrar ajustes como información, pero NO aplicarlos al total
             if (clasesCanceladasAnticipacion > 0 || vacantesCount > 0) {
+              const montoVacantesActual = vacantesCount * unitPrice;
               entry.ajustes = {
                 cancelaciones: {
                   cantidad: clasesCanceladasAnticipacion,
