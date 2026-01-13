@@ -155,9 +155,10 @@ export const FeriadosConfigModal = ({
       return;
     }
 
+    let loadingToast: string | number | undefined;
     try {
       setLoading(true);
-      showLoading('Guardando feriado...');
+      loadingToast = showLoading('Guardando feriado...');
 
       // Parsear la fecha manualmente para evitar problemas de zona horaria
       const fechaParts = fecha.split('T')[0].split('-').map(Number);
@@ -169,14 +170,14 @@ export const FeriadosConfigModal = ({
       // Validar que el tipo coincida con el día
       if (esFinSemana && tipo === 'dia_habil_feriado') {
         showError('No puedes marcar un fin de semana como día hábil feriado. Usa "Fin de semana habilitado"');
-        dismissToast();
+        dismissToast(loadingToast);
         setLoading(false);
         return;
       }
 
       if (!esFinSemana && tipo === 'fin_semana_habilitado') {
         showError('Solo puedes habilitar fines de semana (sábados y domingos)');
-        dismissToast();
+        dismissToast(loadingToast);
         setLoading(false);
         return;
       }
@@ -215,19 +216,27 @@ export const FeriadosConfigModal = ({
 
       // Si es día hábil feriado, cancelar turnos
       // Para nuevos feriados siempre cancelar, para editados solo si aún no se cancelaron
-      if (tipo === 'dia_habil_feriado' && (!editandoFeriado || !editandoFeriado.turnos_cancelados)) {
-        console.log('📌 [FERIADO] Llamando a cancelarTurnosDia con:', { fecha, feriadoId, horariosPersonalizados: horariosPersonalizados.length });
-        try {
-          await cancelarTurnosDia(fecha, feriadoId, horariosPersonalizados);
-          console.log('✅ [FERIADO] cancelarTurnosDia completado');
-        } catch (cancelacionError) {
-          console.error('❌ [FERIADO] Error en cancelarTurnosDia:', cancelacionError);
-          // No lanzar error aquí para que el feriado se guarde, pero loguear el error
+      if (tipo === 'dia_habil_feriado') {
+        // Si es un feriado nuevo o si aún no se cancelaron los turnos, ejecutar cancelación
+        const debeCancelar = !editandoFeriado || !editandoFeriado.turnos_cancelados;
+        
+        if (debeCancelar) {
+          console.log('📌 [FERIADO] Llamando a cancelarTurnosDia con:', { fecha, feriadoId, horariosPersonalizados: horariosPersonalizados.length });
+          try {
+            await cancelarTurnosDia(fecha, feriadoId, horariosPersonalizados);
+            console.log('✅ [FERIADO] cancelarTurnosDia completado');
+          } catch (cancelacionError) {
+            console.error('❌ [FERIADO] Error en cancelarTurnosDia:', cancelacionError);
+            // Mostrar error al usuario pero permitir que el feriado se guarde
+            showError('El feriado se guardó, pero hubo un error al cancelar los turnos. Por favor, verifica manualmente.');
+          }
+        } else {
+          console.log('ℹ️ [FERIADO] Los turnos ya fueron cancelados previamente, no se vuelven a cancelar');
         }
       }
 
       showSuccess('Feriado guardado correctamente');
-      dismissToast();
+      dismissToast(loadingToast);
       resetearFormulario();
       await cargarFeriados();
       // Disparar evento para actualizar CalendarView
@@ -236,7 +245,7 @@ export const FeriadosConfigModal = ({
     } catch (error: any) {
       console.error('Error guardando feriado:', error);
       showError(error.message || 'Error al guardar feriado');
-      dismissToast();
+      if (loadingToast !== undefined) dismissToast(loadingToast);
     } finally {
       setLoading(false);
     }
@@ -363,7 +372,6 @@ export const FeriadosConfigModal = ({
               turno_hora_inicio: horaInicio,
               turno_hora_fin: horaFin,
               tipo_cancelacion: 'sistema',
-              motivo_cancelacion: 'Día feriado',
               cancelacion_tardia: false
             };
           });
@@ -448,7 +456,6 @@ export const FeriadosConfigModal = ({
             turno_hora_inicio: turno.turno_hora_inicio,
             turno_hora_fin: turno.turno_hora_fin,
             tipo_cancelacion: 'sistema',
-            motivo_cancelacion: 'Día feriado',
             cancelacion_tardia: false
           }));
 
@@ -481,40 +488,61 @@ export const FeriadosConfigModal = ({
 
       // 4. Si hay horarios personalizados, crear turnos disponibles
       if (horariosPersonalizados.length > 0 && feriadoId) {
-        console.log('⏰ [FERIADO] Creando turnos disponibles para horarios personalizados');
+        console.log('⏰ [FERIADO] Creando turnos disponibles para horarios personalizados:', horariosPersonalizados.length);
         
         for (const horario of horariosPersonalizados) {
-          // Crear cancelación dummy (sin cliente_id) para poder crear turno disponible
-          const { data: cancelacionDummy, error: errorDummy } = await supabase
-            .from('turnos_cancelados')
-            .insert({
-              cliente_id: null,
-              turno_fecha: fechaFormateada, // Usar fecha formateada
-              turno_hora_inicio: horario.hora_inicio,
-              turno_hora_fin: horario.hora_fin,
-              tipo_cancelacion: 'sistema',
-              motivo_cancelacion: 'Turno disponible desde feriado'
-            })
+          // Asegurar formato correcto de hora (HH:MM:SS)
+          let horaInicio = horario.hora_inicio;
+          let horaFin = horario.hora_fin;
+          
+          // Si viene sin segundos, agregarlos
+          if (horaInicio && horaInicio.split(':').length === 2) {
+            horaInicio = `${horaInicio}:00`;
+          }
+          if (horaFin && horaFin.split(':').length === 2) {
+            horaFin = `${horaFin}:00`;
+          }
+          
+          console.log('📝 [FERIADO] Procesando horario personalizado:', {
+            hora_inicio_original: horario.hora_inicio,
+            hora_inicio_procesada: horaInicio,
+            hora_fin_original: horario.hora_fin,
+            hora_fin_procesada: horaFin,
+            feriadoId
+          });
+          
+          // Verificar si ya existe un turno disponible para este horario
+          const { data: turnoExistente } = await supabase
+            .from('turnos_disponibles')
             .select('id')
-            .single();
+            .eq('turno_fecha', fechaFormateada)
+            .eq('turno_hora_inicio', horaInicio)
+            .eq('turno_hora_fin', horaFin)
+            .eq('creado_desde_feriado_id', feriadoId)
+            .maybeSingle();
+          
+          if (turnoExistente) {
+            console.log('⚠️ [FERIADO] Turno disponible ya existe para este horario:', horaInicio, '-', horaFin);
+            continue;
+          }
+          
+          // Crear turno disponible directamente (creado_desde_cancelacion_id es nullable)
+          // Los turnos disponibles desde feriados no requieren cancelación previa
+          const { error: errorDisponible } = await supabase
+            .from('turnos_disponibles')
+            .insert({
+              turno_fecha: fechaFormateada, // Usar fecha formateada
+              turno_hora_inicio: horaInicio,
+              turno_hora_fin: horaFin,
+              creado_desde_cancelacion_id: null, // Nullable, no requerido para feriados
+              creado_desde_feriado_id: feriadoId
+            });
 
-          if (!errorDummy && cancelacionDummy) {
-            // Crear turno disponible
-            const { error: errorDisponible } = await supabase
-              .from('turnos_disponibles')
-              .insert({
-                turno_fecha: fechaFormateada, // Usar fecha formateada
-                turno_hora_inicio: horario.hora_inicio,
-                turno_hora_fin: horario.hora_fin,
-                creado_desde_cancelacion_id: cancelacionDummy.id,
-                creado_desde_feriado_id: feriadoId
-              });
-
-            if (errorDisponible) {
-              console.error('❌ [FERIADO] Error creando turno disponible:', errorDisponible);
-            } else {
-              console.log('✅ [FERIADO] Turno disponible creado:', horario);
-            }
+          if (errorDisponible) {
+            console.error('❌ [FERIADO] Error creando turno disponible:', errorDisponible);
+            console.error('❌ [FERIADO] Detalles del error:', JSON.stringify(errorDisponible, null, 2));
+          } else {
+            console.log('✅ [FERIADO] Turno disponible creado exitosamente:', { horaInicio, horaFin, feriadoId });
           }
         }
       }
@@ -538,6 +566,7 @@ export const FeriadosConfigModal = ({
         window.dispatchEvent(new CustomEvent('feriados:updated'));
         window.dispatchEvent(new CustomEvent('turnosCancelados:updated'));
         window.dispatchEvent(new CustomEvent('turnosVariables:updated'));
+        window.dispatchEvent(new CustomEvent('turnosDisponibles:updated'));
         window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
         window.dispatchEvent(new CustomEvent('balance:refresh'));
       }, 500);

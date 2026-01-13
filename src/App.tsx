@@ -848,6 +848,12 @@ const Dashboard = () => {
                                 <span className="text-muted-foreground">Cantidad de clases</span>
                                 <span className="font-medium">{entry.clases}</span>
                               </div>
+                              {entry.ajustes && entry.ajustes.cancelaciones.cantidad > 0 && entry.isCurrent && (
+                                <div className="flex items-center justify-between text-xs text-muted-foreground">
+                                  <span>Clases canceladas</span>
+                                  <span>-{entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}</span>
+                                </div>
+                              )}
                               {entry.descuentoPorcentaje > 0 && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">Descuento</span>
@@ -859,7 +865,7 @@ const Dashboard = () => {
                                   </span>
                                 </div>
                               )}
-                              {entry.ajustes && (
+                              {entry.ajustes && !entry.isCurrent && (
                                 <>
                                   <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground">
@@ -888,6 +894,21 @@ const Dashboard = () => {
                                     </div>
                                   </div>
                                 </>
+                              )}
+                              {entry.ajustes && entry.isCurrent && entry.ajustes.cancelaciones.cantidad > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">
+                                    Descuento por cancelaciones
+                                  </span>
+                                  <div className="text-right">
+                                    <p className="font-medium text-green-500">
+                                      -${formatCurrency(entry.ajustes.cancelaciones.monto)}
+                                    </p>
+                                    <p className="text-[11px] text-muted-foreground">
+                                      {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'} cancelada{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
+                                    </p>
+                                  </div>
+                                </div>
                               )}
                               <div className="border-t pt-2 flex items-center justify-between font-semibold">
                                 <span>Total</span>

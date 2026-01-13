@@ -286,8 +286,14 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
           }
 
-          // Si es el mes actual y no hay clases en la cuota (o es 0), calcular basándose en horarios recurrentes
-          let clases = Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
+          // Obtener clases previstas y canceladas del mes actual
+          const clasesPrevistas = Number(cuota?.clases_previstas ?? 0);
+          const clasesCanceladasAnticipacion = Number(cuota?.clases_canceladas_anticipacion ?? 0);
+          const clasesCanceladasTardia = Number(cuota?.clases_canceladas_tardia ?? 0);
+          
+          // Para el cálculo del balance, usar clases previstas (no clases_a_cobrar)
+          // Las cancelaciones se restarán del total
+          let clases = isCurrent ? clasesPrevistas : Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
           let montoRecalculado = false;
           
           if (isCurrent && clases === 0 && horariosUsuarioData && horariosUsuarioData.length > 0) {
@@ -331,10 +337,27 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             }
           }
           
-          // Si recalculamos las clases, también recalcular el monto
-          const totalBase = montoRecalculado 
-            ? clases * unitPrice 
-            : (cuota?.monto_total !== undefined ? Number(cuota.monto_total) : clases * unitPrice);
+          // Calcular el monto base
+          // Para el mes actual: usar clases_previstas como base, luego se ajustará con cancelaciones y vacantes
+          // Para otros meses: usar monto_total de la cuota
+          let totalBase: number;
+          if (isCurrent) {
+            // Calcular desde clases previstas (base sin ajustes)
+            const montoBaseClasesPrevistas = clasesPrevistas * unitPrice;
+            totalBase = montoBaseClasesPrevistas;
+          } else {
+            // Para meses pasados/futuros, usar monto_total de la cuota
+            totalBase = montoRecalculado 
+              ? clases * unitPrice
+              : (cuota?.monto_total !== undefined 
+                  ? Number(cuota.monto_total) 
+                  : clases * unitPrice);
+          }
+          
+          // Calcular el monto de cancelaciones (solo anticipadas, las tardías se cobran)
+          const montoCancelacionesAnticipadas = isCurrent 
+            ? clasesCanceladasAnticipacion * unitPrice 
+            : 0;
           
           // Si recalculamos el monto base, también recalcular el monto con descuento
           // pero mantener el descuento porcentual si existe
@@ -367,7 +390,46 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             isNext,
           };
 
+          // Para el mes actual, agregar ajustes con cancelaciones y vacantes del mes actual
+          // y actualizar el total sumando las vacantes y restando las cancelaciones
+          if (entry.isCurrent) {
+            // Calcular el monto de vacantes del mes actual
+            const montoVacantesActual = vacantesCount * unitPrice;
+            
+            // Actualizar el total: restar cancelaciones y sumar vacantes
+            const totalConAjustes = totalBase - montoCancelacionesAnticipadas + montoVacantesActual;
+            const totalConDescuentoYAjustes = totalConDescuento - montoCancelacionesAnticipadas + montoVacantesActual;
+            
+            entry.total = totalConAjustes;
+            entry.totalConDescuento = totalConDescuentoYAjustes;
+            
+            // Solo mostrar ajustes si hay cancelaciones o vacantes
+            if (clasesCanceladasAnticipacion > 0 || vacantesCount > 0) {
+              entry.ajustes = {
+                cancelaciones: {
+                  cantidad: clasesCanceladasAnticipacion,
+                  monto: montoCancelacionesAnticipadas,
+                },
+                vacantes: {
+                  cantidad: vacantesCount,
+                  monto: montoVacantesActual,
+                },
+              };
+            }
+          }
+
+          // Para el mes siguiente, agregar ajustes con cancelaciones y vacantes del mes actual
+          // Restar cancelaciones y sumar vacantes del mes actual al total del mes siguiente
           if (entry.isNext) {
+            // Aplicar ajustes del mes actual al mes siguiente:
+            // - Restar cancelaciones (saldo a favor)
+            // - Sumar vacantes (clases adicionales reservadas)
+            const totalConAjustes = totalBase - cancelacionesMonto + vacantesMonto;
+            const totalConDescuentoYAjustes = totalConDescuento - cancelacionesMonto + vacantesMonto;
+            
+            entry.total = totalConAjustes;
+            entry.totalConDescuento = totalConDescuentoYAjustes;
+            
             entry.ajustes = {
               cancelaciones: {
                 cantidad: totalCancelacionesCount,
@@ -549,14 +611,16 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             snapshotToUse = { ...currentFromLoad };
             lockedCurrentSnapshotRef.current = snapshotToUse;
           } else if (snapshotToUse && currentFromLoad) {
-            // Si el snapshot existe y es del mismo mes, solo actualizar el descuento
-            // Mantener bloqueados: clases, monto_total, precioUnitario
-            // Permitir actualizar: descuento, descuentoPorcentaje, monto_con_descuento, totalConDescuento
+            // Si el snapshot existe y es del mismo mes, actualizar valores dinámicos
+            // Mantener bloqueados: clases, precioUnitario (valores base)
+            // Permitir actualizar: descuento, descuentoPorcentaje, monto_con_descuento, totalConDescuento, total, ajustes
             snapshotToUse = {
               ...snapshotToUse,
               descuento: currentFromLoad.descuento,
               descuentoPorcentaje: currentFromLoad.descuentoPorcentaje,
+              total: currentFromLoad.total, // Actualizar total (incluye cancelaciones y vacantes)
               totalConDescuento: currentFromLoad.totalConDescuento,
+              ajustes: currentFromLoad.ajustes, // Actualizar ajustes (cancelaciones y vacantes)
               estadoPago: currentFromLoad.estadoPago, // También permitir actualizar estado de pago
             };
             lockedCurrentSnapshotRef.current = snapshotToUse;

@@ -713,6 +713,18 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     return () => window.removeEventListener('turnosVariables:updated', handler);
   }, []);
 
+  // Escuchar cambios en turnos disponibles (desde feriados con horarios personalizados) - refrescar vista de vacantes
+  useEffect(() => {
+    const handler = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        console.log('📢 [RECURRING_VIEW] Evento turnosDisponibles:updated recibido, recargando turnos disponibles...');
+        await cargarTurnosCancelados(true);
+      }
+    };
+    window.addEventListener('turnosDisponibles:updated', handler);
+    return () => window.removeEventListener('turnosDisponibles:updated', handler);
+  }, []);
+
   // Escuchar cambios en clases del mes (desde admin, especialmente feriados) - solo si la página está visible
   useEffect(() => {
     const handler = async () => {
