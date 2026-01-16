@@ -537,34 +537,56 @@ const Dashboard = () => {
 
     const cargarVacantesCount = async () => {
       try {
-        const fechaHoy = new Date().toISOString().split('T')[0];
+        const fechaHoy = new Date();
+        const fechaManana = new Date();
+        fechaManana.setDate(fechaManana.getDate() + 1);
+        const fechaMananaStr = fechaManana.toISOString().split('T')[0];
         
-        // Obtener turnos disponibles
-        const { data: turnosDisponibles, error: errorDisponibles } = await supabase
-          .from('turnos_disponibles')
-          .select('id')
-          .gte('turno_fecha', fechaHoy);
+        // Calcular el último día del mes actual
+        const ultimoDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 1, 0);
+        const fechaHastaStr = ultimoDiaMes.toISOString().split('T')[0];
+        
+        // Obtener todas las clases disponibles del mes actual usando la función SQL
+        const { data: clasesDisponibles, error: errorClases } = await supabase
+          .rpc('obtener_clases_disponibles', {
+            p_fecha_desde: fechaMananaStr,
+            p_fecha_hasta: fechaHastaStr
+          });
 
-        if (errorDisponibles) {
-          console.error('Error cargando turnos disponibles:', errorDisponibles);
+        if (errorClases) {
+          console.error('Error cargando clases disponibles:', errorClases);
           return;
         }
 
-        // Obtener turnos ya reservados por el usuario
+        // Obtener turnos ya reservados por el usuario del mes actual
         const { data: turnosReservados, error: errorReservados } = await supabase
           .from('turnos_variables')
-          .select('creado_desde_disponible_id')
+          .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
           .eq('cliente_id', user.id)
-          .eq('estado', 'confirmada');
+          .eq('estado', 'confirmada')
+          .gte('turno_fecha', fechaMananaStr)
+          .lte('turno_fecha', fechaHastaStr);
 
         if (errorReservados) {
           console.error('Error cargando turnos reservados:', errorReservados);
           return;
         }
 
-        const idsReservados = new Set(turnosReservados?.map(r => r.creado_desde_disponible_id) || []);
-        const disponibles = (turnosDisponibles || []).filter(t => !idsReservados.has(t.id));
-        const count = disponibles.length;
+        // Crear un Set de turnos reservados por el usuario
+        const turnosReservadosSet = new Set(
+          (turnosReservados || []).map(r => 
+            `${r.turno_fecha}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
+          )
+        );
+
+        // Contar cupos disponibles excluyendo los ya reservados por el usuario
+        let count = 0;
+        (clasesDisponibles || []).forEach((clase) => {
+          const turnoKey = `${clase.turno_fecha}_${clase.turno_hora_inicio}_${clase.turno_hora_fin}`;
+          if (!turnosReservadosSet.has(turnoKey)) {
+            count += clase.cupos_disponibles;
+          }
+        });
         
         setVacantesCount(count);
         // Guardar en caché
@@ -602,6 +624,26 @@ const Dashboard = () => {
           const cachedTime2 = vacantesCountCacheRef.current;
           // Solo recargar si ha pasado más de 1 minuto desde la última carga
           if (!cachedTime2.timestamp || (nowTime2 - cachedTime2.timestamp) > 60000) {
+            cargarVacantesCount();
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario' }, () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          const nowTime3 = Date.now();
+          const cachedTime3 = vacantesCountCacheRef.current;
+          // Solo recargar si ha pasado más de 1 minuto desde la última carga
+          if (!cachedTime3.timestamp || (nowTime3 - cachedTime3.timestamp) > 60000) {
+            cargarVacantesCount();
+          }
+        }
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_semanales' }, () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          const nowTime4 = Date.now();
+          const cachedTime4 = vacantesCountCacheRef.current;
+          // Solo recargar si ha pasado más de 1 minuto desde la última carga
+          if (!cachedTime4.timestamp || (nowTime4 - cachedTime4.timestamp) > 60000) {
             cargarVacantesCount();
           }
         }
@@ -971,51 +1013,44 @@ const Dashboard = () => {
               );
             })()}
 
-            {/* Navbar móvil flotante (siempre visible en mobile) */}
-            <div className="block sm:hidden">
-              <nav className="fixed bottom-4 left-0 right-0 z-40 pointer-events-none">
-                <div className="max-w-7xl mx-auto px-6 flex justify-center">
-                  <div className="flex items-center gap-2 bg-black/40 backdrop-blur-lg rounded-full shadow-lg pointer-events-auto px-3 py-1.5">
-                    {/* Mis Clases */}
-                    <button
-                      onClick={() => setActiveTab('clases')}
-                      className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                        activeTab === 'clases' ? 'text-white' : 'text-muted-foreground'
-                      }`}
-                      aria-current={activeTab === 'clases'}
-                    >
-                      <Dumbbell className={`h-5 w-5 ${activeTab === 'clases' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                      {activeTab === 'clases' && <span className="leading-none">Mis Clases</span>}
-                      {activeTab === 'clases' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                    </button>
-                    {/* Vacantes */}
-                    <button
-                      onClick={() => setActiveTab('vacantes')}
-                      className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                        activeTab === 'vacantes' ? 'text-white' : 'text-muted-foreground'
-                      }`}
-                      aria-current={activeTab === 'vacantes'}
-                    >
-                      <Zap className={`h-5 w-5 ${activeTab === 'vacantes' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                      {activeTab === 'vacantes' && <span className="leading-none">Vacantes</span>}
-                      {activeTab === 'vacantes' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                    </button>
-                    {/* Balance */}
-                    <button
-                      onClick={() => setActiveTab('balance')}
-                      className={`relative flex flex-col items-center justify-center w-20 py-1.5 text-[10px] font-medium transition-colors ${
-                        activeTab === 'balance' ? 'text-white' : 'text-muted-foreground'
-                      }`}
-                      aria-current={activeTab === 'balance'}
-                    >
-                      <Wallet className={`h-5 w-5 ${activeTab === 'balance' ? 'text-white mb-1' : 'text-muted-foreground'}`} />
-                      {activeTab === 'balance' && <span className="leading-none">Balance</span>}
-                      {activeTab === 'balance' && <span className="absolute -bottom-0.5 h-0.5 w-8 rounded-full bg-accent-foreground/80" />}
-                    </button>
-                  </div>
-                </div>
-              </nav>
-            </div>
+            {/* Navbar móvil (fija en bottom, solo visible en mobile) */}
+            <nav className="block sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
+              <div className="grid grid-cols-3 h-16">
+                {/* Mis Clases */}
+                <button
+                  onClick={() => setActiveTab('clases')}
+                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                    activeTab === 'clases' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-current={activeTab === 'clases'}
+                >
+                  <Dumbbell className="h-5 w-5" />
+                  <span className="text-[10px] font-medium">Mis Clases</span>
+                </button>
+                {/* Vacantes */}
+                <button
+                  onClick={() => setActiveTab('vacantes')}
+                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                    activeTab === 'vacantes' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-current={activeTab === 'vacantes'}
+                >
+                  <Zap className="h-5 w-5" />
+                  <span className="text-[10px] font-medium">Vacantes</span>
+                </button>
+                {/* Balance */}
+                <button
+                  onClick={() => setActiveTab('balance')}
+                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                    activeTab === 'balance' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-current={activeTab === 'balance'}
+                >
+                  <Wallet className="h-5 w-5" />
+                  <span className="text-[10px] font-medium">Balance</span>
+                </button>
+              </div>
+            </nav>
           </div>
         )}
       </main>
