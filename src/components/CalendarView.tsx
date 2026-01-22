@@ -231,9 +231,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     fetchTurnos();
     cargarAusenciasAdmin(); // Cargar ausencias del admin
     cargarFeriados(); // Cargar feriados
+    // Cargar slots para admin y usuarios (necesario para mostrar horarios correctos en feriados)
+    fetchAdminSlots();
     if (isAdminView) {
       fetchAlumnosHorarios();
-      fetchAdminSlots();
     }
   }, [currentDate, isAdminView]);
 

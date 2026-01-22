@@ -265,6 +265,11 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               'Límite de registros alcanzado', 
               'Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.'
             );
+          } else if (errorMsg.toLowerCase().includes('error sending confirmation email') || errorMsg.toLowerCase().includes('email') && errorMsg.toLowerCase().includes('send')) {
+            showError(
+              'Error al enviar email de confirmación',
+              'No se pudo enviar el email de confirmación. Por favor, contacta al administrador o intenta más tarde.'
+            );
           } else {
             showError('Error al crear cuenta', errorMsg);
           }
@@ -273,7 +278,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
         
-        // Mostrar mensaje de éxito ANTES de cambiar el estado
+        // Mostrar mensaje de éxito
         showSuccess('Correo enviado', 'Revisa tu casilla de correo para confirmar tu cuenta. La cuenta se creará una vez que confirmes el email.');
         
         // Pequeño delay para que el toast se muestre

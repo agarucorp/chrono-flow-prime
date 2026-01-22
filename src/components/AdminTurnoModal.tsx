@@ -45,7 +45,7 @@ interface AdminTurnoModalProps {
 
 export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: AdminTurnoModalProps) => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
-  const { obtenerCapacidadActual } = useSystemConfig();
+  const { obtenerCapacidadActual, obtenerCapacidadPorHorario } = useSystemConfig();
 
   const [clientes, setClientes] = useState<AdminUser[]>([]);
   const [clienteSeleccionado, setClienteSeleccionado] = useState<string>('');
@@ -210,10 +210,13 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
 
       setClientesReservados(todosLosClientes);
 
-      // Calcular capacidad disponible usando capacidad global
+      // Calcular capacidad disponible usando capacidad específica de la clase
       // Solo contar clientes activos (no cancelados)
       const clientesActivos = todosLosClientes.filter(c => !c.cancelado);
-      const maxAlumnos = obtenerCapacidadActual() || 4;
+      // Obtener capacidad del horario del turno
+      const fechaTurno = turno.fecha ? new Date(turno.fecha) : new Date();
+      const diaSemana = fechaTurno.getDay() === 0 ? 7 : fechaTurno.getDay();
+      const maxAlumnos = await obtenerCapacidadPorHorario(turno.hora_inicio, turno.hora_fin, diaSemana) || 4;
       setCapacidadDisponible(Math.max(0, maxAlumnos - clientesActivos.length));
     } catch (error) {
       console.error('Error cargando reservas:', error);

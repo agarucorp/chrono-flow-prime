@@ -127,14 +127,18 @@ export const useAuth = () => {
       })
       
       return { success: true, user: data.user }
-    } catch (error) {
+    } catch (error: any) {
       const errorMessage = error instanceof Error ? error.message : 'Error al iniciar sesión'
       
-      // Detectar errores de conexión/red
-      const isNetworkError = errorMessage.includes('Failed to fetch') || 
-                             errorMessage.includes('ERR_NAME_NOT_RESOLVED') ||
-                             errorMessage.includes('NetworkError') ||
-                             (error instanceof TypeError && errorMessage.includes('fetch'))
+      // Detectar errores de conexión/red REALES (no errores HTTP del servidor)
+      // Solo errores de red del navegador, no errores 500/400/etc del servidor
+      const isNetworkError = (
+        errorMessage.includes('Failed to fetch') || 
+        errorMessage.includes('ERR_NAME_NOT_RESOLVED') ||
+        errorMessage.includes('NetworkError') ||
+        (error instanceof TypeError && errorMessage.includes('fetch')) ||
+        (error?.code === 'ECONNREFUSED' || error?.code === 'ENOTFOUND' || error?.code === 'ETIMEDOUT')
+      ) && !error?.status && !error?.response // No es un error HTTP del servidor
       
       const finalErrorMessage = isNetworkError 
         ? 'Conexión con la base de datos caída. Inténtalo de nuevo más tarde'
@@ -182,7 +186,7 @@ export const useAuth = () => {
     }
     localStorage.setItem('lastSignUpAttempt', Date.now().toString());
 
-    const attempt = async (triesLeft: number, delayMs: number, attemptNumber: number = 1): Promise<{ success: boolean; user?: any; error?: string }> => {
+    const attempt = async (triesLeft: number, delayMs: number, attemptNumber: number = 1): Promise<{ success: boolean; user?: any; error?: string; warning?: string }> => {
       try {
         const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
           email,
@@ -192,7 +196,11 @@ export const useAuth = () => {
           }
         };
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
-        if (error) throw error;
+        
+        // Si hay un error, NO permitir la creación - el flujo requiere confirmación de email
+        if (error) {
+          throw error;
+        }
 
         // Limpiar el timestamp de último intento al tener éxito
         localStorage.removeItem('lastSignUpAttempt');
@@ -212,12 +220,30 @@ export const useAuth = () => {
           return attempt(triesLeft - 1, delayMs * 1.5, attemptNumber + 1);
         }
         
-        // Mensaje de error más claro para rate limit
-        let errorMessage = 'Error al registrarse';
+        // Detectar errores específicos y mostrar mensajes amigables (sin mencionar Supabase)
+        const errorMsg = err?.message || err?.error?.message || '';
+        const errorCode = err?.status || err?.code || err?.statusCode || err?.error?.code;
+        const errorMsgLower = errorMsg.toLowerCase();
+        
+        // Mensaje de error más claro para diferentes tipos de errores
+        let errorMessage = 'Error al registrarse. Por favor, intenta nuevamente.';
+        
         if (isRateLimit(err)) {
-          errorMessage = 'Límite de registros alcanzado. Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.';
+          errorMessage = 'Límite de registros alcanzado. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.';
+        } else if (
+          errorCode === 451 || 
+          errorMsgLower.includes('maximum credits exceeded') ||
+          errorMsgLower.includes('credits exceeded') ||
+          errorMsgLower.includes('451')
+        ) {
+          errorMessage = 'El servicio de envío de emails no está disponible en este momento. Por favor, contacta al administrador o intenta más tarde.';
+        } else if (
+          errorMsgLower.includes('error sending confirmation email') ||
+          (errorMsgLower.includes('email') && errorMsgLower.includes('send'))
+        ) {
+          errorMessage = 'No se pudo enviar el email de confirmación. Por favor, contacta al administrador o intenta más tarde.';
         } else {
-          errorMessage = err instanceof Error ? err.message : 'Error al registrarse';
+          errorMessage = err instanceof Error ? err.message : 'Error al registrarse. Por favor, intenta nuevamente.';
         }
         
         setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));

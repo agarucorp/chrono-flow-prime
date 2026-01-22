@@ -349,7 +349,44 @@ export const useSystemConfig = () => {
   };
 
   const obtenerCapacidadActual = () => {
+    // Mantener retrocompatibilidad - devolver capacidad por defecto
+    // NOTA: Esta función está deprecada, usar obtenerCapacidadPorHorario en su lugar
     return configuracionCapacidad.find(c => c.activo)?.max_alumnos_por_clase || 4;
+  };
+
+  // Obtener capacidad de una clase específica por horario
+  const obtenerCapacidadPorHorario = async (horaInicio: string, horaFin: string, diaSemana?: number) => {
+    try {
+      // Buscar el horario en horarios_semanales
+      let query = supabase
+        .from('horarios_semanales')
+        .select('capacidad, clase_numero')
+        .eq('hora_inicio', horaInicio)
+        .eq('hora_fin', horaFin)
+        .eq('activo', true)
+        .limit(1);
+
+      // Si se proporciona día de la semana, filtrar por él
+      if (diaSemana !== undefined) {
+        query = query.eq('dia_semana', diaSemana);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error obteniendo capacidad por horario:', error);
+        return 4; // Valor por defecto
+      }
+
+      if (data && data.length > 0) {
+        return data[0].capacidad || 4;
+      }
+
+      return 4; // Valor por defecto si no se encuentra
+    } catch (error) {
+      console.error('Error inesperado obteniendo capacidad por horario:', error);
+      return 4; // Valor por defecto
+    }
   };
 
   const obtenerHorariosActivos = () => {
@@ -395,6 +432,7 @@ export const useSystemConfig = () => {
     obtenerConfiguracion,
     obtenerTarifaActual,
     obtenerCapacidadActual,
+    obtenerCapacidadPorHorario,
     obtenerHorariosActivos,
     obtenerAusenciasActivas,
     cargarConfiguraciones
