@@ -54,10 +54,19 @@ const formatDate = (dateString: string) => {
   return `${day}/${month}/${year}`;
 };
 
+interface CapacidadClase {
+  clase_numero: number;
+  hora_inicio: string;
+  hora_fin: string;
+  capacidad: number;
+}
+
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
-  const [capacidadMaximaGlobal, setCapacidadMaximaGlobal] = useState('4');
+  
+  // Capacidades por clase (9 clases)
+  const [capacidadesClases, setCapacidadesClases] = useState<Record<number, number>>({});
   
   // Tarifas escalonadas (valores se cargan desde BD)
   const [combo1Tarifa, setCombo1Tarifa] = useState('12500');
@@ -78,8 +87,6 @@ export const TurnoManagement = () => {
   ]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
-  const [isCapacidadDialogOpen, setIsCapacidadDialogOpen] = useState(false);
-  const [capacidadValor, setCapacidadValor] = useState<string>('');
   const [horariosSemanales, setHorariosSemanales] = useState<HorarioSemanal[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
   const [isTarifaDialogOpen, setIsTarifaDialogOpen] = useState(false);
@@ -119,13 +126,39 @@ export const TurnoManagement = () => {
     cargarTarifas();
   }, []);
 
-  // Cargar capacidad real al montar
-  useEffect(() => {
-    if (configuracionCapacidad && configuracionCapacidad.length > 0) {
-      const capacidadActual = configuracionCapacidad[0].max_alumnos_por_clase;
-      setCapacidadMaximaGlobal(capacidadActual.toString());
+  // Cargar capacidades de cada clase desde BD
+  const cargarCapacidadesClases = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('clase_numero, capacidad, hora_inicio, hora_fin')
+        .eq('activo', true)
+        .eq('dia_semana', 1) // Usar lunes como referencia (todas las clases tienen la misma capacidad todos los días)
+        .order('clase_numero');
+
+      if (error) {
+        console.error('Error cargando capacidades de clases:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const capacidades: Record<number, number> = {};
+        data.forEach((clase: any) => {
+          capacidades[clase.clase_numero] = clase.capacidad;
+        });
+        setCapacidadesClases(capacidades);
+      }
+    } catch (error) {
+      console.error('Error inesperado cargando capacidades:', error);
     }
-  }, [configuracionCapacidad]);
+  };
+
+  // Cargar capacidades al abrir el dialog
+  useEffect(() => {
+    if (isDialogOpen) {
+      cargarCapacidadesClases();
+    }
+  }, [isDialogOpen]);
 
   // Cargar horarios desde BD cuando se abre el dialog
   const cargarHorariosDesdeDB = async () => {
@@ -181,11 +214,6 @@ export const TurnoManagement = () => {
     } finally {
       setLoadingHorarios(false);
     }
-  };
-
-  const abrirCapacidad = async () => {
-    await cargarHorariosSemanales();
-    setIsCapacidadDialogOpen(true);
   };
 
   const actualizarCapacidadHorario = async (horarioId: string, nuevaCapacidad: number) => {
@@ -330,31 +358,6 @@ export const TurnoManagement = () => {
   };
 
   const handleGuardarHorarios = async () => {
-    const nuevaCapacidad = parseInt(capacidadMaximaGlobal);
-    
-    // Validar capacidad
-    const validacion = await validarCapacidad(nuevaCapacidad);
-    
-    if (!validacion.valido) {
-      if (validacion.conflictos.length > 0) {
-        // Mostrar alerta de conflictos
-        const conflictosText = validacion.conflictos.map(c => 
-          `${c.diaNombre} ${c.hora_inicio.substring(0,5)} (${c.alumnos_agendados} alumnos)`
-        ).join('\n');
-        
-        if (!confirm(`⚠️ ADVERTENCIA: La nueva capacidad (${nuevaCapacidad}) es menor que el número actual de alumnos agendados en:\n\n${conflictosText}\n\n¿Está seguro de continuar? Esto podría afectar el funcionamiento del sistema.`)) {
-          return; // Usuario canceló
-        }
-      } else {
-        toast({ 
-          title: 'Error', 
-          description: validacion.error || 'Error validando capacidad', 
-          variant: 'destructive' 
-        });
-        return;
-      }
-    }
-
     try {
       // Calcular horarios de apertura y cierre basándose en los horarios del popup
       const horariosInicio = horariosFijos.map(h => h.horaInicio).sort();
@@ -362,9 +365,8 @@ export const TurnoManagement = () => {
       const horarioApertura = horariosInicio[0] || '08:00';
       const horarioCierre = horariosFin[horariosFin.length - 1] || '20:00';
 
-      // Preparar datos para actualizar configuracion_admin
+      // Preparar datos para actualizar configuracion_admin (sin capacidad global)
       const updateData: any = {
-        max_alumnos_por_clase: nuevaCapacidad,
         horario_apertura: horarioApertura,
         horario_cierre: horarioCierre,
         updated_at: new Date().toISOString()
@@ -439,12 +441,12 @@ export const TurnoManagement = () => {
 
           if (existente) {
             // Actualizar el horario existente (las horas pueden cambiar, pero clase_numero es fijo)
+            // NO actualizar capacidad aquí - se maneja individualmente por clase
             const { error: errorUpd } = await supabase
               .from('horarios_semanales')
               .update({ 
                 hora_inicio: hi, 
                 hora_fin: hf, 
-                capacidad: nuevaCapacidad, 
                 activo: true, 
                 updated_at: nowIso 
               })
@@ -456,6 +458,8 @@ export const TurnoManagement = () => {
             }
           } else {
             // Insertar nuevo slot con clase_numero
+            // Usar la capacidad de la clase desde capacidadesClases, o 4 por defecto
+            const capacidadClase = capacidadesClases[claseNumero] || 4;
             const { error: errorIns } = await supabase
               .from('horarios_semanales')
               .insert({ 
@@ -463,7 +467,7 @@ export const TurnoManagement = () => {
                 clase_numero: claseNumero,
                 hora_inicio: hi, 
                 hora_fin: hf, 
-                capacidad: nuevaCapacidad, 
+                capacidad: capacidadClase, 
                 activo: true, 
                 updated_at: nowIso 
               });
@@ -496,52 +500,49 @@ export const TurnoManagement = () => {
     }
   };
 
-  const handleGuardarCapacidadMaxima = async () => {
+  // Actualizar capacidad de una clase específica
+  const handleActualizarCapacidadClase = async (claseNumero: number, nuevaCapacidad: number) => {
     try {
-      const nuevaCapacidad = parseInt(capacidadMaximaGlobal);
-      
-      // 1. Actualizar configuracion_admin
-      const { error: errorConfig } = await supabase
-        .from('configuracion_admin')
-        .update({ 
-          max_alumnos_por_clase: nuevaCapacidad,
-          updated_at: new Date().toISOString()
-        })
-        .eq('sistema_activo', true);
-
-      if (errorConfig) {
-        console.error('Error actualizando configuracion_admin:', errorConfig);
-        throw errorConfig;
-      }
-
-      // 2. Actualizar todos los horarios_semanales con la nueva capacidad
-      const { error: errorHorarios } = await supabase
+      // Actualizar todos los horarios de esa clase (todos los días de la semana)
+      const { error } = await supabase
         .from('horarios_semanales')
         .update({ 
           capacidad: nuevaCapacidad,
           updated_at: new Date().toISOString()
         })
+        .eq('clase_numero', claseNumero)
         .eq('activo', true);
 
-      if (errorHorarios) {
-        console.error('Error actualizando horarios_semanales:', errorHorarios);
-        // No lanzar error, solo loguear - la capacidad global ya se actualizó
+      if (error) {
+        console.error(`Error actualizando capacidad de clase ${claseNumero}:`, error);
+        toast({ 
+          title: 'Error', 
+          description: `No se pudo actualizar la capacidad de la Clase ${claseNumero}`, 
+          variant: 'destructive' 
+        });
+        return;
       }
 
-      toast({ title: 'Guardado', description: 'Capacidad máxima actualizada globalmente' });
+      // Actualizar estado local
+      setCapacidadesClases(prev => ({
+        ...prev,
+        [claseNumero]: nuevaCapacidad
+      }));
+
+      toast({ 
+        title: 'Guardado', 
+        description: `Capacidad de Clase ${claseNumero} actualizada a ${nuevaCapacidad}` 
+      });
       
       // Disparar evento para actualizar otros componentes
       window.dispatchEvent(new Event('capacidad:updated'));
-      
-      // Recargar configuración
-      await actualizarConfiguracionCapacidad({
-        tipo_clase: 'general',
-        max_alumnos_por_clase: nuevaCapacidad,
-        activo: true
-      });
     } catch (error) {
-      console.error('Error actualizando capacidad máxima:', error);
-      toast({ title: 'Error', description: 'No se pudo actualizar la capacidad máxima', variant: 'destructive' });
+      console.error(`Error inesperado actualizando capacidad de clase ${claseNumero}:`, error);
+      toast({ 
+        title: 'Error', 
+        description: 'Error inesperado al actualizar la capacidad', 
+        variant: 'destructive' 
+      });
     }
   };
 
@@ -759,25 +760,44 @@ export const TurnoManagement = () => {
                   </DialogHeader>
                   
                   <div className="space-y-4">
-                    {/* Card para capacidad por clase */}
-                    <div className="p-3 border border-border rounded-lg bg-muted/50">
-                      <div className="flex items-center justify-center gap-4">
-                        <Label htmlFor="capacidad-maxima" className="whitespace-nowrap" style={{ fontSize: '12px' }}>Capacidad por clase</Label>
-                        <Select
-                          value={capacidadMaximaGlobal}
-                          onValueChange={(value) => setCapacidadMaximaGlobal(value)}
-                        >
-                          <SelectTrigger className="w-20 text-center" style={{ fontSize: '12px' }}>
-                            <SelectValue placeholder="Elegir" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
-                              <SelectItem key={num} value={num.toString()} style={{ fontSize: '12px' }}>
-                                {num}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                    {/* Card para capacidad por clase - Lista de las 9 clases */}
+                    <div className="p-4 border border-border rounded-lg bg-muted/50">
+                      <div className="text-center mb-3">
+                        <Label className="font-semibold" style={{ fontSize: '13px' }}>Capacidad por clase</Label>
+                        <p className="text-xs text-muted-foreground mt-1">Configura la capacidad máxima para cada clase</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {horariosFijos.map((horario) => (
+                          <div key={horario.id} className="flex items-center justify-between gap-2 p-2 border rounded-md bg-background">
+                            <div className="flex-1 min-w-0">
+                              <Label className="text-xs font-medium block truncate">
+                                {horario.nombre}
+                              </Label>
+                              <span className="text-[10px] text-muted-foreground">
+                                {horario.horaInicio} - {horario.horaFin}
+                              </span>
+                            </div>
+                            <Select
+                              value={capacidadesClases[horario.id]?.toString() || '4'}
+                              onValueChange={(value) => {
+                                const nuevaCapacidad = parseInt(value);
+                                handleActualizarCapacidadClase(horario.id, nuevaCapacidad);
+                              }}
+                            >
+                              <SelectTrigger className="w-16 h-8 text-center" style={{ fontSize: '12px' }}>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30].map((num) => (
+                                  <SelectItem key={num} value={num.toString()} style={{ fontSize: '12px' }}>
+                                    {num}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        ))}
                       </div>
                     </div>
 
@@ -955,7 +975,11 @@ export const TurnoManagement = () => {
                     >
                       Cancelar
                     </Button>
-                    <Button onClick={handleGuardarHorarios} style={{ fontSize: '12px' }}>
+                    <Button 
+                      onClick={handleGuardarHorarios} 
+                      style={{ fontSize: '12px' }}
+                      className="bg-white text-black hover:bg-gray-100 border border-gray-300"
+                    >
                       Guardar
                     </Button>
                   </DialogFooter>

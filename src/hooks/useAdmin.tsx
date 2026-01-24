@@ -12,6 +12,7 @@ export interface AdminUser {
   role: 'client' | 'admin';
   created_at: string;
   is_active?: boolean;
+  fecha_desactivacion?: string | null;
   horarios_recurrentes?: {
     turno_nombre: string;
     dias_semana: string[];

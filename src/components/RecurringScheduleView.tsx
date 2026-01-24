@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate, startOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDay, getDate, startOfDay, addDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
@@ -34,6 +34,7 @@ interface HorarioRecurrente {
   bloqueada?: boolean;
   nombre_clase?: string;
   esVariable?: boolean; // Para identificar turnos variables
+  tipoCancelacion?: 'usuario' | 'admin' | 'sistema'; // Tipo de cancelación para mostrar correctamente
 }
 
 interface ClaseDelDia {
@@ -71,6 +72,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [turnosReservados, setTurnosReservados] = useState<any[]>([]);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [activeView, setActiveView] = useState<'mis-clases' | 'turnos-disponibles' | 'perfil'>(initialView);
+  
+  // Estados para calendario de vacantes
+  const [selectedVacantesDate, setSelectedVacantesDate] = useState<Date | null>(null);
+  const [showVacantesDayModal, setShowVacantesDayModal] = useState(false);
+  const [vacantesCalendarMonth, setVacantesCalendarMonth] = useState(new Date());
+  const [horariosSemanales, setHorariosSemanales] = useState<Array<{ dia_semana: number; hora_inicio: string; hora_fin: string; clase_numero?: number }>>([]);
   
   // Refs para rastrear qué vistas ya han sido cargadas (persisten entre renders)
   const misClasesLoadedRef = useRef<boolean>(false);
@@ -179,13 +186,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
     // Si se cambia a vacantes, recargar siempre para asegurar datos frescos
     else if (view === 'turnos-disponibles') {
-      if (!turnosDisponiblesLoadedRef.current) {
+      try {
         setLoadingTurnosCancelados(true);
         cargarTurnosCancelados(true, true);
         turnosDisponiblesLoadedRef.current = true;
-      } else {
-        // Si ya están cargados, refrescar sin loading
-        cargarTurnosCancelados(false, false);
+      } catch (error) {
+        console.error('Error al cambiar a vista de vacantes:', error);
         setLoadingTurnosCancelados(false);
       }
     }
@@ -389,8 +395,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // Cargar turnos cancelados disponibles
   const cargarTurnosCancelados = async (forceReload = false, showLoading = false) => {
     if (!user?.id) {
+      console.log('⚠️ cargarTurnosCancelados: No hay user.id, abortando');
       return;
     }
+    
+    console.log('🔄 cargarTurnosCancelados iniciado', { forceReload, showLoading, activeView });
     
     // Actualizar timestamp cuando se cargan datos
     if (forceReload || !turnosCancelados.length) {
@@ -402,41 +411,59 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       setLoadingTurnosCancelados(true);
     }
     try {
-      // Obtener todos los turnos cancelados disponibles con el cliente que canceló
-      const fechaHoy = format(new Date(), 'yyyy-MM-dd');
+      // Obtener todas las clases disponibles usando la función SQL
+      const fechaHoy = new Date();
+      const fechaManana = format(addDays(fechaHoy, 1), 'yyyy-MM-dd');
       
-      const turnosDisponiblesPromise = supabase
-        .from('turnos_disponibles')
-        .select('*')
-        .gte('turno_fecha', fechaHoy)
-        .order('turno_fecha', { ascending: true })
-        .order('turno_hora_inicio', { ascending: true });
+      // Calcular el último día del mes actual
+      const ultimoDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 1, 0);
+      const fechaHasta = format(ultimoDiaMes, 'yyyy-MM-dd');
+      
+      // Llamar a la función SQL que calcula todas las clases disponibles del mes actual
+      const { data: clasesDisponibles, error: errorClases } = await supabase
+        .rpc('obtener_clases_disponibles', {
+          p_fecha_desde: fechaManana,
+          p_fecha_hasta: fechaHasta
+        });
 
-      // Obtener turnos reservados por el usuario en paralelo
-      const turnosReservadosPromise = supabase
-        .from('turnos_variables')
-        .select('creado_desde_disponible_id')
-        .eq('cliente_id', user.id)
-        .eq('estado', 'confirmada');
+      if (errorClases) {
+        console.error('❌ Error al cargar clases disponibles:', errorClases);
+        setLoadingTurnosCancelados(false);
+        setTurnosCancelados([]); // Asegurar que el array esté vacío en caso de error
+        return;
+      }
 
-      // Ejecutar ambas consultas en paralelo
-      const [{ data, error }, { data: reservados, error: errorReservados }] = await Promise.all([
-        turnosDisponiblesPromise,
-        turnosReservadosPromise
-      ]);
-
-      if (error) {
-        console.error('❌ Error al cargar turnos cancelados:', error);
+      // Si no hay datos, asegurar que el array esté vacío
+      if (!clasesDisponibles || clasesDisponibles.length === 0) {
+        setTurnosCancelados([]);
         setLoadingTurnosCancelados(false);
         return;
       }
+
+      // Obtener turnos reservados por el usuario del mes actual
+      const { data: reservados, error: errorReservados } = await supabase
+        .from('turnos_variables')
+        .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
+        .eq('cliente_id', user.id)
+        .eq('estado', 'confirmada')
+        .gte('turno_fecha', fechaManana)
+        .lte('turno_fecha', fechaHasta);
 
       if (errorReservados) {
         console.error('Error al cargar turnos reservados:', errorReservados);
       }
 
-      // Obtener información de quién canceló cada turno en una sola consulta
-      const idsCancelaciones = (data || []).map(t => t.creado_desde_cancelacion_id);
+      // Crear un Set de turnos reservados por el usuario para verificación rápida
+      const turnosReservadosSet = new Set(
+        (reservados || []).map(r => 
+          `${r.turno_fecha}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
+        )
+      );
+
+      // Obtener información de cancelaciones si existen
+      const idsCancelaciones = (clasesDisponibles || [])
+        .filter(c => c.creado_desde_cancelacion_id)
+        .map(c => c.creado_desde_cancelacion_id);
       
       let cancelaciones = [];
       if (idsCancelaciones.length > 0) {
@@ -458,27 +485,120 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         cancelacionesMap.set(c.id, c);
       });
 
-      const idsReservados = new Set(reservados?.map(r => r.creado_desde_disponible_id) || []);
+      // Expandir cada clase disponible en múltiples entradas según cupos disponibles
+      const turnosExpandidos: any[] = [];
+      (clasesDisponibles || []).forEach((clase) => {
+        const turnoKey = `${clase.turno_fecha}_${clase.turno_hora_inicio}_${clase.turno_hora_fin}`;
+        const estaReservado = turnosReservadosSet.has(turnoKey);
+        
+        // Solo agregar si no está reservado por este usuario
+        if (!estaReservado) {
+          const cancelacion = clase.creado_desde_cancelacion_id 
+            ? cancelacionesMap.get(clase.creado_desde_cancelacion_id)
+            : null;
+          
+          // Crear una entrada por cada cupo disponible
+          for (let i = 0; i < clase.cupos_disponibles; i++) {
+            turnosExpandidos.push({
+              id: clase.turno_disponible_id || `virtual_${clase.turno_fecha}_${clase.turno_hora_inicio}_${i}`,
+              turno_fecha: clase.turno_fecha,
+              turno_hora_inicio: clase.turno_hora_inicio,
+              turno_hora_fin: clase.turno_hora_fin,
+              capacidad_total: clase.capacidad_total,
+              alumnos_reservados: clase.alumnos_reservados,
+              cupos_disponibles: clase.cupos_disponibles,
+              clase_numero: clase.clase_numero,
+              dia_semana: clase.dia_semana,
+              es_cancelacion: clase.es_cancelacion,
+              creado_desde_cancelacion_id: clase.creado_desde_cancelacion_id,
+              creado_desde_feriado_id: clase.creado_desde_feriado_id,
+              cliente_que_cancelo: cancelacion?.cliente_id,
+              tipo_cancelacion: cancelacion?.tipo_cancelacion,
+              reservado: false,
+              canceladoPorUsuario: cancelacion?.cliente_id === user.id,
+              es_virtual: !clase.turno_disponible_id // Marcar si es una entrada virtual (no existe en turnos_disponibles)
+            });
+          }
+        }
+      });
 
-      // Combinar datos y marcar como reservados
-      const turnosFiltrados = (data || []).map((turno) => {
-        const cancelacion = cancelacionesMap.get(turno.creado_desde_cancelacion_id);
-        return {
-          ...turno,
-          cliente_que_cancelo: cancelacion?.cliente_id,
-          tipo_cancelacion: cancelacion?.tipo_cancelacion,
-          reservado: idsReservados.has(turno.id),
-          canceladoPorUsuario: cancelacion?.cliente_id === user.id
-        };
-      }).filter(turno => !turno.reservado); // Excluir los que ya están reservados
-
-      setTurnosCancelados(turnosFiltrados);
+      console.log('✅ cargarTurnosCancelados completado', { turnosExpandidos: turnosExpandidos.length });
+      setTurnosCancelados(turnosExpandidos);
     } catch (error) {
-      console.error('Error al cargar turnos cancelados:', error);
-    } finally {
+      console.error('❌ Error al cargar turnos cancelados:', error);
+      setTurnosCancelados([]); // Asegurar que el array esté vacío en caso de error
       setLoadingTurnosCancelados(false);
     }
   };
+
+  // Agrupar turnos por fecha y clase (por horario único) - debe estar al nivel superior del componente
+  const turnosPorFecha = useMemo(() => {
+    try {
+      if (!turnosCancelados || !Array.isArray(turnosCancelados) || turnosCancelados.length === 0) {
+        return {};
+      }
+
+      const grouped: Record<string, { turnos: typeof turnosCancelados; tieneCupos: boolean }> = {};
+      turnosCancelados
+        .filter(turno => turno && !turno.reservado && turno.turno_fecha)
+        .forEach(turno => {
+          const fechaStr = turno.turno_fecha;
+          const claseKey = `${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+          const key = `${fechaStr}-${claseKey}`;
+          
+          if (!grouped[key]) {
+            grouped[key] = { turnos: [], tieneCupos: (turno.cupos_disponibles || 0) > 0 };
+          }
+          grouped[key].turnos.push(turno);
+        });
+      
+      // Agrupar por fecha
+      const porFecha: Record<string, { turnos: typeof turnosCancelados; tieneCupos: boolean }> = {};
+      Object.entries(grouped).forEach(([key, value]) => {
+        const fechaStr = key.split('-')[0] + '-' + key.split('-')[1] + '-' + key.split('-')[2];
+        if (!porFecha[fechaStr]) {
+          porFecha[fechaStr] = { turnos: [], tieneCupos: false };
+        }
+        porFecha[fechaStr].turnos.push(...value.turnos);
+        if (value.tieneCupos) {
+          porFecha[fechaStr].tieneCupos = true;
+        }
+      });
+      
+      return porFecha;
+    } catch (error) {
+      console.error('Error procesando turnos por fecha:', error);
+      return {};
+    }
+  }, [turnosCancelados]);
+
+  // Determinar estado de cada día (verde = tiene cupos, rojo = completo)
+  const getEstadoDia = useCallback((fecha: Date): 'verde' | 'rojo' | 'sin-clases' => {
+    try {
+      const fechaStr = format(fecha, 'yyyy-MM-dd');
+      const diaInfo = turnosPorFecha[fechaStr];
+      
+      if (diaInfo && diaInfo.tieneCupos) {
+        return 'verde';
+      }
+      
+      // Verificar si hay clases programadas para este día consultando horarios_semanales
+      const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay(); // Ajustar domingo (1-7)
+      const clasesProgramadas = horariosSemanales.filter(h => 
+        h.dia_semana === diaSemana
+      );
+      
+      if (clasesProgramadas.length > 0) {
+        // Hay clases programadas pero no hay cupos disponibles = completo
+        return 'rojo';
+      }
+      
+      return 'sin-clases';
+    } catch (error) {
+      console.error('Error en getEstadoDia:', error);
+      return 'sin-clases';
+    }
+  }, [turnosPorFecha, horariosSemanales]);
 
   // Suscripción en tiempo real a turnos_disponibles (siempre activa para actualizar contador)
   useEffect(() => {
@@ -487,6 +607,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const channel = supabase
       .channel('turnos_disponibles_changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
+        cargarTurnosCancelados(false, false);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
+        cargarTurnosCancelados(false, false);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario' }, () => {
+        cargarTurnosCancelados(false, false);
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_semanales' }, () => {
         cargarTurnosCancelados(false, false);
       })
       .subscribe();
@@ -676,38 +805,73 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     return () => window.removeEventListener('ausenciasAdmin:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos cancelados (desde admin) - solo si la página está visible
+  // Escuchar cambios en turnos cancelados (desde admin, especialmente feriados) - refrescar clases del mes, turnos disponibles y balance
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        console.log('📢 [RECURRING_VIEW] Evento turnosCancelados:updated recibido, recargando datos...');
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        // Recargar horarios recurrentes primero para asegurar datos frescos
+        await cargarHorariosRecurrentes(true);
+        // Recargar turnos cancelados y clases del mes
         await cargarTurnosCancelados(true);
+        // Pequeño delay para asegurar que los horarios se actualizaron
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
       }
     };
     window.addEventListener('turnosCancelados:updated', handler);
     return () => window.removeEventListener('turnosCancelados:updated', handler);
   }, []);
 
-  // Escuchar cambios en turnos variables (desde admin) - solo si la página está visible
+  // Escuchar cambios en turnos variables (desde admin) - refrescar clases del mes y balance
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
         await cargarClasesDelMes(true);
+        window.dispatchEvent(new CustomEvent('balance:refresh'));
       }
     };
     window.addEventListener('turnosVariables:updated', handler);
     return () => window.removeEventListener('turnosVariables:updated', handler);
   }, []);
 
-  // Escuchar cambios en clases del mes (desde admin) - solo si la página está visible
+  // Escuchar cambios en turnos disponibles (desde feriados con horarios personalizados) - refrescar vista de vacantes
   useEffect(() => {
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-        await cargarClasesDelMes(true);
+        console.log('📢 [RECURRING_VIEW] Evento turnosDisponibles:updated recibido, recargando turnos disponibles...');
+        await cargarTurnosCancelados(true);
+      }
+    };
+    window.addEventListener('turnosDisponibles:updated', handler);
+    return () => window.removeEventListener('turnosDisponibles:updated', handler);
+  }, []);
+
+  // Escuchar cambios en clases del mes (desde admin, especialmente feriados) - solo si la página está visible
+  useEffect(() => {
+    const handler = async () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        console.log('📢 [RECURRING_VIEW] Evento clasesDelMes:updated recibido, recargando datos...');
+        // Limpiar caché para forzar recarga
+        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        // Recargar horarios recurrentes primero para asegurar datos frescos
+        await cargarHorariosRecurrentes(true);
+        // Pequeño delay para asegurar que los horarios se actualizaron
+        setTimeout(() => {
+          cargarClasesDelMes(true);
+        }, 100);
       }
     };
     window.addEventListener('clasesDelMes:updated', handler);
     return () => window.removeEventListener('clasesDelMes:updated', handler);
   }, []);
+
 
   // Cargar clases del mes (horarios recurrentes + turnos variables)
   const cargarClasesDelMes = async (forceReload = false) => {
@@ -864,44 +1028,122 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     if (userStartDate && startOfDay(dia) < userStartDate) {
       return [];
     }
-    const diaSemana = dia.getDay();
+    // Convertir día de la semana: JS (0=domingo, 6=sábado) -> DB (1=lunes, 7=domingo)
+    const diaSemanaJS = dia.getDay();
+    const diaSemanaDB = diaSemanaJS === 0 ? 7 : diaSemanaJS;
     const horariosAFiltrar = horariosParaUsar || horariosRecurrentes;
-    const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemana);
+    const horariosDelDia = horariosAFiltrar.filter(horario => horario.dia_semana === diaSemanaDB);
     
-    // Debug temporal para ver qué días se están procesando
-    if (format(dia, 'yyyy-MM-dd') === '2025-10-22' || format(dia, 'yyyy-MM-dd') === '2025-10-23') {
-      // Debug temporal removido
+    const fechaFormateada = format(dia, 'yyyy-MM-dd');
+    
+    // Debug para feriados
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🔍 [GET_CLASES] Fecha:', fechaFormateada);
+      console.log('📅 [GET_CLASES] Día semana JS:', diaSemanaJS, 'DB:', diaSemanaDB);
+      console.log('📋 [GET_CLASES] Horarios filtrados:', horariosDelDia.length);
+      if (horariosDelDia.length > 0) {
+        console.log('📝 [GET_CLASES] Horarios encontrados:', horariosDelDia.map(h => ({
+          id: h.id,
+          hora_inicio: h.hora_inicio,
+          hora_fin: h.hora_fin,
+          dia_semana: h.dia_semana
+        })));
+      }
     }
     
     if (horariosDelDia.length === 0) return [];
 
-    // Obtener todas las cancelaciones del día de una sola vez
-    const { data: cancelaciones } = await supabase
+    // Obtener todas las cancelaciones del día de una sola vez (incluyendo tipo_cancelacion)
+    // También obtener todas las cancelaciones sin filtrar por cliente para debug
+    const { data: cancelaciones, error: errorCancelaciones } = await supabase
       .from('turnos_cancelados')
-      .select('turno_hora_inicio, turno_hora_fin')
+      .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
       .eq('cliente_id', user?.id)
-      .eq('turno_fecha', format(dia, 'yyyy-MM-dd'));
+      .eq('turno_fecha', fechaFormateada);
 
-    // Crear un Set para búsqueda rápida de cancelaciones
-    const cancelacionesSet = new Set(
-      cancelaciones?.map(c => `${c.turno_hora_inicio}-${c.turno_hora_fin}`) || []
+    if (errorCancelaciones) {
+      console.error('❌ [GET_CLASES] Error obteniendo cancelaciones:', errorCancelaciones);
+    }
+
+    // Debug para feriados: también buscar todas las cancelaciones de ese día sin filtrar por cliente
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🔍 [GET_CLASES] Buscando cancelaciones para:', {
+        fecha: fechaFormateada,
+        cliente_id: user?.id
+      });
+      console.log('🚫 [GET_CLASES] Cancelaciones encontradas (filtradas por cliente):', cancelaciones?.length || 0);
+      if (cancelaciones && cancelaciones.length > 0) {
+        console.log('📝 [GET_CLASES] Cancelaciones:', cancelaciones.map(c => ({
+          hora_inicio: c.turno_hora_inicio,
+          hora_fin: c.turno_hora_fin,
+          tipo: c.tipo_cancelacion,
+          cliente_id: c.cliente_id
+        })));
+      }
+      
+      // También buscar todas las cancelaciones del día para ver si existen pero con otro cliente_id
+      const { data: todasCancelaciones } = await supabase
+        .from('turnos_cancelados')
+        .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
+        .eq('turno_fecha', fechaFormateada)
+        .eq('tipo_cancelacion', 'sistema');
+      
+      console.log('🔍 [GET_CLASES] Todas las cancelaciones del día (sistema):', todasCancelaciones?.length || 0);
+      if (todasCancelaciones && todasCancelaciones.length > 0) {
+        console.log('📝 [GET_CLASES] Todas las cancelaciones sistema:', todasCancelaciones.map(c => ({
+          hora_inicio: c.turno_hora_inicio,
+          hora_fin: c.turno_hora_fin,
+          tipo: c.tipo_cancelacion,
+          cliente_id: c.cliente_id
+        })));
+      }
+    }
+
+    // Crear un Map para búsqueda rápida de cancelaciones con su tipo
+    // Normalizar horas a formato HH:MM para comparación consistente
+    const cancelacionesMap = new Map(
+      (cancelaciones || []).map(c => {
+        const horaInicioNorm = formatTime(c.turno_hora_inicio);
+        const horaFinNorm = formatTime(c.turno_hora_fin);
+        const clave = `${horaInicioNorm}-${horaFinNorm}`;
+        return [clave, c.tipo_cancelacion || 'usuario'];
+      })
     );
+
+    // Debug para feriados
+    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+      console.log('🗺️ [GET_CLASES] Mapa de cancelaciones:', Array.from(cancelacionesMap.entries()));
+    }
 
     // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
     const clasesConCancelaciones = horariosDelDia
       .map((horario) => {
-        const claveCancelacion = `${horario.hora_inicio}-${horario.hora_fin}`;
+        const horaInicioNorm = formatTime(horario.hora_inicio);
+        const horaFinNorm = formatTime(horario.hora_fin);
+        const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
+        const estaCancelada = cancelacionesMap.has(claveCancelacion);
+        const tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
         const estaBloqueada = estaClaseBloqueada(dia, horario.clase_numero);
         
-        
+        // Debug para feriados
+        if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
+          console.log(`🔄 [GET_CLASES] Horario ${horaInicioNorm}-${horaFinNorm}:`, {
+            claveCancelacion,
+            estaCancelada,
+            tipoCancelacion,
+            horaInicioOriginal: horario.hora_inicio,
+            horaFinOriginal: horario.hora_fin
+          });
+        }
         
         return {
-          id: `${horario.id}-${format(dia, 'yyyy-MM-dd')}`,
+          id: `${horario.id}-${fechaFormateada}`,
           dia,
           horario: {
             ...horario,
-            cancelada: cancelacionesSet.has(claveCancelacion),
-            bloqueada: estaBloqueada
+            cancelada: estaCancelada,
+            bloqueada: estaBloqueada,
+            tipoCancelacion: tipoCancelacion as 'usuario' | 'admin' | 'sistema' | undefined
           }
         };
       });
@@ -1127,6 +1369,53 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
     setConfirmingReserva(true);
     try {
+      // Si el turno es virtual (no existe en turnos_disponibles), crear el registro primero
+      let turnoDisponibleId = turnoToReserve.id;
+      
+      if (turnoToReserve.es_virtual || turnoToReserve.id?.startsWith('virtual_')) {
+        // Crear registro en turnos_disponibles si no existe
+        const { data: turnoDisponibleExistente, error: errorBuscar } = await supabase
+          .from('turnos_disponibles')
+          .select('id')
+          .eq('turno_fecha', turnoToReserve.turno_fecha)
+          .eq('turno_hora_inicio', turnoToReserve.turno_hora_inicio)
+          .eq('turno_hora_fin', turnoToReserve.turno_hora_fin)
+          .maybeSingle();
+
+        if (errorBuscar && errorBuscar.code !== 'PGRST116') {
+          console.error('Error buscando turno disponible:', errorBuscar);
+        }
+
+        if (!turnoDisponibleExistente) {
+          // Crear nuevo registro en turnos_disponibles
+          const { data: nuevoTurnoDisponible, error: errorCrear } = await supabase
+            .from('turnos_disponibles')
+            .insert({
+              turno_fecha: turnoToReserve.turno_fecha,
+              turno_hora_inicio: turnoToReserve.turno_hora_inicio,
+              turno_hora_fin: turnoToReserve.turno_hora_fin,
+              creado_desde_cancelacion_id: turnoToReserve.creado_desde_cancelacion_id || null,
+              creado_desde_feriado_id: turnoToReserve.creado_desde_feriado_id || null
+            })
+            .select('id')
+            .single();
+
+          if (errorCrear) {
+            console.error('Error creando turno disponible:', errorCrear);
+            toast({
+              title: "Error",
+              description: `Error al crear el turno disponible: ${errorCrear.message}`,
+              variant: "destructive",
+            });
+            return;
+          }
+
+          turnoDisponibleId = nuevoTurnoDisponible.id;
+        } else {
+          turnoDisponibleId = turnoDisponibleExistente.id;
+        }
+      }
+
       // Insertar en turnos_variables
       const { error } = await supabase
         .from('turnos_variables')
@@ -1136,7 +1425,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           turno_hora_inicio: turnoToReserve.turno_hora_inicio,
           turno_hora_fin: turnoToReserve.turno_hora_fin,
           estado: 'confirmada',
-          creado_desde_disponible_id: turnoToReserve.id
+          creado_desde_disponible_id: turnoDisponibleId
         });
 
       if (error) {
@@ -1213,13 +1502,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80"></div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2 pb-20 sm:pb-2">
+    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2 pb-20 sm:pb-2 md:pb-2">
       {/* Subnavbar - solo mostrar si no está oculta */}
       {!hideSubNav && (
         <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
@@ -1263,8 +1552,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-sm text-muted-foreground">Cargando tus clases...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80 mx-auto mb-4"></div>
+                <p className="text-sm text-white/90">Cargando tus clases...</p>
               </div>
             </div>
           ) : (
@@ -1319,8 +1608,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         <tr>
                           <td colSpan={4} className="px-4 py-8 text-center">
                             <div className="flex flex-col items-center">
-                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary mb-2"></div>
-                              <p className="text-sm text-muted-foreground">Cargando mes...</p>
+                              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white/80 mb-2"></div>
+                              <p className="text-sm text-white/90">Cargando mes...</p>
                             </div>
                           </td>
                         </tr>
@@ -1356,8 +1645,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                 {format(dia, 'EEEE', { locale: es })}
                               </div>
                               {clase.horario.cancelada && (
-                                <div className="text-[10px] sm:text-xs text-red-600 dark:text-red-400 font-medium">
-                                  CANCELADA
+                                <div className={`text-[10px] sm:text-xs font-medium ${
+                                  clase.horario.tipoCancelacion === 'sistema'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {clase.horario.tipoCancelacion === 'sistema' ? 'FERIADO' : 'CANCELADA'}
                                 </div>
                               )}
                               {clase.horario.bloqueada && (
@@ -1369,7 +1662,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <span className={`text-xs sm:text-sm font-medium ${
                                 clase.horario.cancelada 
-                                  ? 'text-red-600 dark:text-red-400 line-through' 
+                                  ? clase.horario.tipoCancelacion === 'sistema'
+                                    ? 'text-amber-600 dark:text-amber-400 line-through'
+                                    : 'text-red-600 dark:text-red-400 line-through'
                                   : clase.horario.bloqueada
                                     ? 'text-yellow-600 dark:text-yellow-400'
                                     : clase.horario.esVariable
@@ -1480,89 +1775,280 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       {/* Vista de Turnos Disponibles */}
       {activeView === 'turnos-disponibles' && (() => {
-        // Marcar turnos bloqueados por ausencias del admin y filtrar los ya reservados
-        const turnosConEstado = turnosCancelados
-          .filter(turno => !turno.reservado) // Filtrar turnos ya reservados
-          .map(turno => {
-            const fecha = new Date(turno.turno_fecha);
-            const bloqueado = estaClaseBloqueada(fecha, turno.clase_numero);
-            return {
-              ...turno,
-              bloqueadoPorAdmin: bloqueado
-            };
-          });
-        
+
+        // Renderizar calendario
+        const renderVacantesCalendar = () => {
+          const year = vacantesCalendarMonth.getFullYear();
+          const month = vacantesCalendarMonth.getMonth();
+          const firstDay = startOfMonth(vacantesCalendarMonth);
+          const lastDay = endOfMonth(vacantesCalendarMonth);
+          const daysInMonth = getDate(lastDay);
+          const startingDayOfWeek = getDay(firstDay) === 0 ? 6 : getDay(firstDay) - 1; // Lunes = 0
+
+          const days: Array<{ date: Date; isCurrentMonth: boolean }> = [];
+          
+          // Días del mes anterior
+          for (let i = 0; i < startingDayOfWeek; i++) {
+            const date = new Date(year, month, -i);
+            days.unshift({ date, isCurrentMonth: false });
+          }
+          
+          // Días del mes actual
+          for (let i = 1; i <= daysInMonth; i++) {
+            const date = new Date(year, month, i);
+            days.push({ date, isCurrentMonth: true });
+          }
+          
+          // Completar hasta el final de la semana
+          const remainingDays = 42 - days.length; // 6 semanas * 7 días
+          for (let i = 1; i <= remainingDays; i++) {
+            const date = new Date(year, month + 1, i);
+            days.push({ date, isCurrentMonth: false });
+          }
+
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+
+          return (
+            <div className="w-full">
+              {/* Navegación del mes */}
+              <div className="flex items-center justify-between mb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVacantesCalendarMonth(prev => subMonths(prev, 1))}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <h3 className="text-lg font-semibold">
+                  {format(vacantesCalendarMonth, "MMMM yyyy", { locale: es })}
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVacantesCalendarMonth(prev => addMonths(prev, 1))}
+                  className="h-8 w-8 p-0"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+
+              {/* Headers de días */}
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'].map(day => (
+                  <div key={day} className="text-center text-xs font-medium text-muted-foreground py-2">
+                    {day}
+                  </div>
+                ))}
+              </div>
+
+              {/* Días del calendario */}
+              <div className="grid grid-cols-7 gap-1">
+                {days.map(({ date, isCurrentMonth }, index) => {
+                  const estadoDia = isCurrentMonth ? getEstadoDia(date) : 'sin-clases';
+                  const isPast = date < hoy;
+                  const isToday = isSameDay(date, hoy);
+
+                  return (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        if (isCurrentMonth && !isPast && estadoDia !== 'sin-clases') {
+                          setSelectedVacantesDate(date);
+                          setShowVacantesDayModal(true);
+                        }
+                      }}
+                      disabled={!isCurrentMonth || isPast || estadoDia === 'sin-clases'}
+                      className={`
+                        relative min-h-[48px] p-2 rounded-lg text-sm
+                        transition-colors
+                        ${!isCurrentMonth ? 'opacity-0 cursor-default' : ''}
+                        ${isPast ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/50'}
+                        ${isToday ? 'ring-2 ring-primary' : ''}
+                        ${estadoDia === 'sin-clases' ? 'cursor-default' : ''}
+                      `}
+                    >
+                      <span className={isCurrentMonth ? '' : 'invisible'}>{getDate(date)}</span>
+                      {isCurrentMonth && !isPast && (
+                        <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
+                          {estadoDia === 'verde' && (
+                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                          )}
+                          {estadoDia === 'rojo' && (
+                            <div className="w-2 h-2 bg-red-500 rounded-full" />
+                          )}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Leyenda */}
+              <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <span>Con cupos disponibles</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-red-500 rounded-full" />
+                  <span>Completo</span>
+                </div>
+              </div>
+            </div>
+          );
+        };
+
         return (
           <div className="w-full animate-view-swap pb-24 sm:pb-0">
-            <div className="mb-4">
-              <h2 className="text-lg sm:text-2xl font-semibold">Turnos Cancelados Disponibles</h2>
+            <div className="mb-6">
+              <h2 className="text-lg sm:text-2xl font-semibold">Vacantes Disponibles</h2>
+              <p className="text-sm text-muted-foreground mt-1">Seleccioná un día para ver las clases disponibles</p>
             </div>
             {loadingTurnosCancelados ? (
               <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-                <p className="text-muted-foreground">Cargando vacantes...</p>
-              </div>
-            ) : turnosConEstado.length === 0 ? (
-              <div className="p-8 text-center text-muted-foreground">
-                <p>No hay turnos cancelados disponibles</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80 mx-auto mb-4"></div>
+                <p className="text-white/90">Cargando vacantes...</p>
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 overflow-x-hidden">
-                {turnosConEstado.map((turno) => (
-                <Card key={turno.id} className={`transition-colors flex flex-col ${
-                  turno.bloqueadoPorAdmin 
-                    ? 'bg-muted/30 border-muted-foreground/50 opacity-60' 
-                    : 'hover:bg-muted/50'
-                }`}>
-                  <CardContent className="p-4 flex flex-col h-full">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-baseline gap-2">
-                        <h3 className="font-semibold text-sm sm:text-base">
-                          {turno.bloqueadoPorAdmin ? 'Clase No Disponible' : 'Clase Disponible'}
-                        </h3>
-                      </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mb-2">
-                      {(() => {
-                        const [year, month, day] = turno.turno_fecha.split('-');
-                        const fecha = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                        return format(fecha, "dd 'de' MMMM", { locale: es });
-                      })()}
-                    </p>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      {formatTime(turno.turno_hora_inicio)} a {formatTime(turno.turno_hora_fin)}
-                    </p>
-                    {(() => {
-                      const createdAt = turno.creado_at || turno.created_at;
-                      const d = createdAt ? new Date(createdAt) : null;
-                      return d && !isNaN(d.valueOf()) && isAdmin ? (
-                        <p className="text-xs text-muted-foreground mb-3">
-                          Cancelado el {format(d, "dd 'de' MMMM 'de' yyyy 'a las' HH:mm", { locale: es })}
-                        </p>
-                      ) : null;
-                    })()}
-                    {/* Botón centrado en la parte inferior */}
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => handleReservarClick(turno)}
-                      disabled={turno.reservado || turno.bloqueadoPorAdmin}
-                      className={`w-full mt-auto h-8 sm:h-9 text-xs sm:text-sm ${
-                        turno.bloqueadoPorAdmin 
-                          ? 'bg-muted-foreground/50 hover:bg-muted-foreground/50 cursor-not-allowed' 
-                          : 'bg-gray-600 hover:bg-gray-700'
-                      } text-white`}
-                    >
-                      {turno.bloqueadoPorAdmin ? 'No disponible' : turno.reservado ? 'Reservado' : 'Reservar Clase'}
-                    </Button>
-                  </CardContent>
-                </Card>
-                ))}
-              </div>
+              <Card>
+                <CardContent className="p-4 sm:p-6">
+                  {renderVacantesCalendar()}
+                </CardContent>
+              </Card>
             )}
           </div>
         );
       })()}
+
+      {/* Modal de clases del día seleccionado */}
+      <Dialog open={showVacantesDayModal} onOpenChange={setShowVacantesDayModal}>
+        <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedVacantesDate && format(selectedVacantesDate, "dd 'de' MMMM 'de' yyyy", { locale: es })}
+            </DialogTitle>
+            <DialogDescription>
+              Clases disponibles para este día
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedVacantesDate && (() => {
+            try {
+              const fechaStr = format(selectedVacantesDate, 'yyyy-MM-dd');
+              const turnosDia = (turnosCancelados || [])
+                .filter(turno => turno && !turno.reservado && turno.turno_fecha === fechaStr)
+                .map(turno => {
+                  try {
+                    const fecha = new Date(turno.turno_fecha);
+                    const bloqueado = estaClaseBloqueada(fecha, turno.clase_numero);
+                    return { ...turno, bloqueadoPorAdmin: bloqueado };
+                  } catch (error) {
+                    console.error('Error procesando turno:', error, turno);
+                    return { ...turno, bloqueadoPorAdmin: false };
+                  }
+                });
+
+              // Agrupar por horario (clase)
+              const clasesAgrupadas: Record<string, typeof turnosDia> = {};
+              turnosDia.forEach(turno => {
+                if (turno && turno.turno_hora_inicio && turno.turno_hora_fin) {
+                  const key = `${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
+                  if (!clasesAgrupadas[key]) {
+                    clasesAgrupadas[key] = [];
+                  }
+                  clasesAgrupadas[key].push(turno);
+                }
+              });
+
+              const clasesArray = Object.entries(clasesAgrupadas).map(([key, turnos]) => ({
+                horario: key,
+                turnos: turnos.filter(t => t),
+                tieneCupos: turnos.length > 0 && turnos[0] && !turnos[0].bloqueadoPorAdmin
+              })).filter(clase => clase.turnos.length > 0);
+
+              if (clasesArray.length === 0) {
+                return (
+                  <div className="py-8 text-center text-muted-foreground">
+                    <p>No hay clases disponibles para este día</p>
+                  </div>
+                );
+              }
+
+              return (
+                <div className="space-y-2 mt-4">
+                  {clasesArray.map((clase, idx) => {
+                    const primerTurno = clase.turnos[0];
+                    if (!primerTurno) return null;
+                    
+                    return (
+                      <div
+                        key={idx}
+                        className={`
+                          flex items-center justify-between p-3 rounded-lg border
+                          ${clase.tieneCupos 
+                            ? 'border-green-500/30 bg-green-500/10 hover:bg-green-500/20 cursor-pointer' 
+                            : 'border-red-500/30 bg-red-500/10 opacity-60 cursor-not-allowed'
+                          }
+                          transition-colors
+                        `}
+                        onClick={() => {
+                          if (clase.tieneCupos && clase.turnos.length > 0) {
+                            handleReservarClick(clase.turnos[0]);
+                            setShowVacantesDayModal(false);
+                          }
+                        }}
+                      >
+                        <div className="flex items-center gap-3 flex-1">
+                          <div className={`
+                            w-3 h-3 rounded-full flex-shrink-0
+                            ${clase.tieneCupos ? 'bg-green-500' : 'bg-red-500'}
+                          `} />
+                          <div className="flex-1">
+                            <div className="font-medium text-sm">
+                              Clase {primerTurno.clase_numero || ''} - {formatTime(primerTurno.turno_hora_inicio)} a {formatTime(primerTurno.turno_hora_fin)}
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {clase.tieneCupos 
+                                ? `${clase.turnos.length} cupo${clase.turnos.length > 1 ? 's' : ''} disponible${clase.turnos.length > 1 ? 's' : ''}`
+                                : 'Completo'
+                              }
+                            </div>
+                          </div>
+                        </div>
+                        {clase.tieneCupos && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="ml-2"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (clase.turnos.length > 0 && clase.turnos[0]) {
+                                handleReservarClick(clase.turnos[0]);
+                                setShowVacantesDayModal(false);
+                              }
+                            }}
+                          >
+                            Reservar
+                          </Button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            } catch (error) {
+              console.error('Error renderizando clases del día:', error);
+              return (
+                <div className="py-8 text-center text-muted-foreground">
+                  <p>Error al cargar las clases. Por favor, intentá nuevamente.</p>
+                </div>
+              );
+            }
+          })()}
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de detalles de la clase */}
       <Dialog open={showModal} onOpenChange={setShowModal}>

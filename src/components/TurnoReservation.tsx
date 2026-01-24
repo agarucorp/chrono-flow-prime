@@ -36,7 +36,7 @@ interface TurnoReservado {
 export const TurnoReservation = () => {
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
-  const { obtenerCapacidadActual } = useSystemConfig();
+  const { obtenerCapacidadActual, obtenerCapacidadPorHorario } = useSystemConfig();
   
   const [turnosDisponibles, setTurnosDisponibles] = useState<Turno[]>([]);
   const [turnosReservados, setTurnosReservados] = useState<TurnoReservado[]>([]);
@@ -178,9 +178,10 @@ export const TurnoReservation = () => {
         return;
       }
 
-      // Validar capacidad máxima antes de reservar
-      const capacidadMaxima = obtenerCapacidadActual() || 4;
+      // Validar capacidad máxima antes de reservar - obtener capacidad específica de la clase
       const fechaTurno = selectedDate.toISOString().split('T')[0];
+      const diaSemana = selectedDate.getDay() === 0 ? 7 : selectedDate.getDay(); // Convertir domingo de 0 a 7
+      const capacidadMaxima = await obtenerCapacidadPorHorario(turno.hora_inicio, turno.hora_fin, diaSemana) || 4;
       
       // Contar cuántos usuarios ya tienen reserva para este horario
       // Contar de ambas tablas: turnos y turnos_variables

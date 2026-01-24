@@ -170,7 +170,10 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
         if (!result.success || !result.user) {
           const message = result.error || 'Error al iniciar sesión';
-          console.error('Error en login:', message);
+          // No loguear errores de conexión para evitar spam en consola
+          if (!message.includes('Conexión con la base de datos')) {
+            console.error('Error en login:', message);
+          }
           setError(message);
           return;
         }
@@ -252,7 +255,14 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           }
         );
         
-        if (!result.success) {
+        // Si hay un warning (usuario creado pero problema con email), mostrar warning pero continuar
+        if (result.warning) {
+          showError(
+            'Cuenta creada con advertencia',
+            result.warning
+          );
+          // Continuar con el flujo normal aunque haya warning
+        } else if (!result.success) {
           console.error('Error en registro:', result.error);
           const errorMsg = result.error || 'Error al crear la cuenta';
           
@@ -262,6 +272,20 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               'Límite de registros alcanzado', 
               'Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.'
             );
+          } else if (
+            errorMsg.toLowerCase().includes('confirmation email') ||
+            errorMsg.toLowerCase().includes('credits exceeded') ||
+            (errorMsg.toLowerCase().includes('email') && errorMsg.toLowerCase().includes('send'))
+          ) {
+            showError(
+              'Error al enviar email de confirmación',
+              'No se pudo enviar el email (p. ej. límite de Resend/SMTP). Revisa SMTP en Supabase o desactívalo temporalmente para usar el envío por defecto.'
+            );
+          } else if (errorMsg.toLowerCase().includes('500') || errorMsg.toLowerCase().includes('servidor')) {
+            showError(
+              'Error del servidor',
+              'Error al crear la cuenta. Puede ser por triggers o por el envío de emails. Contacta al administrador.'
+            );
           } else {
             showError('Error al crear cuenta', errorMsg);
           }
@@ -270,8 +294,15 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
         
-        // Mostrar mensaje de éxito ANTES de cambiar el estado
-        showSuccess('Correo enviado', 'Revisa tu casilla de correo para confirmar tu cuenta. La cuenta se creará una vez que confirmes el email.');
+        // Mostrar mensaje de éxito (o warning si existe)
+        if (result.warning) {
+          showError(
+            'Cuenta creada',
+            'Tu cuenta se creó correctamente, pero hubo un problema al enviar el email de confirmación. Por favor, contacta al administrador para confirmar tu cuenta manualmente.'
+          );
+        } else {
+          showSuccess('Correo enviado', 'Revisa tu casilla de correo para confirmar tu cuenta. La cuenta se creará una vez que confirmes el email.');
+        }
         
         // Pequeño delay para que el toast se muestre
         await new Promise(resolve => setTimeout(resolve, 500));
