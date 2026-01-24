@@ -192,13 +192,43 @@ export const useAuth = () => {
           email,
           password,
           options: {
-            data: metadata
+            data: metadata,
+            // Permitir que el usuario se cree aunque falle el envío del email
+            emailRedirectTo: `${window.location.origin}/dashboard`
           }
         };
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
         
-        // Si hay un error, NO permitir la creación - el flujo requiere confirmación de email
+        // Si hay un error, verificar si es un error 500 relacionado con el email
+        // En algunos casos, el usuario se crea pero falla el envío del email
         if (error) {
+          // Si el error es 500 y el usuario se creó, permitir continuar
+          const is500Error = error.status === 500 || error.message?.includes('500');
+          const userWasCreated = data?.user !== null && data?.user !== undefined;
+          
+          if (is500Error && userWasCreated) {
+            // El usuario se creó pero falló el envío del email
+            // Esto puede pasar si hay un problema con el trigger o el servicio de emails
+            console.warn('Usuario creado pero falló el envío del email:', error);
+            
+            // Limpiar el timestamp de último intento
+            localStorage.removeItem('lastSignUpAttempt');
+            
+            setAuthState({
+              user: data.user,
+              loading: false,
+              error: null
+            });
+            
+            // Retornar éxito pero con advertencia sobre el email
+            return { 
+              success: true, 
+              user: data.user,
+              warning: 'Tu cuenta se creó correctamente, pero no pudimos enviar el email de confirmación. Por favor, contacta al administrador para confirmar tu cuenta manualmente.'
+            };
+          }
+          
+          // Para otros errores, lanzar el error normalmente
           throw error;
         }
 
@@ -228,7 +258,23 @@ export const useAuth = () => {
         // Mensaje de error más claro para diferentes tipos de errores
         let errorMessage = 'Error al registrarse. Por favor, intenta nuevamente.';
         
-        if (isRateLimit(err)) {
+        // Detectar errores 500 específicamente
+        const is500Error = errorCode === 500 || `${errorCode}` === '500' || 
+                          errorMsgLower.includes('500') ||
+                          err?.status === 500;
+        
+        // Detectar si el 500 viene del envío de email (Resend créditos, SMTP, etc.)
+        const isEmailRelated = errorMsgLower.includes('confirmation email') ||
+          errorMsgLower.includes('sending') && errorMsgLower.includes('email') ||
+          errorMsgLower.includes('maximum credits exceeded') ||
+          errorMsgLower.includes('credits exceeded') ||
+          errorMsgLower.includes('451');
+        
+        if (is500Error && isEmailRelated) {
+          errorMessage = 'No se pudo enviar el email de confirmación (por ejemplo, límite de créditos de Resend o SMTP). Deshabilita temporalmente el SMTP custom en Supabase o revisa tu proveedor de emails.';
+        } else if (is500Error) {
+          errorMessage = 'Error del servidor al crear la cuenta. Puede ser temporal, un problema con triggers o con el envío de emails. Contacta al administrador o intenta más tarde.';
+        } else if (isRateLimit(err)) {
           errorMessage = 'Límite de registros alcanzado. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.';
         } else if (
           errorCode === 451 || 
@@ -243,7 +289,11 @@ export const useAuth = () => {
         ) {
           errorMessage = 'No se pudo enviar el email de confirmación. Por favor, contacta al administrador o intenta más tarde.';
         } else {
-          errorMessage = err instanceof Error ? err.message : 'Error al registrarse. Por favor, intenta nuevamente.';
+          // Incluir más detalles del error para debugging
+          const detailedError = err instanceof Error 
+            ? `${err.message}${errorCode ? ` (Código: ${errorCode})` : ''}` 
+            : `Error desconocido${errorCode ? ` (Código: ${errorCode})` : ''}`;
+          errorMessage = `Error al registrarse: ${detailedError}. Por favor, intenta nuevamente o contacta al administrador.`;
         }
         
         setAuthState(prev => ({ ...prev, loading: false, error: errorMessage }));
