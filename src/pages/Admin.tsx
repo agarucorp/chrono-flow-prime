@@ -35,6 +35,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
 import { FeriadosConfigModal } from '@/components/FeriadosConfigModal';
+import { FinSemanaConfigModal } from '@/components/FinSemanaConfigModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -138,7 +139,9 @@ export default function Admin() {
   };
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [showFeriadosModal, setShowFeriadosModal] = useState(false);
+  const [showFinSemanaModal, setShowFinSemanaModal] = useState(false);
   const [fechaSeleccionadaFeriado, setFechaSeleccionadaFeriado] = useState<Date | null>(null);
+  const [fechaSeleccionadaFinSemana, setFechaSeleccionadaFinSemana] = useState<Date | null>(null);
 
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -1395,14 +1398,23 @@ export default function Admin() {
                 className="bg-white text-gray-900 hover:bg-gray-100 border border-white"
               >
                 <Calendar className="h-4 w-4 mr-2" />
-                Gestionar Feriados
+                Gestionar feriados
               </Button>
             </div>
             <CalendarView 
               isAdminView={true}
               onDateLongPress={(date) => {
-                setFechaSeleccionadaFeriado(date);
-                setShowFeriadosModal(true);
+                // Detectar si es fin de semana (sábado=6, domingo=0)
+                const diaSemana = date.getDay();
+                const esFinSemana = diaSemana === 0 || diaSemana === 6;
+                
+                if (esFinSemana) {
+                  setFechaSeleccionadaFinSemana(date);
+                  setShowFinSemanaModal(true);
+                } else {
+                  setFechaSeleccionadaFeriado(date);
+                  setShowFeriadosModal(true);
+                }
               }}
             />
           </TabsContent>
@@ -1615,6 +1627,19 @@ export default function Admin() {
         }}
         fechaSeleccionada={fechaSeleccionadaFeriado}
         onFeriadoGuardado={() => {
+          // Recargar datos si es necesario
+        }}
+      />
+
+      {/* Modal de Configuración de Fin de Semana */}
+      <FinSemanaConfigModal
+        open={showFinSemanaModal}
+        onClose={() => {
+          setShowFinSemanaModal(false);
+          setFechaSeleccionadaFinSemana(null);
+        }}
+        fechaSeleccionada={fechaSeleccionadaFinSemana}
+        onFinSemanaGuardado={() => {
           // Recargar datos si es necesario
         }}
       />

@@ -165,14 +165,24 @@ const Dashboard = () => {
     const checkHasHorarios = async () => {
       setLoadingHorarios(true);
       try {
+        // Verificar si tiene horarios ACTIVOS (no solo existencia)
         const { data, error } = await supabase
           .from('horarios_recurrentes_usuario')
           .select('id')
           .eq('usuario_id', user.id)
+          .eq('activo', true)
           .limit(1);
         
         if (error) {
           console.warn('Error verificando horarios recurrentes:', error);
+          // Si hay error, NO cambiar el estado si ya tenía horarios (evitar mostrar modal incorrectamente)
+          if (hasHorariosCheckRef.current.userId === user.id && hasHorariosCheckRef.current.hasHorarios === true) {
+            // Mantener el estado anterior si ya tenía horarios
+            setHasHorarios(true);
+            setHasCompletedSetup(true);
+            setLoadingHorarios(false);
+            return;
+          }
           setHasHorarios(false);
           setHasCompletedSetup(false);
           hasHorariosCheckRef.current = { userId: user.id, hasHorarios: false, timestamp: Date.now() };
@@ -180,7 +190,7 @@ const Dashboard = () => {
           return;
         }
         
-        // Verificar si tiene horarios
+        // Verificar si tiene horarios activos
         const tieneHorarios = data && data.length > 0;
         setHasHorarios(tieneHorarios);
         setHasCompletedSetup(tieneHorarios);
@@ -188,6 +198,14 @@ const Dashboard = () => {
         hasHorariosCheckRef.current = { userId: user.id, hasHorarios: tieneHorarios, timestamp: Date.now() };
       } catch (err) {
         console.error('Error inesperado verificando horarios:', err);
+        // Si hay error, NO cambiar el estado si ya tenía horarios (evitar mostrar modal incorrectamente)
+        if (hasHorariosCheckRef.current.userId === user.id && hasHorariosCheckRef.current.hasHorarios === true) {
+          // Mantener el estado anterior si ya tenía horarios
+          setHasHorarios(true);
+          setHasCompletedSetup(true);
+          setLoadingHorarios(false);
+          return;
+        }
         setHasHorarios(false);
         setHasCompletedSetup(false);
         hasHorariosCheckRef.current = { userId: user.id, hasHorarios: false, timestamp: Date.now() };
@@ -212,17 +230,25 @@ const Dashboard = () => {
     }
   }, [user, firstTimeLoading, isFirstTime, hasHorarios, loadingHorarios, tutorialDismissed]);
 
-  // Mostrar modal de configuración SIEMPRE que no tenga horarios (no solo en primera vez)
+  // Mostrar modal de configuración SOLO si no tiene horarios Y no se ha completado el setup antes
   useEffect(() => {
     if (loadingHorarios || hasHorarios === null) return;
     
-    // Si no tiene horarios, mostrar modal (independientemente de si es primera vez o no)
-    if (!hasHorarios && !showTutorial && tutorialProcessed) {
+    // Si tiene horarios, cerrar modal inmediatamente
+    if (hasHorarios) {
+      setShowRecurringModal(false);
+      return;
+    }
+    
+    // Si no tiene horarios, mostrar modal SOLO si no está en tutorial y el tutorial ya se procesó
+    // Y solo si no se ha completado el setup antes (evitar mostrar después de navegar entre tabs)
+    if (!hasHorarios && !showTutorial && tutorialProcessed && !hasCompletedSetup) {
       setShowRecurringModal(true);
-    } else if (hasHorarios) {
+    } else if (hasCompletedSetup) {
+      // Si ya se completó el setup antes, NO mostrar el modal aunque temporalmente no tenga horarios
       setShowRecurringModal(false);
     }
-  }, [hasHorarios, loadingHorarios, showTutorial, tutorialProcessed]);
+  }, [hasHorarios, loadingHorarios, showTutorial, tutorialProcessed, hasCompletedSetup]);
 
   // Escuchar evento de actualización de horarios recurrentes
   useEffect(() => {
@@ -231,15 +257,19 @@ const Dashboard = () => {
       if (user) {
         const checkHasHorarios = async () => {
           try {
+            // Verificar horarios ACTIVOS
             const { data, error } = await supabase
               .from('horarios_recurrentes_usuario')
               .select('id')
               .eq('usuario_id', user.id)
+              .eq('activo', true)
               .limit(1);
             
             if (!error && data && data.length > 0) {
               setHasHorarios(true);
               setHasCompletedSetup(true);
+              // Actualizar caché
+              hasHorariosCheckRef.current = { userId: user.id, hasHorarios: true, timestamp: Date.now() };
             }
           } catch (err) {
             console.error('Error verificando horarios después de actualización:', err);

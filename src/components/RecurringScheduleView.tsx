@@ -111,8 +111,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const pageVisibleRef = useRef<boolean>(true);
   const lastReloadTimeRef = useRef<number>(0); // Inicializar en 0 para forzar primera carga
   const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
-  const clasesDelMesCacheRef = useRef<{ monthKey: string; timestamp: number }>({ monthKey: '', timestamp: 0 });
-  const CLASSES_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
+  // Caché por mes: guarda las clases de múltiples meses
+  const clasesDelMesCacheRef = useRef<Map<string, { clases: any[]; timestamp: number }>>(new Map());
+  const CLASSES_CACHE_DURATION_MS = 30 * 60 * 1000; // 30 minutos en caché (aumentado para mantener datos más tiempo)
   const prevMonthRef = useRef<string>('');
   
   useEffect(() => {
@@ -147,6 +148,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Estado para ausencias del admin
   const [ausenciasAdmin, setAusenciasAdmin] = useState<any[]>([]);
+  
+  // Estado para feriados
+  const [feriados, setFeriados] = useState<Array<{
+    fecha: string;
+    tipo: 'dia_habil_feriado' | 'fin_semana_habilitado';
+    horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string }> | null;
+    activo: boolean;
+  }>>([]);
   // Caché para ausencias del admin
   const ausenciasAdminCacheRef = useRef<{ timestamp: number }>({ timestamp: 0 });
   const AUSENCIAS_CACHE_DURATION_MS = 10 * 60 * 1000; // 10 minutos
@@ -308,6 +317,27 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     } catch (error) {
       console.error('❌ Error inesperado al cargar ausencias:', error);
       setAusenciasAdmin([]);
+    }
+  };
+
+  // Cargar feriados
+  const cargarFeriados = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('feriados')
+        .select('fecha, tipo, horarios_personalizados, activo')
+        .eq('activo', true);
+
+      if (error) {
+        console.error('Error cargando feriados:', error);
+        setFeriados([]);
+        return;
+      }
+
+      setFeriados(data || []);
+    } catch (error) {
+      console.error('Error inesperado cargando feriados:', error);
+      setFeriados([]);
     }
   };
 
@@ -572,10 +602,27 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   }, [turnosCancelados]);
 
-  // Determinar estado de cada día (verde = tiene cupos, rojo = completo)
-  const getEstadoDia = useCallback((fecha: Date): 'verde' | 'rojo' | 'sin-clases' => {
+  // Determinar estado de cada día (verde = tiene cupos, rojo = completo, feriado = anaranjado, feriado-habilitado = verde)
+  const getEstadoDia = useCallback((fecha: Date): 'verde' | 'rojo' | 'sin-clases' | 'feriado' | 'feriado-habilitado' => {
     try {
       const fechaStr = format(fecha, 'yyyy-MM-dd');
+      
+      // Verificar si es feriado
+      const feriadoInfo = feriados.find(f => f.fecha === fechaStr && f.activo);
+      if (feriadoInfo) {
+        if (feriadoInfo.tipo === 'dia_habil_feriado') {
+          // Si tiene horarios personalizados, es feriado habilitado (verde)
+          if (feriadoInfo.horarios_personalizados && feriadoInfo.horarios_personalizados.length > 0) {
+            return 'feriado-habilitado';
+          }
+          // Si no tiene horarios personalizados, es feriado normal (anaranjado)
+          return 'feriado';
+        } else if (feriadoInfo.tipo === 'fin_semana_habilitado') {
+          // Fin de semana habilitado (verde)
+          return 'feriado-habilitado';
+        }
+      }
+      
       const diaInfo = turnosPorFecha[fechaStr];
       
       if (diaInfo && diaInfo.tieneCupos) {
@@ -598,7 +645,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       console.error('Error en getEstadoDia:', error);
       return 'sin-clases';
     }
-  }, [turnosPorFecha, horariosSemanales]);
+  }, [turnosPorFecha, horariosSemanales, feriados]);
 
   // Suscripción en tiempo real a turnos_disponibles (siempre activa para actualizar contador)
   useEffect(() => {
@@ -747,6 +794,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         cargarAusenciasAdmin(); // Cargar ausencias del admin (no bloquea, solo carga en background)
       }
       
+      // Cargar feriados
+      cargarFeriados();
+      
       // Timeout de seguridad para evitar loading infinito
       const timeoutId = setTimeout(() => {
         console.warn('Timeout de seguridad: ocultando loading después de 10 segundos');
@@ -771,6 +821,41 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       cargarDatosPerfil();
     }
   }, [activeView, user?.id]);
+
+  // Escuchar actualización de feriados
+  useEffect(() => {
+    const handler = async () => {
+      await cargarFeriados();
+      // Aplicar feriados a las clases actuales si hay caché
+      const monthKey = format(currentMonth, 'yyyy-MM');
+      const cached = clasesDelMesCacheRef.current.get(monthKey);
+      if (cached && cached.clases.length > 0) {
+        const clasesConFeriados = aplicarFeriadosAClases(cached.clases);
+        setClasesDelMes(clasesConFeriados);
+      } else {
+        // Recargar clases del mes para reflejar cambios en feriados
+        cargarClasesDelMes(false);
+      }
+    };
+    window.addEventListener('feriados:updated', handler);
+    return () => window.removeEventListener('feriados:updated', handler);
+  }, [currentMonth]);
+
+  // Aplicar feriados cuando se cargan por primera vez o cambian
+  useEffect(() => {
+    if (feriados.length >= 0 && clasesDelMes.length > 0 && activeView === 'mis-clases') {
+      const clasesConFeriados = aplicarFeriadosAClases(clasesDelMes);
+      // Solo actualizar si hay cambios
+      const hayCambios = clasesConFeriados.some((clase, index) => 
+        clase.horario.cancelada !== clasesDelMes[index]?.horario.cancelada ||
+        clase.horario.tipoCancelacion !== clasesDelMes[index]?.horario.tipoCancelacion
+      );
+      if (hayCambios) {
+        setClasesDelMes(clasesConFeriados);
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feriados.length, activeView]);
 
   // Escuchar actualización desde el modal y recargar inmediatamente (solo si la página está visible)
   useEffect(() => {
@@ -811,7 +896,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         console.log('📢 [RECURRING_VIEW] Evento turnosCancelados:updated recibido, recargando datos...');
         // Limpiar caché para forzar recarga
-        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        clasesDelMesCacheRef.current.clear();
         // Recargar horarios recurrentes primero para asegurar datos frescos
         await cargarHorariosRecurrentes(true);
         // Recargar turnos cancelados y clases del mes
@@ -832,7 +917,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const handler = async () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         // Limpiar caché para forzar recarga
-        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        clasesDelMesCacheRef.current.clear();
         await cargarClasesDelMes(true);
         window.dispatchEvent(new CustomEvent('balance:refresh'));
       }
@@ -859,7 +944,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
         console.log('📢 [RECURRING_VIEW] Evento clasesDelMes:updated recibido, recargando datos...');
         // Limpiar caché para forzar recarga
-        clasesDelMesCacheRef.current = { monthKey: '', timestamp: 0 };
+        clasesDelMesCacheRef.current.clear();
         // Recargar horarios recurrentes primero para asegurar datos frescos
         await cargarHorariosRecurrentes(true);
         // Pequeño delay para asegurar que los horarios se actualizaron
@@ -874,12 +959,25 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
 
   // Cargar clases del mes (horarios recurrentes + turnos variables)
-  const cargarClasesDelMes = async (forceReload = false) => {
+  const cargarClasesDelMes = async (forceReload = false, monthToLoad?: Date) => {
     if (!user?.id) return;
 
-    const monthKey = format(currentMonth, 'yyyy-MM');
-    const cachedKey = `clasesDelMes_${monthKey}`;
-    const lastLoadKey = `lastClasesLoadTime_${monthKey}`;
+    const monthToUse = monthToLoad || currentMonth;
+    const monthKey = format(monthToUse, 'yyyy-MM');
+    
+    // Verificar caché antes de cargar
+    const cached = clasesDelMesCacheRef.current.get(monthKey);
+    const now = Date.now();
+    
+    // Si hay caché válido y no se fuerza recarga, usar caché
+    if (!forceReload && cached && (now - cached.timestamp) < CLASSES_CACHE_DURATION_MS) {
+      // Si estamos cargando el mes actual, actualizar el estado
+      if (monthToUse.getTime() === currentMonth.getTime()) {
+        setClasesDelMes(cached.clases);
+        setLoadingMonth(false);
+      }
+      return;
+    }
     
     // Actualizar timestamp cuando se cargan datos
     if (forceReload || !clasesDelMes.length) {
@@ -891,14 +989,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
-    // Mostrar loadingMonth solo si no hay loading principal activo, hay datos previos y la pestaña está visible
-    // Si loading está activo, no mostrar loadingMonth porque ya se muestra el loading principal
-    setLoadingMonth(!loading && clasesDelMes.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
+    // Mostrar loadingMonth solo si estamos cargando el mes actual y no hay datos previos
+    const isCurrentMonth = monthToUse.getTime() === currentMonth.getTime();
+    setLoadingMonth(isCurrentMonth && !loading && clasesDelMes.length === 0 && (typeof document === 'undefined' || document.visibilityState === 'visible'));
 
     try {
       const diasDelMes = eachDayOfInterval({ 
-        start: startOfMonth(currentMonth), 
-        end: endOfMonth(currentMonth) 
+        start: startOfMonth(monthToUse), 
+        end: endOfMonth(monthToUse) 
       });
 
 
@@ -931,8 +1029,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         .select('*')
         .eq('cliente_id', user.id)
         .eq('estado', 'confirmada')
-        .gte('turno_fecha', format(startOfMonth(currentMonth), 'yyyy-MM-dd'))
-        .lte('turno_fecha', format(endOfMonth(currentMonth), 'yyyy-MM-dd'));
+        .gte('turno_fecha', format(startOfMonth(monthToUse), 'yyyy-MM-dd'))
+        .lte('turno_fecha', format(endOfMonth(monthToUse), 'yyyy-MM-dd'));
 
       if (error) {
         console.error('Error al cargar turnos variables:', error);
@@ -971,10 +1069,29 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       // Las cancelaciones de turnos variables ya se manejan eliminando el turno_variable
       // Por lo tanto, NO necesitamos agregar líneas adicionales desde turnos_cancelados
 
-      setClasesDelMes(todasLasClases);
-      // Actualizar timestamp del caché
-      const monthKey = format(currentMonth, 'yyyy-MM');
-      clasesDelMesCacheRef.current = { monthKey, timestamp: Date.now() };
+      // Guardar en caché
+      clasesDelMesCacheRef.current.set(monthKey, {
+        clases: todasLasClases,
+        timestamp: Date.now()
+      });
+      
+      // Si estamos cargando el mes actual, actualizar el estado
+      if (isCurrentMonth) {
+        setClasesDelMes(todasLasClases);
+      }
+      
+      // Pre-cargar el mes siguiente en background si no está en caché
+      const nextMonth = addMonths(monthToUse, 1);
+      const nextMonthKey = format(nextMonth, 'yyyy-MM');
+      const nextMonthCached = clasesDelMesCacheRef.current.get(nextMonthKey);
+      const nextMonthNow = Date.now();
+      
+      if (!nextMonthCached || (nextMonthNow - nextMonthCached.timestamp) >= CLASSES_CACHE_DURATION_MS) {
+        // Pre-cargar en background sin mostrar loading
+        cargarClasesDelMes(false, nextMonth).catch(err => {
+          console.error('Error pre-cargando mes siguiente:', err);
+        });
+      }
     } catch (error) {
       console.error('Error al cargar clases del mes:', error);
     } finally {
@@ -986,22 +1103,50 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   useEffect(() => {
     if (activeView === 'mis-clases') {
       const monthKey = format(currentMonth, 'yyyy-MM');
+      const cached = clasesDelMesCacheRef.current.get(monthKey);
       const now = Date.now();
-      const cached = clasesDelMesCacheRef.current;
       const monthChanged = prevMonthRef.current !== monthKey;
       
-      // Solo recargar si:
-      // 1. Cambió el mes, O
-      // 2. No hay caché válido para este mes, O
-      // 3. La caché expiró
-      if (monthChanged || cached.monthKey !== monthKey || (now - cached.timestamp) >= CLASSES_CACHE_DURATION_MS) {
+      // Si cambió el mes o no hay caché válido, cargar
+      if (monthChanged || !cached || (now - cached.timestamp) >= CLASSES_CACHE_DURATION_MS) {
         prevMonthRef.current = monthKey;
-        cargarClasesDelMes(false);
-        // El timestamp se actualiza dentro de cargarClasesDelMes
+        
+        // Si hay caché pero expiró, usar caché mientras se recarga en background
+        if (cached && cached.clases.length > 0) {
+          // Aplicar feriados al caché antes de mostrarlo
+          const clasesConFeriados = aplicarFeriadosAClases(cached.clases);
+          setClasesDelMes(clasesConFeriados);
+          setLoadingMonth(false);
+          // Recargar en background
+          cargarClasesDelMes(true, currentMonth).catch(err => {
+            console.error('Error recargando mes en background:', err);
+          });
+        } else {
+          // No hay caché, cargar normalmente (esperar a que feriados estén cargados)
+          if (feriados.length > 0 || feriados.length === 0) {
+            // Si feriados ya se cargaron (incluso si está vacío), proceder
+            cargarClasesDelMes(false, currentMonth);
+          } else {
+            // Esperar a que se carguen los feriados primero
+            const checkFeriados = setInterval(() => {
+              if (feriados.length >= 0) { // Ya se cargaron (puede ser vacío)
+                clearInterval(checkFeriados);
+                cargarClasesDelMes(false, currentMonth);
+              }
+            }, 100);
+            // Timeout de seguridad
+            setTimeout(() => clearInterval(checkFeriados), 2000);
+          }
+        }
+      } else {
+        // Hay caché válido, aplicar feriados y usar directamente
+        const clasesConFeriados = aplicarFeriadosAClases(cached.clases);
+        setClasesDelMes(clasesConFeriados);
+        setLoadingMonth(false);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [horariosRecurrentes, currentMonth, ausenciasAdmin, activeView]);
+  }, [horariosRecurrentes, currentMonth, ausenciasAdmin, activeView, feriados]);
 
   // Recargar ausencias cuando cambie el mes (con caché)
   useEffect(() => {
@@ -1022,6 +1167,34 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const end = endOfMonth(currentMonth);
     return eachDayOfInterval({ start, end });
   }, [currentMonth]);
+
+  // Función helper para aplicar feriados a clases ya cargadas (útil para caché)
+  const aplicarFeriadosAClases = (clases: any[]): any[] => {
+    return clases.map(clase => {
+      const fechaFormateada = format(clase.dia, 'yyyy-MM-dd');
+      
+      // Verificar si el día es feriado (día hábil feriado sin horarios personalizados)
+      const esFeriado = feriados.some(f => 
+        f.fecha === fechaFormateada && 
+        f.tipo === 'dia_habil_feriado' && 
+        (!f.horarios_personalizados || f.horarios_personalizados.length === 0)
+      );
+      
+      // Si es feriado y la clase no está cancelada, marcarla como cancelada con tipo 'sistema'
+      if (esFeriado && !clase.horario.cancelada) {
+        return {
+          ...clase,
+          horario: {
+            ...clase.horario,
+            cancelada: true,
+            tipoCancelacion: 'sistema' as const
+          }
+        };
+      }
+      
+      return clase;
+    });
+  };
 
   // Obtener clases del día
   const getClasesDelDia = async (dia: Date, horariosParaUsar?: HorarioRecurrente[]) => {
@@ -1115,6 +1288,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       console.log('🗺️ [GET_CLASES] Mapa de cancelaciones:', Array.from(cancelacionesMap.entries()));
     }
 
+    // Verificar si el día es feriado (día hábil feriado sin horarios personalizados)
+    const esFeriado = feriados.some(f => 
+      f.fecha === fechaFormateada && 
+      f.tipo === 'dia_habil_feriado' && 
+      (!f.horarios_personalizados || f.horarios_personalizados.length === 0)
+    );
+
     // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
     const clasesConCancelaciones = horariosDelDia
       .map((horario) => {
@@ -1122,7 +1302,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const horaFinNorm = formatTime(horario.hora_fin);
         const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
         const estaCancelada = cancelacionesMap.has(claveCancelacion);
-        const tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
+        let tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
+        
+        // Si es feriado sin horarios personalizados, marcar como cancelado con tipo 'sistema'
+        if (esFeriado && !estaCancelada) {
+          tipoCancelacion = 'sistema';
+        }
+        
         const estaBloqueada = estaClaseBloqueada(dia, horario.clase_numero);
         
         // Debug para feriados
@@ -1131,6 +1317,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             claveCancelacion,
             estaCancelada,
             tipoCancelacion,
+            esFeriado,
             horaInicioOriginal: horario.hora_inicio,
             horaFinOriginal: horario.hora_fin
           });
@@ -1141,7 +1328,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           dia,
           horario: {
             ...horario,
-            cancelada: estaCancelada,
+            cancelada: estaCancelada || esFeriado, // Marcar como cancelada si es feriado
             bloqueada: estaBloqueada,
             tipoCancelacion: tipoCancelacion as 'usuario' | 'admin' | 'sistema' | undefined
           }
@@ -1867,10 +2054,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         ${isPast ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/50'}
                         ${isToday ? 'ring-2 ring-primary' : ''}
                         ${estadoDia === 'sin-clases' ? 'cursor-default' : ''}
+                        ${estadoDia === 'feriado' ? 'bg-amber-500/20 border-2 border-amber-500/50' : ''}
+                        ${estadoDia === 'feriado-habilitado' ? 'bg-green-500/20 border-2 border-green-500/50' : ''}
                       `}
                     >
                       <span className={isCurrentMonth ? '' : 'invisible'}>{getDate(date)}</span>
-                      {isCurrentMonth && !isPast && (
+                      {isCurrentMonth && !isPast && estadoDia !== 'feriado' && estadoDia !== 'feriado-habilitado' && (
                         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                           {estadoDia === 'verde' && (
                             <div className="w-2 h-2 bg-green-500 rounded-full" />
@@ -1886,7 +2075,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               </div>
 
               {/* Leyenda */}
-              <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground">
+              <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full" />
                   <span>Con cupos disponibles</span>
@@ -1894,6 +2083,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-red-500 rounded-full" />
                   <span>Completo</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-amber-500/20 border-2 border-amber-500/50 rounded-lg" />
+                  <span>Feriado</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 bg-green-500/20 border-2 border-green-500/50 rounded-lg" />
+                  <span>Feriado/Fin de semana habilitado</span>
                 </div>
               </div>
             </div>
@@ -1903,7 +2100,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         return (
           <div className="w-full animate-view-swap pb-24 sm:pb-0">
             <div className="mb-6">
-              <h2 className="text-lg sm:text-2xl font-semibold">Vacantes Disponibles</h2>
+              <h2 className="text-lg sm:text-2xl font-semibold">Vacantes disponibles</h2>
               <p className="text-sm text-muted-foreground mt-1">Seleccioná un día para ver las clases disponibles</p>
             </div>
             {loadingTurnosCancelados ? (
@@ -2056,7 +2253,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5" />
-              <span>Detalles de la Clase</span>
+              <span>Detalles de la clase</span>
             </DialogTitle>
           </DialogHeader>
           
@@ -2189,7 +2386,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           <DialogHeader>
             <DialogTitle className="flex items-center space-x-2">
               <Calendar className="h-5 w-5" />
-              <span>Confirmar Reserva</span>
+              <span>Confirmar reserva</span>
             </DialogTitle>
           </DialogHeader>
           

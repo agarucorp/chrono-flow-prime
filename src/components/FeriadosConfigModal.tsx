@@ -61,13 +61,8 @@ export const FeriadosConfigModal = ({
       if (fechaSeleccionada) {
         const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
         setFecha(fechaStr);
-        // Determinar tipo automáticamente según el día de la semana
-        const diaSemana = fechaSeleccionada.getDay();
-        if (diaSemana === 0 || diaSemana === 6) {
-          setTipo('fin_semana_habilitado');
-        } else {
-          setTipo('dia_habil_feriado');
-        }
+        // Si hay fecha seleccionada, siempre es día hábil feriado (los fines de semana usan otro modal)
+        setTipo('dia_habil_feriado');
         setMostrarFormulario(true);
       } else {
         setMostrarFormulario(false);
@@ -632,7 +627,7 @@ export const FeriadosConfigModal = ({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
-            {fechaSeleccionada ? 'Configurar Feriado' : 'Gestionar Feriados'}
+            {fechaSeleccionada ? 'Configurar feriado' : 'Gestionar feriados'}
           </DialogTitle>
           <DialogDescription>
             {fechaSeleccionada 
