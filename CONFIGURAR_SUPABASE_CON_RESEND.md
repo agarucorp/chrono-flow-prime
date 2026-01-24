@@ -38,7 +38,23 @@ Si no tenés la API key a mano:
 
 ---
 
-## 3. Probar
+## 3. Redirect URLs (confirmación de email)
+
+Para que al hacer clic en "Confirmar email" no caigas en 404:
+
+1. **Supabase** → **Authentication** → **URL Configuration**
+2. **Site URL:** `https://www.maldagym.com` (o el que uses)
+3. **Redirect URLs** — agregar:
+   - `https://www.maldagym.com/user`
+   - `https://www.maldagym.com/dashboard` (redirige a `/user`)
+   - `https://maldagym.com/user` y `https://maldagym.com/dashboard` si usás ambos dominios
+   - `http://localhost:5173/user` para desarrollo
+
+La app redirige después de confirmar a `/user` (tu panel). Sin estas URLs, Supabase rechaza el redirect y podés ver 404 o "invalid redirect".
+
+---
+
+## 4. Probar
 
 1. En Supabase: **Authentication** → **Users** → **Invite user** (o probar registro desde tu app).
 2. Verificar que llegue el email de confirmación.
@@ -46,7 +62,7 @@ Si no tenés la API key a mano:
 
 ---
 
-## 4. Límites Resend Free
+## 5. Límites Resend Free
 
 - **3.000 emails / mes**
 - **100 emails / día**

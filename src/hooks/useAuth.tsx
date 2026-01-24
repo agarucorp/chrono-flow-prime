@@ -194,7 +194,7 @@ export const useAuth = () => {
           options: {
             data: metadata,
             // Permitir que el usuario se cree aunque falle el envío del email
-            emailRedirectTo: `${window.location.origin}/dashboard`
+            emailRedirectTo: `${window.location.origin}/user`
           }
         };
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
