@@ -101,12 +101,11 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
         return;
       }
 
-      // Obtener capacidad global
-      const capacidadGlobal = obtenerCapacidadActual() || 4;
-
       // Para cada horario, verificar cuántos usuarios recurrentes ya están registrados
+      // Usar capacidad por clase (item.capacidad) en lugar de capacidad global
       const horariosConCapacidad = await Promise.all(
         (data || []).map(async (item) => {
+          const capacidadClase = item.capacidad || 4; // Usar capacidad de la clase específica
           // Normalizar formato de hora: puede venir como HH:MM o HH:MM:SS
           // Necesitamos usar el mismo formato que se guarda en la BD
           const horaInicioRaw = item.hora_inicio || '';
@@ -199,18 +198,18 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
               usuariosRecurrentesCount = 0; // Si todo falla, asumir 0 (puede estar limitado por RLS)
             }
           }
-          const cupoCompleto = usuariosRecurrentesCount >= capacidadGlobal;
+          const cupoCompleto = usuariosRecurrentesCount >= capacidadClase;
 
           // Log para debug - siempre mostrar para verificar
-          console.log(`📊 Horario ${item.id} (Día ${item.dia_semana}, ${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}): ${usuariosRecurrentesCount}/${capacidadGlobal} usuarios - ${cupoCompleto ? 'COMPLETO ❌' : 'DISPONIBLE ✅'}`);
+          console.log(`📊 Horario ${item.id} (Día ${item.dia_semana}, Clase ${item.clase_numero}, ${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}): ${usuariosRecurrentesCount}/${capacidadClase} usuarios - ${cupoCompleto ? 'COMPLETO ❌' : 'DISPONIBLE ✅'}`);
           
           if (cupoCompleto) {
-            console.warn(`⚠️ BLOQUEO: Horario ${item.id} (${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}) está COMPLETO: ${usuariosRecurrentesCount}/${capacidadGlobal}`);
+            console.warn(`⚠️ BLOQUEO: Horario ${item.id} (${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}) está COMPLETO: ${usuariosRecurrentesCount}/${capacidadClase}`);
           }
 
           const horarioConCapacidad = {
             ...item,
-            capacidad_maxima: capacidadGlobal, // Usar capacidad global
+            capacidad_maxima: capacidadClase, // Usar capacidad de la clase específica
             usuariosActuales: usuariosRecurrentesCount,
             cupoCompleto: cupoCompleto // Asegurar que siempre sea boolean
           };

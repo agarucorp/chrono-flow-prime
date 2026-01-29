@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -13,6 +14,14 @@ import { es } from 'date-fns/locale';
 interface HorarioPersonalizado {
   hora_inicio: string;
   hora_fin: string;
+  clase_numero?: number; // Para identificar qué clase fue seleccionada
+}
+
+interface ClaseDisponible {
+  clase_numero: number;
+  hora_inicio: string;
+  hora_fin: string;
+  nombre: string;
 }
 
 interface FinSemanaHabilitado {
@@ -41,16 +50,85 @@ export const FinSemanaConfigModal = ({
   const [fecha, setFecha] = useState<string>('');
   const [horariosPersonalizados, setHorariosPersonalizados] = useState<HorarioPersonalizado[]>([]);
   const [editandoFinSemana, setEditandoFinSemana] = useState<FinSemanaHabilitado | null>(null);
+  const [clasesDisponibles, setClasesDisponibles] = useState<ClaseDisponible[]>([]);
 
   useEffect(() => {
-    if (open && fechaSeleccionada) {
-      const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
-      setFecha(fechaStr);
-      cargarFinSemanaExistente(fechaStr);
+    if (open) {
+      cargarClasesDisponibles();
+      if (fechaSeleccionada) {
+        const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
+        setFecha(fechaStr);
+        cargarFinSemanaExistente(fechaStr);
+      } else {
+        resetearFormulario();
+      }
     } else {
       resetearFormulario();
     }
   }, [open, fechaSeleccionada]);
+
+  // Actualizar horarios con clase_numero cuando se cargan las clases disponibles
+  useEffect(() => {
+    if (clasesDisponibles.length > 0 && editandoFinSemana && horariosPersonalizados.length > 0) {
+      const horariosConClase = horariosPersonalizados.map(horario => {
+        // Si ya tiene clase_numero, mantenerlo
+        if (horario.clase_numero) {
+          return horario;
+        }
+        
+        // Intentar encontrar la clase que coincida con este horario
+        const horaInicio = horario.hora_inicio?.substring(0, 5) || '';
+        const horaFin = horario.hora_fin?.substring(0, 5) || '';
+        const claseEncontrada = clasesDisponibles.find(
+          c => c.hora_inicio === horaInicio && c.hora_fin === horaFin
+        );
+        
+        if (claseEncontrada) {
+          return {
+            ...horario,
+            clase_numero: claseEncontrada.clase_numero
+          };
+        }
+        
+        // Si no se encuentra, mantener el horario sin clase_numero
+        return horario;
+      });
+      
+      // Solo actualizar si hay cambios
+      const hayCambios = horariosConClase.some((h, i) => h.clase_numero !== horariosPersonalizados[i]?.clase_numero);
+      if (hayCambios) {
+        setHorariosPersonalizados(horariosConClase);
+      }
+    }
+  }, [clasesDisponibles]);
+
+  const cargarClasesDisponibles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('clase_numero, hora_inicio, hora_fin')
+        .eq('dia_semana', 1) // Usar lunes como referencia (todas las clases tienen los mismos horarios todos los días)
+        .eq('activo', true)
+        .order('clase_numero');
+
+      if (error) {
+        console.error('Error cargando clases disponibles:', error);
+        return;
+      }
+
+      if (data && data.length > 0) {
+        const clases = data.map((h: any) => ({
+          clase_numero: h.clase_numero,
+          hora_inicio: h.hora_inicio.substring(0, 5), // Formato HH:MM
+          hora_fin: h.hora_fin.substring(0, 5),
+          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`
+        }));
+        setClasesDisponibles(clases);
+      }
+    } catch (error) {
+      console.error('Error inesperado cargando clases:', error);
+    }
+  };
 
   const resetearFormulario = () => {
     setEditandoFinSemana(null);
@@ -75,6 +153,7 @@ export const FinSemanaConfigModal = ({
 
       if (data) {
         setEditandoFinSemana(data);
+        // Los horarios se asociarán con clases en el useEffect cuando clasesDisponibles se carguen
         setHorariosPersonalizados(data.horarios_personalizados || []);
       } else {
         setEditandoFinSemana(null);
@@ -86,16 +165,27 @@ export const FinSemanaConfigModal = ({
   };
 
   const agregarHorario = () => {
-    setHorariosPersonalizados([...horariosPersonalizados, { hora_inicio: '09:00', hora_fin: '10:00' }]);
+    // Agregar un horario vacío que se completará con el dropdown
+    setHorariosPersonalizados([
+      ...horariosPersonalizados,
+      { hora_inicio: '', hora_fin: '', clase_numero: undefined }
+    ]);
   };
 
   const eliminarHorario = (index: number) => {
     setHorariosPersonalizados(horariosPersonalizados.filter((_, i) => i !== index));
   };
 
-  const actualizarHorario = (index: number, campo: 'hora_inicio' | 'hora_fin', valor: string) => {
+  const seleccionarClase = (index: number, claseNumero: number) => {
+    const claseSeleccionada = clasesDisponibles.find(c => c.clase_numero === claseNumero);
+    if (!claseSeleccionada) return;
+
     const nuevosHorarios = [...horariosPersonalizados];
-    nuevosHorarios[index][campo] = valor;
+    nuevosHorarios[index] = {
+      hora_inicio: claseSeleccionada.hora_inicio,
+      hora_fin: claseSeleccionada.hora_fin,
+      clase_numero: claseNumero
+    };
     setHorariosPersonalizados(nuevosHorarios);
   };
 
@@ -274,27 +364,34 @@ export const FinSemanaConfigModal = ({
                 {horariosPersonalizados.map((horario, index) => (
                   <Card key={index} className="p-4">
                     <div className="flex items-center gap-4">
-                      <div className="flex-1 grid grid-cols-2 gap-4">
-                        <div>
-                          <Label htmlFor={`hora_inicio_${index}`}>Hora inicio</Label>
-                          <Input
-                            id={`hora_inicio_${index}`}
-                            type="time"
-                            value={horario.hora_inicio}
-                            onChange={(e) => actualizarHorario(index, 'hora_inicio', e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
-                        <div>
-                          <Label htmlFor={`hora_fin_${index}`}>Hora fin</Label>
-                          <Input
-                            id={`hora_fin_${index}`}
-                            type="time"
-                            value={horario.hora_fin}
-                            onChange={(e) => actualizarHorario(index, 'hora_fin', e.target.value)}
-                            className="mt-1"
-                          />
-                        </div>
+                      <div className="flex-1">
+                        <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
+                        {clasesDisponibles.length > 0 ? (
+                          <Select
+                            value={horario.clase_numero?.toString() || ''}
+                            onValueChange={(value) => seleccionarClase(index, parseInt(value))}
+                          >
+                            <SelectTrigger id={`clase_${index}`} className="mt-1">
+                              <SelectValue placeholder="Selecciona una clase" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {clasesDisponibles.map((clase) => (
+                                <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
+                                  {clase.nombre}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        ) : (
+                          <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
+                            Cargando clases...
+                          </div>
+                        )}
+                        {horario.hora_inicio && horario.hora_fin && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            Horario: {horario.hora_inicio} - {horario.hora_fin}
+                          </p>
+                        )}
                       </div>
                       <Button
                         type="button"

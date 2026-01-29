@@ -1179,9 +1179,16 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
             );
           }
 
-          // Handlers para long press y click derecho
+          // Verificar si la fecha es futura (después de hoy)
+          const hoy = new Date();
+          hoy.setHours(0, 0, 0, 0);
+          const fechaComparar = new Date(date);
+          fechaComparar.setHours(0, 0, 0, 0);
+          const esFechaFutura = fechaComparar > hoy;
+
+          // Handlers para long press y click derecho (solo para fechas futuras)
           const handleLongPressStart = () => {
-            if (!isAdminView || !onDateLongPress) return;
+            if (!isAdminView || !onDateLongPress || !esFechaFutura) return;
             longPressTimerRef.current = setTimeout(() => {
               onDateLongPress(date);
             }, 2000); // 2 segundos
@@ -1193,7 +1200,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
             }
           };
           const handleContextMenu = (e: React.MouseEvent) => {
-            if (!isAdminView || !onDateLongPress) return;
+            if (!isAdminView || !onDateLongPress || !esFechaFutura) return;
             e.preventDefault();
             onDateLongPress(date);
           };
@@ -1212,12 +1219,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                 // Los feriados siempre son accesibles (admin puede verlos y gestionarlos)
                 handleDateSelect(date);
               }}
-              onMouseDown={isAdminView && onDateLongPress ? handleLongPressStart : undefined}
-              onMouseUp={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
-              onMouseLeave={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
-              onTouchStart={isAdminView && onDateLongPress ? handleLongPressStart : undefined}
-              onTouchEnd={isAdminView && onDateLongPress ? handleLongPressEnd : undefined}
-              onContextMenu={isAdminView && onDateLongPress ? handleContextMenu : undefined}
+              onMouseDown={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressStart : undefined}
+              onMouseUp={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
+              onMouseLeave={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
+              onTouchStart={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressStart : undefined}
+              onTouchEnd={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
+              onContextMenu={isAdminView && onDateLongPress && esFechaFutura ? handleContextMenu : undefined}
             >
               <SelectedDayMarker isSelected={isSelected} />
               <div className="font-light relative z-10 truncate text-foreground" style={{ fontSize: '10px' }}>

@@ -1404,6 +1404,17 @@ export default function Admin() {
             <CalendarView 
               isAdminView={true}
               onDateLongPress={(date) => {
+                // Verificar que la fecha sea futura (después de hoy)
+                const hoy = new Date();
+                hoy.setHours(0, 0, 0, 0);
+                const fechaComparar = new Date(date);
+                fechaComparar.setHours(0, 0, 0, 0);
+                
+                // Solo permitir configurar feriados/fin de semana para fechas futuras
+                if (fechaComparar <= hoy) {
+                  return;
+                }
+                
                 // Detectar si es fin de semana (sábado=6, domingo=0)
                 const diaSemana = date.getDay();
                 const esFinSemana = diaSemana === 0 || diaSemana === 6;
