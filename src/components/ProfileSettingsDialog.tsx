@@ -3,12 +3,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Lock, X, Calendar, Clock, Edit } from 'lucide-react';
+import { Lock, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
-import { ChangeScheduleModal } from './ChangeScheduleModal';
 
 interface ProfileSettingsDialogProps {
   open: boolean;
@@ -24,10 +21,6 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
-  const [showChangeSchedule, setShowChangeSchedule] = useState(false);
-  const [currentSchedules, setCurrentSchedules] = useState<any[]>([]);
-  const [currentPlan, setCurrentPlan] = useState<number | null>(null);
-  const [loadingSchedules, setLoadingSchedules] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -37,7 +30,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
         // Intentar cargar desde profiles; si no existe la tabla, continuar silenciosamente
         const { data, error } = await supabase
           .from('profiles')
-          .select('first_name, last_name, phone, combo_asignado')
+          .select('first_name, last_name, phone')
           .eq('id', userId)
           .single();
 
@@ -51,16 +44,12 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           // Fallback al teléfono del user_metadata si profiles.phone está vacío
           const mergedPhone = (data.phone ?? meta.phone ?? '') as string;
           setPhone(mergedPhone);
-          setCurrentPlan(data.combo_asignado || null);
         } else {
           // Si no hay fila en profiles o hubo error, usar metadata
           setFirstName(meta.first_name || '');
           setLastName(meta.last_name || '');
           setPhone(meta.phone || '');
         }
-        
-        // Cargar horarios actuales
-        await loadCurrentSchedules();
       } catch (_) {
         // Ignorar errores (p. ej. tabla inexistente)
       } finally {
@@ -69,42 +58,6 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
     };
     load();
   }, [open, userId]);
-
-  const loadCurrentSchedules = async () => {
-    if (!userId) return;
-    try {
-      setLoadingSchedules(true);
-      const { data, error } = await supabase
-        .from('vista_horarios_usuarios')
-        .select('*')
-        .eq('usuario_id', userId)
-        .eq('activo', true)
-        .order('dia_semana', { ascending: true })
-        .order('clase_numero', { ascending: true });
-
-      if (error) {
-        console.error('Error cargando horarios:', error);
-        return;
-      }
-
-      setCurrentSchedules(data || []);
-      
-      // Obtener plan actual desde profiles
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('combo_asignado')
-        .eq('id', userId)
-        .single();
-      
-      if (profileData) {
-        setCurrentPlan(profileData.combo_asignado);
-      }
-    } catch (error) {
-      console.error('Error cargando horarios:', error);
-    } finally {
-      setLoadingSchedules(false);
-    }
-  };
 
   const handleSave = async () => {
     if (!userId) return;
@@ -145,7 +98,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
         {/* Botón X para mobile */}
         <Button
           variant="ghost"
@@ -186,68 +139,6 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
             <div className="space-y-2">
               <Label htmlFor="phone-mobile" className="text-xs">Teléfono</Label>
               <Input id="phone-mobile" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-xs h-9" placeholder="+54 9 11 1234-5678" />
-            </div>
-
-            {/* Sección de Horarios Actuales */}
-            <div className="space-y-2">
-              <Label className="text-xs">Plan y horarios</Label>
-              <Card className="p-3">
-                {loadingSchedules ? (
-                  <p className="text-xs text-muted-foreground">Cargando...</p>
-                ) : currentSchedules.length > 0 ? (
-                  <div className="space-y-2">
-                    {currentPlan && (
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-xs font-medium">Plan actual:</span>
-                        <Badge variant="outline" className="text-xs">Plan {currentPlan}</Badge>
-                      </div>
-                    )}
-                    <div className="space-y-1">
-                      {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes'].map((diaNombre, index) => {
-                        const diaNumero = index + 1;
-                        const horariosDia = currentSchedules.filter(h => h.dia_semana === diaNumero);
-                        if (horariosDia.length === 0) return null;
-                        return (
-                          <div key={diaNumero} className="flex items-center gap-2 text-xs">
-                            <Calendar className="h-3 w-3 text-muted-foreground" />
-                            <span className="font-medium w-16">{diaNombre}:</span>
-                            <div className="flex flex-wrap gap-1">
-                              {horariosDia.map((h, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">
-                                  <Clock className="h-2.5 w-2.5 mr-1" />
-                                  {h.hora_inicio?.substring(0, 5)} - {h.hora_fin?.substring(0, 5)}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    <Button
-                      type="button"
-                      onClick={() => setShowChangeSchedule(true)}
-                      className="w-full text-xs h-8 mt-2"
-                      variant="outline"
-                    >
-                      <Edit className="w-3 h-3 mr-2" />
-                      Cambiar horarios
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="text-center py-2">
-                    <p className="text-xs text-muted-foreground mb-2">No tienes horarios configurados</p>
-                    <Button
-                      type="button"
-                      onClick={() => setShowChangeSchedule(true)}
-                      className="w-full text-xs h-8"
-                      variant="outline"
-                    >
-                      <Calendar className="w-3 h-3 mr-2" />
-                      Configurar horarios
-                    </Button>
-                  </div>
-                )}
-              </Card>
             </div>
 
             {/* CTA Cambiar Contraseña */}
@@ -324,22 +215,6 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
         open={showChangePassword}
         onClose={() => setShowChangePassword(false)}
       />
-
-      {/* Dialog para cambiar horarios */}
-      <ChangeScheduleModal
-        isOpen={showChangeSchedule}
-        onClose={() => {
-          setShowChangeSchedule(false);
-          loadCurrentSchedules(); // Recargar horarios después de cerrar
-        }}
-        onComplete={() => {
-          setShowChangeSchedule(false);
-          loadCurrentSchedules(); // Recargar horarios después de completar
-        }}
-        currentSchedules={currentSchedules}
-        currentPlan={currentPlan}
-      />
     </Dialog>
   );
 };
-

@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { flushSync } from 'react-dom';
-import { Check, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Check, AlertCircle, ArrowLeft, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
@@ -182,6 +182,8 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
             horariosSeleccionadosIniciales.add(item.id);
           }
 
+          // Usar capacidad específica de la clase o capacidad global como fallback
+          const capacidadClase = item.capacidad || capacidadGlobal;
           const cupoCompleto = usuariosRecurrentesCount >= capacidadClase;
 
           return {
@@ -325,74 +327,133 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
       const paquete = PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado);
       const tarifaPorClase = paquete?.precioPorClase || 0;
 
-      // 1. Eliminar horarios antiguos del usuario
-      const { error: deleteError } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .delete()
-        .eq('usuario_id', user.id);
+      // Detectar si es cambio de plan o solo de horarios
+      const esCambioDePlan = paqueteSeleccionado !== currentPlan;
 
-      if (deleteError) {
-        console.error('Error eliminando horarios antiguos:', deleteError);
-        dismissToast(loadingToast);
-        showError('Error', 'No se pudieron eliminar los horarios antiguos');
-        return;
-      }
-
-      // 2. Crear nuevos horarios
-      const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
-        const horario = horariosClase.find(h => h.id === horarioId);
-        return {
-          usuario_id: user.id,
-          dia_semana: horario?.dia_semana,
-          clase_numero: horario?.clase_numero,
-          hora_inicio: horario?.hora_inicio,
-          hora_fin: horario?.hora_fin,
-          activo: true,
-          fecha_inicio: new Date().toISOString().split('T')[0],
-          combo_aplicado: paqueteSeleccionado,
-          tarifa_personalizada: tarifaPorClase
-        };
-      });
-
-      const { error: insertError } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .insert(horariosRecurrentes);
-
-      if (insertError) {
-        dismissToast(loadingToast);
-        console.error('Error guardando horarios recurrentes:', insertError);
-        showError('Error', `No se pudieron guardar tus horarios recurrentes: ${insertError.message}`);
-        return;
-      }
-
-      // 3. Actualizar combo asignado y tarifa en el perfil del usuario
-      const { error: profileUpdateError } = await supabase
-        .from('profiles')
-        .update({ 
-          combo_asignado: paqueteSeleccionado,
-          tarifa_personalizada: tarifaPorClase.toString()
-        })
-        .eq('id', user.id);
-
-      if (profileUpdateError) {
-        console.warn('No se pudo actualizar el perfil:', profileUpdateError);
-      }
-
-      dismissToast(loadingToast);
-      showSuccess('¡Horarios actualizados!', `Tus horarios fueron actualizados con Plan ${paqueteSeleccionado} - ${formatPrecio(tarifaPorClase)} por clase`);
-
-      // Generar cuota mensual automáticamente para el mes actual
       const ahora = new Date();
-      const mesActual = ahora.getMonth() + 1;
-      const anioActual = ahora.getFullYear();
+      const manana = new Date(ahora);
+      manana.setDate(manana.getDate() + 1);
+      const hoyStr = ahora.toISOString().split('T')[0];
+      const mananaStr = manana.toISOString().split('T')[0];
+      
+      // Calcular 1ro del próximo mes
+      const primeroDiaProximoMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
+      const primeroDiaProximoMesStr = primeroDiaProximoMes.toISOString().split('T')[0];
+      
+      // Calcular último día del mes actual
+      const ultimoDiaMesActual = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
+      const ultimoDiaMesActualStr = ultimoDiaMesActual.toISOString().split('T')[0];
 
-      const { error: cuotaError } = await supabase.rpc('fn_generar_cuotas_mes', {
-        p_anio: anioActual,
-        p_mes: mesActual
-      });
+      if (esCambioDePlan) {
+        // CAMBIO DE PLAN: Aplica desde el próximo mes
+        
+        // 1. Marcar horarios actuales con fecha_fin = último día del mes actual
+        const { error: updateOldError } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .update({ fecha_fin: ultimoDiaMesActualStr })
+          .eq('usuario_id', user.id)
+          .eq('activo', true)
+          .is('fecha_fin', null);
 
-      if (cuotaError) {
-        console.warn('No se pudo generar la cuota automáticamente:', cuotaError);
+        if (updateOldError) {
+          console.error('Error marcando fin de horarios antiguos:', updateOldError);
+        }
+
+        // 2. Crear nuevos horarios con fecha_inicio = 1ro del próximo mes
+        const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
+          const horario = horariosClase.find(h => h.id === horarioId);
+          return {
+            usuario_id: user.id,
+            dia_semana: horario?.dia_semana,
+            clase_numero: horario?.clase_numero,
+            hora_inicio: horario?.hora_inicio,
+            hora_fin: horario?.hora_fin,
+            activo: true,
+            fecha_inicio: primeroDiaProximoMesStr,
+            combo_aplicado: paqueteSeleccionado,
+            tarifa_personalizada: tarifaPorClase
+          };
+        });
+
+        const { error: insertError } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .insert(horariosRecurrentes);
+
+        if (insertError) {
+          dismissToast(loadingToast);
+          console.error('Error guardando horarios recurrentes:', insertError);
+          showError('Error', `No se pudieron guardar tus horarios recurrentes: ${insertError.message}`);
+          return;
+        }
+
+        // 3. Guardar cambio de plan como pendiente (NO actualizar combo_asignado todavía)
+        const { error: profileUpdateError } = await supabase
+          .from('profiles')
+          .update({ 
+            combo_pendiente: paqueteSeleccionado,
+            tarifa_pendiente: tarifaPorClase,
+            fecha_cambio_plan: primeroDiaProximoMesStr
+          })
+          .eq('id', user.id);
+
+        if (profileUpdateError) {
+          console.warn('No se pudo guardar el cambio pendiente:', profileUpdateError);
+        }
+
+        dismissToast(loadingToast);
+        const nombreMes = primeroDiaProximoMes.toLocaleDateString('es-AR', { month: 'long' });
+        showSuccess(
+          '¡Cambio de plan programado!', 
+          `Tu nuevo Plan ${paqueteSeleccionado} aplicará desde el 1 de ${nombreMes}. Hasta entonces, mantenés tu plan actual.`
+        );
+
+      } else {
+        // CAMBIO DE HORARIOS (mismo plan): Aplica desde mañana
+        
+        // 1. Marcar horarios actuales con fecha_fin = hoy
+        const { error: updateOldError } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .update({ fecha_fin: hoyStr })
+          .eq('usuario_id', user.id)
+          .eq('activo', true)
+          .is('fecha_fin', null);
+
+        if (updateOldError) {
+          console.error('Error marcando fin de horarios antiguos:', updateOldError);
+        }
+
+        // 2. Crear nuevos horarios con fecha_inicio = mañana
+        const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
+          const horario = horariosClase.find(h => h.id === horarioId);
+          return {
+            usuario_id: user.id,
+            dia_semana: horario?.dia_semana,
+            clase_numero: horario?.clase_numero,
+            hora_inicio: horario?.hora_inicio,
+            hora_fin: horario?.hora_fin,
+            activo: true,
+            fecha_inicio: mananaStr,
+            combo_aplicado: paqueteSeleccionado,
+            tarifa_personalizada: tarifaPorClase
+          };
+        });
+
+        const { error: insertError } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .insert(horariosRecurrentes);
+
+        if (insertError) {
+          dismissToast(loadingToast);
+          console.error('Error guardando horarios recurrentes:', insertError);
+          showError('Error', `No se pudieron guardar tus horarios recurrentes: ${insertError.message}`);
+          return;
+        }
+
+        dismissToast(loadingToast);
+        showSuccess(
+          '¡Horarios actualizados!', 
+          `Tus nuevos horarios aplicarán desde mañana.`
+        );
       }
 
       // Disparar eventos para actualizar todas las vistas
@@ -400,8 +461,8 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
         window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
         window.dispatchEvent(new CustomEvent('balance:refresh'));
         window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
-        window.dispatchEvent(new CustomEvent('alumnosHorarios:updated')); // Para actualizar vista admin
-        window.dispatchEvent(new CustomEvent('turnosVariables:updated')); // Para actualizar agenda admin
+        window.dispatchEvent(new CustomEvent('alumnosHorarios:updated'));
+        window.dispatchEvent(new CustomEvent('turnosVariables:updated'));
       }, 300);
 
       onComplete();
@@ -521,16 +582,28 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                   <div className="flex-1 min-w-0 text-[11px] text-zinc-300 sm:text-sm">
                     <p className="font-medium text-zinc-100">Actualizar horarios</p>
                     <p className="mt-2 text-[11px] leading-relaxed text-zinc-400 sm:text-xs">
-                      Seleccioná tus nuevos horarios. Los horarios actuales están pre-seleccionados. Puedes mantenerlos o cambiarlos.
+                      Seleccioná tus nuevos horarios. Los horarios actuales están pre-seleccionados. Tocá la <X className="inline h-3 w-3" /> para quitar un horario.
                     </p>
                     <div className="mt-4 flex items-center justify-between">
                       <div className="flex items-center gap-2 text-[8px] font-normal uppercase tracking-[0.28em] text-zinc-400 sm:text-[11px] sm:font-medium">
-                        <span className="inline-flex h-2 w-2 items-center justify-center rounded-full bg-white" />
-                        <span className="font-normal text-zinc-100 sm:font-medium">
+                        <span className={`inline-flex h-2 w-2 items-center justify-center rounded-full ${
+                          horariosSeleccionados.size > paqueteSeleccionado ? 'bg-amber-500' : 'bg-white'
+                        }`} />
+                        <span className={`font-normal sm:font-medium ${
+                          horariosSeleccionados.size > paqueteSeleccionado ? 'text-amber-400' : 'text-zinc-100'
+                        }`}>
                           Horarios seleccionados: {horariosSeleccionados.size}/{paqueteSeleccionado || 0}
                         </span>
                       </div>
                     </div>
+                    {horariosSeleccionados.size > paqueteSeleccionado && (
+                      <div className="mt-3 flex items-center gap-2 rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2">
+                        <AlertCircle className="h-4 w-4 text-amber-400 flex-shrink-0" />
+                        <p className="text-[10px] sm:text-xs text-amber-300">
+                          Quitá {horariosSeleccionados.size - paqueteSeleccionado} horario(s) para continuar con Plan {paqueteSeleccionado}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -575,9 +648,9 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                         key={horario.id}
                                         variant="outline"
                                         size="sm"
-                                        className={`h-10 w-full justify-center text-[13px] font-light transition-colors ${
+                                        className={`h-10 w-full justify-center text-[13px] font-light transition-colors relative ${
                                           estaSeleccionado
-                                            ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
+                                            ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)] pr-8'
                                             : puedeSeleccionar && !estaLleno
                                             ? 'border-white/20 bg-zinc-900/80 text-zinc-100 hover:bg-zinc-900'
                                             : 'cursor-not-allowed border-white/5 bg-zinc-950 text-zinc-600 opacity-50'
@@ -590,10 +663,13 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                           toggleHorario(horario.id, dia.numero);
                                         }}
                                         disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
-                                        title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
+                                        title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
                                       >
                                         {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
                                         {estaLleno && !estaSeleccionado && ' (Lleno)'}
+                                        {estaSeleccionado && (
+                                          <X className="absolute right-2 h-4 w-4 text-zinc-500 hover:text-zinc-700" />
+                                        )}
                                       </Button>
                                     );
                                   })}
@@ -636,7 +712,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                       key={horario.id}
                                       variant="outline"
                                       size="sm"
-                                      className={`h-8 w-full justify-start text-[10px] font-light transition-colors ${
+                                      className={`h-8 w-full justify-between text-[10px] font-light transition-colors relative ${
                                         estaSeleccionado
                                           ? 'border-white bg-white text-zinc-900 shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                           : puedeSeleccionar && !estaLleno
@@ -651,10 +727,13 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                         toggleHorario(horario.id, dia.numero);
                                       }}
                                       disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
-                                      title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
+                                      title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
                                     >
-                                      {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                      <span>{formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}</span>
                                       {estaLleno && !estaSeleccionado && ' (Lleno)'}
+                                      {estaSeleccionado && (
+                                        <X className="h-3.5 w-3.5 text-zinc-500 hover:text-zinc-700" />
+                                      )}
                                     </Button>
                                   );
                                 })
@@ -723,7 +802,15 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
               </div>
 
               <div className="rounded-2xl border-2 border-amber-500/60 bg-amber-500/10 p-4 text-[11px] text-amber-100 shadow-[0_0_20px_rgba(245,158,11,0.15)] sm:p-6 sm:text-xs">
-                <strong className="font-semibold text-amber-200">Importante:</strong> Los cambios en tus horarios se aplicarán de inmediato. La cuota mensual se recalculará según tu nuevo plan.
+                {paqueteSeleccionado !== currentPlan ? (
+                  <>
+                    <strong className="font-semibold text-amber-200">Importante:</strong> Tu cambio de plan aplicará desde el <strong>1° del próximo mes</strong>. Hasta entonces, mantenés tu plan actual (Plan {currentPlan}).
+                  </>
+                ) : (
+                  <>
+                    <strong className="font-semibold text-amber-200">Importante:</strong> Tus nuevos horarios aplicarán desde <strong>mañana</strong>. El día de hoy no se verá afectado.
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -760,7 +847,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                 variant="outline"
                 onClick={onClose}
                 disabled={saving}
-                className="border-white/20 text-zinc-100 hover:bg-zinc-900"
+                className="bg-gray-500 text-white hover:bg-gray-600 border-gray-600"
               >
                 Cancelar
               </Button>

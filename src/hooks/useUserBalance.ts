@@ -125,7 +125,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const { data: profile } = await supabase
           .from('profiles')
-          .select('tarifa_personalizada, combo_asignado')
+          .select('tarifa_personalizada, combo_asignado, combo_pendiente, tarifa_pendiente, fecha_cambio_plan')
           .eq('id', user.id)
           .maybeSingle();
 
@@ -194,6 +194,28 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           .select('dia_semana, clase_numero, activo')
           .eq('usuario_id', user.id)
           .eq('activo', true);
+
+        // Obtener horarios recurrentes con fecha_inicio para calcular primer mes correctamente
+        const { data: horariosRecurrentesConFecha } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .select('dia_semana, fecha_inicio, fecha_fin, activo')
+          .eq('usuario_id', user.id)
+          .eq('activo', true);
+
+        // Obtener feriados del mes actual (días sin clases)
+        const { data: feriadosData } = await supabase
+          .from('feriados')
+          .select('fecha, tipo, activo')
+          .eq('activo', true)
+          .gte('fecha', currentStartISO)
+          .lte('fecha', currentEndISO);
+
+        // Crear Set de fechas de feriados (días sin clases)
+        const feriadosSinClases = new Set(
+          (feriadosData || [])
+            .filter(f => f.tipo === 'dia_habil_feriado')
+            .map(f => f.fecha)
+        );
 
         const cancelacionesUsuarioCount = cancelacionesData?.length ?? 0;
         const vacantesCount = vacantesData?.length ?? 0;
@@ -281,8 +303,32 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             } else {
               unitPrice = baseUnitPrice;
             }
+          } else if (isNext && profile?.combo_pendiente && profile?.fecha_cambio_plan) {
+            // Para el mes siguiente, verificar si hay un cambio de plan pendiente
+            const fechaCambio = new Date(profile.fecha_cambio_plan);
+            const inicioProximoMes = new Date(nextYear, nextMonthNum - 1, 1);
+            
+            // Si la fecha de cambio es igual o anterior al inicio del próximo mes, aplicar tarifa pendiente
+            if (fechaCambio <= inicioProximoMes) {
+              if (profile.tarifa_pendiente && Number(profile.tarifa_pendiente) > 0) {
+                unitPrice = Number(profile.tarifa_pendiente);
+              } else if (profile.combo_pendiente && config) {
+                const comboKey = `combo_${profile.combo_pendiente}_tarifa` as keyof typeof config;
+                const value = config[comboKey];
+                if (value && Number(value) > 0) {
+                  unitPrice = Number(value);
+                } else {
+                  unitPrice = baseUnitPrice;
+                }
+              } else {
+                unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+              }
+            } else {
+              // La fecha de cambio es después del próximo mes, usar tarifa actual
+              unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+            }
           } else {
-            // Para meses pasados o futuros, usar la tarifa de la cuota
+            // Para meses pasados o futuros sin cambio pendiente, usar la tarifa de la cuota
             unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
           }
 
@@ -306,22 +352,54 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 : null,
             }));
 
+            // Determinar fecha de inicio para este mes (considerar fecha_inicio del usuario)
+            let fechaInicioMes = new Date(currentYear, currentMonthNum - 1, 1);
+            fechaInicioMes.setHours(0, 0, 0, 0);
+            
+            // Si el usuario se registró después del inicio del mes, usar su fecha de registro
+            if (userStartDate && userStartDate > fechaInicioMes) {
+              fechaInicioMes = userStartDate;
+            }
+            
+            // También verificar fecha_inicio de los horarios recurrentes
+            if (horariosRecurrentesConFecha && horariosRecurrentesConFecha.length > 0) {
+              const fechasInicio = horariosRecurrentesConFecha
+                .filter(hr => hr.fecha_inicio)
+                .map(hr => new Date(hr.fecha_inicio));
+              
+              if (fechasInicio.length > 0) {
+                const minFechaHorarios = new Date(Math.min(...fechasInicio.map(d => d.getTime())));
+                minFechaHorarios.setHours(0, 0, 0, 0);
+                if (minFechaHorarios > fechaInicioMes) {
+                  fechaInicioMes = minFechaHorarios;
+                }
+              }
+            }
+
+            const diaInicio = fechaInicioMes.getMonth() === currentMonthNum - 1 
+              ? fechaInicioMes.getDate() 
+              : 1;
+
             let clasesCalculadas = 0;
-            for (let dia = 1; dia <= lastDayCurrentMonth; dia++) {
+            for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
               const diaSemanaJS = fecha.getDay();
+              const fechaStr = fecha.toISOString().split('T')[0];
 
               const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+
+              // Verificar si es feriado (día sin clases)
+              const esFeriado = feriadosSinClases.has(fechaStr);
 
               // Verificar si está bloqueado por ausencia del admin
               const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
                 const inicio = getDateOnly(ausencia.fecha_inicio);
                 const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
-                const fechaCheck = getDateOnly(fecha.toISOString().split('T')[0]);
+                const fechaCheck = getDateOnly(fechaStr);
                 return fechaCheck >= inicio && fechaCheck <= fin;
               });
 
-              if (tieneHorario && !bloqueado) {
+              if (tieneHorario && !bloqueado && !esFeriado) {
                 clasesCalculadas++;
               }
             }
@@ -473,12 +551,28 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             .eq('activo', true)
             .or(`fecha_inicio.lte.${endNextMonthStr},fecha_fin.gte.${startNextMonthStr}`);
 
+          // Obtener feriados del mes siguiente
+          const { data: feriadosProximo } = await supabase
+            .from('feriados')
+            .select('fecha, tipo, activo')
+            .eq('activo', true)
+            .gte('fecha', startNextMonthStr)
+            .lte('fecha', endNextMonthStr);
+
+          // Crear Set de fechas de feriados del mes siguiente (días sin clases)
+          const feriadosProximoSinClases = new Set(
+            (feriadosProximo || [])
+              .filter(f => f.tipo === 'dia_habil_feriado')
+              .map(f => f.fecha)
+          );
+
           let clasesEstimadas = 0;
 
           if (horariosRecurrentes && horariosRecurrentes.length > 0) {
             for (let dia = 1; dia <= lastDayNextMonth; dia++) {
               const fecha = new Date(nextYear, nextMonthNum - 1, dia);
               const diaSemanaJS = fecha.getDay();
+              const fechaStr = fecha.toISOString().split('T')[0];
 
               const tieneHorario = horariosRecurrentes.some((hr: any) => {
                 if (hr.dia_semana !== diaSemanaJS) return false;
@@ -495,6 +589,9 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 return true;
               });
 
+              // Verificar si es feriado (día sin clases)
+              const esFeriado = feriadosProximoSinClases.has(fechaStr);
+
               const bloqueado = ausenciasAdminEstimacion?.some((ausencia: any) => {
                 const inicio = new Date(ausencia.fecha_inicio);
                 inicio.setHours(0, 0, 0, 0);
@@ -503,7 +600,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 return fecha >= inicio && fecha <= fin;
               });
 
-              if (tieneHorario && !bloqueado) {
+              if (tieneHorario && !bloqueado && !esFeriado) {
                 clasesEstimadas++;
               }
             }
@@ -536,6 +633,34 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           // Si no hay cuota para el mes actual, calcular basándose en horarios recurrentes
           const lastDayCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
           
+          // Determinar fecha de inicio para este mes (considerar fecha_inicio del usuario)
+          let fechaInicioMes = new Date(currentYear, currentMonthNum - 1, 1);
+          fechaInicioMes.setHours(0, 0, 0, 0);
+          
+          // Si el usuario se registró después del inicio del mes, usar su fecha de registro
+          if (userStartDate && userStartDate > fechaInicioMes) {
+            fechaInicioMes = userStartDate;
+          }
+          
+          // También verificar fecha_inicio de los horarios recurrentes
+          if (horariosRecurrentesConFecha && horariosRecurrentesConFecha.length > 0) {
+            const fechasInicio = horariosRecurrentesConFecha
+              .filter(hr => hr.fecha_inicio)
+              .map(hr => new Date(hr.fecha_inicio));
+            
+            if (fechasInicio.length > 0) {
+              const minFechaHorarios = new Date(Math.min(...fechasInicio.map(d => d.getTime())));
+              minFechaHorarios.setHours(0, 0, 0, 0);
+              if (minFechaHorarios > fechaInicioMes) {
+                fechaInicioMes = minFechaHorarios;
+              }
+            }
+          }
+
+          const diaInicio = fechaInicioMes.getMonth() === currentMonthNum - 1 
+            ? fechaInicioMes.getDate() 
+            : 1;
+          
           // Reutilizar horariosUsuarioData que ya se cargó antes
           let clasesEstimadas = 0;
           
@@ -547,21 +672,25 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 : null,
             }));
 
-            for (let dia = 1; dia <= lastDayCurrentMonth; dia++) {
+            for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
               const diaSemanaJS = fecha.getDay();
+              const fechaStr = fecha.toISOString().split('T')[0];
 
               const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+
+              // Verificar si es feriado (día sin clases)
+              const esFeriado = feriadosSinClases.has(fechaStr);
 
               // Verificar si está bloqueado por ausencia del admin
               const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
                 const inicio = getDateOnly(ausencia.fecha_inicio);
                 const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
-                const fechaCheck = getDateOnly(fecha.toISOString().split('T')[0]);
+                const fechaCheck = getDateOnly(fechaStr);
                 return fechaCheck >= inicio && fechaCheck <= fin;
               });
 
-              if (tieneHorario && !bloqueado) {
+              if (tieneHorario && !bloqueado && !esFeriado) {
                 clasesEstimadas++;
               }
             }
@@ -725,6 +854,12 @@ export const useUserBalance = (): UseUserBalanceReturn => {
     channel.on('postgres_changes',
       { event: '*', schema: 'public', table: 'ausencias_admin' },
       () => loadBalance(false)
+    );
+
+    // Feriados impactan el cálculo de clases
+    channel.on('postgres_changes',
+      { event: '*', schema: 'public', table: 'feriados' },
+      reloadIfVisible
     );
 
     channel.subscribe();

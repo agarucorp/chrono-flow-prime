@@ -16,7 +16,8 @@ import {
   Clock,
   LogOut,
   X,
-  Wallet
+  Wallet,
+  Download
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { Button } from '@/components/ui/button';
@@ -165,6 +166,80 @@ export default function Admin() {
       ).join(' ');
     }
     return name.charAt(0).toUpperCase() + name.slice(1);
+  };
+
+  // Función para exportar balance a CSV
+  const exportarBalanceCSV = () => {
+    if (balanceRows.length === 0) {
+      showWarning('No hay datos para exportar');
+      return;
+    }
+
+    // Nombres de meses en español
+    const nombresMeses = [
+      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    ];
+    const mesNombre = nombresMeses[selectedMonth - 1];
+
+    // Calcular totales
+    const montoTotalRecibir = balanceRows.reduce((sum, r) => sum + r.monto, 0);
+    const montoRecibido = balanceRows.filter(r => r.estado === 'abonada').reduce((sum, r) => sum + r.monto, 0);
+    const pendienteCobro = balanceRows.filter(r => r.estado !== 'abonada').reduce((sum, r) => sum + r.monto, 0);
+
+    // Formatear montos
+    const formatMonto = (monto: number) => `$${monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+    // TABLA 1: Resumen
+    const resumenHeaders = ['Monto total a recibir', 'Monto recibido', 'Pendiente de cobro'];
+    const resumenValues = [formatMonto(montoTotalRecibir), formatMonto(montoRecibido), formatMonto(pendienteCobro)];
+
+    // TABLA 2: Detalle por usuario
+    const detalleHeaders = ['Usuario', 'Cuota', 'Estado de pago', 'Descuento', 'Tipo de pago', 'Total'];
+    const detalleRows = balanceRows.map(row => {
+      const estadoTexto = row.estado === 'abonada' ? 'Pagado' : row.estado === 'pendiente' ? 'Pendiente' : 'Vencida';
+      const tipoPagoTexto = row.tipoPago === 'transferencia' ? 'Transferencia' : 'Efectivo';
+      const descuentoTexto = row.descuento > 0 ? `${row.descuento}%` : '-';
+      
+      return [
+        row.nombre,
+        formatMonto(row.montoOriginal),
+        estadoTexto,
+        descuentoTexto,
+        tipoPagoTexto,
+        formatMonto(row.monto)
+      ];
+    });
+
+    // Construir contenido CSV (usando ; como separador para compatibilidad con Excel en español)
+    const sep = ';';
+    const csvLines = [
+      `sep=${sep}`, // Indicador para Excel del separador usado
+      `Balance - ${mesNombre} ${selectedYear}`,
+      '',
+      'RESUMEN',
+      resumenHeaders.join(sep),
+      resumenValues.join(sep),
+      '',
+      'DETALLE POR USUARIO',
+      detalleHeaders.join(sep),
+      ...detalleRows.map(row => row.join(sep))
+    ];
+
+    const csvContent = csvLines.join('\n');
+
+    // Crear y descargar archivo
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `balance_${mesNombre.toLowerCase()}_${selectedYear}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    showSuccess('Balance exportado correctamente');
   };
 
   // Función para cargar ausencias del admin
@@ -1029,6 +1104,17 @@ export default function Admin() {
                   <SelectItem value={String(new Date().getFullYear()+1)} className="text-[11px] md:text-sm py-1.5 md:py-2">{String(new Date().getFullYear()+1)}</SelectItem>
                 </SelectContent>
               </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={exportarBalanceCSV}
+                className="h-8 md:h-9 text-[11px] md:text-sm gap-1.5"
+                disabled={balanceRows.length === 0}
+              >
+                <Download className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">Exportar CSV</span>
+                <span className="sm:hidden">CSV</span>
+              </Button>
             </div>
 
             {/* KPIs - Mobile: una sola card con divisores */}

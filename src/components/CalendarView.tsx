@@ -76,7 +76,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
   const [feriados, setFeriados] = useState<Array<{
     fecha: string;
     tipo: 'dia_habil_feriado' | 'fin_semana_habilitado';
-    horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string }> | null;
+    horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string; capacidad?: number }> | null;
     activo: boolean;
     motivo?: string | null;
   }>>([]);
@@ -210,7 +210,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
   };
 
   // Verificar si una fecha es feriado
-  const esFeriado = (fecha: Date): { esFeriado: boolean; tipo?: 'dia_habil_feriado' | 'fin_semana_habilitado'; horarios?: Array<{ hora_inicio: string; hora_fin: string }> | null; motivo?: string | null } => {
+  const esFeriado = (fecha: Date): { esFeriado: boolean; tipo?: 'dia_habil_feriado' | 'fin_semana_habilitado'; horarios?: Array<{ hora_inicio: string; hora_fin: string; capacidad?: number }> | null; motivo?: string | null } => {
     const fechaStr = formatLocalDate(fecha);
     const feriado = feriados.find(f => f.fecha === fechaStr && f.activo);
     
@@ -286,11 +286,23 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         }, 200);
       })
       .subscribe();
+    // Suscripción para feriados - actualizar capacidad en tiempo real
+    const chFeriados = supabase
+      .channel('rt_feriados_capacidad')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feriados' }, () => {
+        // Recargar feriados y slots cuando cambie la tabla feriados
+        setTimeout(async () => {
+          await cargarFeriados();
+          await fetchAdminSlots();
+        }, 200);
+      })
+      .subscribe();
     return () => {
       supabase.removeChannel(ch1);
       supabase.removeChannel(ch2);
       supabase.removeChannel(chSlots);
       supabase.removeChannel(ch3);
+      supabase.removeChannel(chFeriados);
     };
   }, [isAdminView, currentDate]);
 
@@ -356,12 +368,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       const fechaStr = formatLocalDate(currentDate);
       const feriadoInfo = esFeriado(currentDate);
       
-      // Si es feriado con horarios personalizados, usar esos horarios
+      // Si es feriado con horarios personalizados, usar esos horarios CON SU CAPACIDAD PERSONALIZADA
       if (feriadoInfo.esFeriado && feriadoInfo.horarios && feriadoInfo.horarios.length > 0) {
         const slots = feriadoInfo.horarios.map((h: any) => ({
           horaInicio: (h.hora_inicio || '').substring(0, 5),
           horaFin: (h.hora_fin || '').substring(0, 5),
-          capacidad: obtenerCapacidadActual(), // Usar capacidad actual del sistema
+          capacidad: h.capacidad || 4, // Usar capacidad personalizada del feriado (OBLIGATORIA)
         }));
         setAdminSlots(slots);
         return;
@@ -1283,7 +1295,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       );
     }
 
-    // Generar horarios dinámicos definidos por admin (horarios_semanales)
+    // Generar horarios dinámicos definidos por admin (horarios_semanales o feriados)
     const timeSlots = adminSlots.map(slot => {
       // Filtrar alumnos por horario (incluidos cancelados para mostrar con stroke rojo)
       const alumnosEnHorario = alumnosHorarios
@@ -1302,20 +1314,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       // Contar solo alumnos activos para el cupo disponible
       const alumnosActivos = alumnosEnHorario.filter(a => a.tipo !== 'cancelado');
       
-      // Usar capacidad global de configuracion_admin en lugar de capacidad individual del horario
-      const capacidadGlobal = obtenerCapacidadActual() || 4;
+      // Usar la capacidad del slot (ya viene correcta: de feriados con capacidad personalizada o de horarios_semanales)
+      const capacidadSlot = slot.capacidad || 4;
       
       // Detectar si hay exceso de usuarios (más que la capacidad máxima)
-      const tieneExceso = alumnosActivos.length > capacidadGlobal;
-      const exceso = tieneExceso ? alumnosActivos.length - capacidadGlobal : 0;
+      const tieneExceso = alumnosActivos.length > capacidadSlot;
+      const exceso = tieneExceso ? alumnosActivos.length - capacidadSlot : 0;
       
       return {
         horaInicio: slot.horaInicio,
         horaFin: slot.horaFin,
         alumnos: alumnosEnHorario, // Incluir cancelados para mostrar con stroke rojo
         alumnosActivos: alumnosActivos, // Solo alumnos activos (azules y verdes)
-        capacidad: capacidadGlobal, // Usar capacidad global
-        cupoDisponible: Math.max(0, capacidadGlobal - alumnosActivos.length),
+        capacidad: capacidadSlot, // Usar capacidad del slot (feriado o normal)
+        cupoDisponible: Math.max(0, capacidadSlot - alumnosActivos.length),
         tieneExceso, // Flag para indicar si hay exceso
         exceso, // Cantidad de usuarios que exceden el límite
       };

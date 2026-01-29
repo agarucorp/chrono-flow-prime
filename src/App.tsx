@@ -19,6 +19,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { Badge } from "@/components/ui/badge";
 import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
 import { SupportModal } from "./components/SupportModal";
+import { ChangeScheduleModal } from "./components/ChangeScheduleModal";
 import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
 import { ProtectedRoute } from "./components/ProtectedRoute";
@@ -45,6 +46,9 @@ const Dashboard = () => {
   const [supportOpen, setSupportOpen] = useState(false);
   const [infoGuideOpen, setInfoGuideOpen] = useState(false);
   const [infoGuideSection, setInfoGuideSection] = useState<'clases' | 'balance'>('clases');
+  const [changeScheduleOpen, setChangeScheduleOpen] = useState(false);
+  const [currentSchedules, setCurrentSchedules] = useState<any[]>([]);
+  const [currentPlan, setCurrentPlan] = useState<number | null>(null);
   const location = useLocation();
   const { isAdmin, isLoading: adminLoading } = useAdmin();
   
@@ -86,6 +90,33 @@ const Dashboard = () => {
       navigate('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
+    }
+  };
+
+  const handleOpenChangeSchedule = async () => {
+    if (!user?.id) return;
+    try {
+      // Cargar horarios actuales
+      const { data: horarios } = await supabase
+        .from('vista_horarios_usuarios')
+        .select('*')
+        .eq('usuario_id', user.id)
+        .eq('activo', true)
+        .order('dia_semana', { ascending: true })
+        .order('clase_numero', { ascending: true });
+
+      // Cargar plan actual
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('combo_asignado')
+        .eq('id', user.id)
+        .single();
+
+      setCurrentSchedules(horarios || []);
+      setCurrentPlan(profile?.combo_asignado || null);
+      setChangeScheduleOpen(true);
+    } catch (error) {
+      console.error('Error cargando datos para cambio de horarios:', error);
     }
   };
 
@@ -730,6 +761,10 @@ const Dashboard = () => {
                       <Settings className="h-4 w-4 mr-2" />
                       Configurar Perfil
                     </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={handleOpenChangeSchedule}>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Cambiar horarios
+                    </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
                       onSelect={() => setInfoGuideOpen(true)}
@@ -764,6 +799,10 @@ const Dashboard = () => {
                     <DropdownMenuItem className="cursor-pointer" onClick={() => window.dispatchEvent(new CustomEvent('profile:open'))}>
                       <Settings className="h-4 w-4 mr-2" />
                       Configurar Perfil
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="cursor-pointer" onClick={handleOpenChangeSchedule}>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Cambiar horarios
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="cursor-pointer"
@@ -1091,6 +1130,19 @@ const Dashboard = () => {
         onClose={() => setProfileOpen(false)}
         userId={user?.id ?? null}
         email={user?.email ?? null}
+      />
+
+      {/* Modal para cambiar horarios/plan */}
+      <ChangeScheduleModal
+        isOpen={changeScheduleOpen}
+        onClose={() => setChangeScheduleOpen(false)}
+        onComplete={() => {
+          setChangeScheduleOpen(false);
+          // Invalidar caché de horarios
+          hasHorariosCheckRef.current = { userId: null, hasHorarios: null, timestamp: 0 };
+        }}
+        currentSchedules={currentSchedules}
+        currentPlan={currentPlan}
       />
 
       {/* Modal de configuración de horarios recurrentes para primera vez */}

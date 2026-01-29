@@ -4,7 +4,6 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -17,6 +16,7 @@ interface HorarioPersonalizado {
   hora_inicio: string;
   hora_fin: string;
   clase_numero?: number; // Para identificar qué clase fue seleccionada
+  capacidad: number; // Capacidad OBLIGATORIA para este horario de feriado/fin de semana
 }
 
 interface ClaseDisponible {
@@ -24,6 +24,7 @@ interface ClaseDisponible {
   hora_inicio: string;
   hora_fin: string;
   nombre: string;
+  capacidad: number; // Capacidad de la clase (de horarios_semanales)
 }
 
 interface Feriado {
@@ -53,7 +54,6 @@ export const FeriadosConfigModal = ({
   const [loading, setLoading] = useState(false);
   const [feriados, setFeriados] = useState<Feriado[]>([]);
   const [fechaFiltro, setFechaFiltro] = useState<string>('');
-  const [tipoFiltro, setTipoFiltro] = useState<'todos' | 'dia_habil_feriado' | 'fin_semana_habilitado'>('todos');
 
   // Estado para nuevo/editar feriado
   const [editandoFeriado, setEditandoFeriado] = useState<Feriado | null>(null);
@@ -86,7 +86,7 @@ export const FeriadosConfigModal = ({
     try {
       const { data, error } = await supabase
         .from('horarios_semanales')
-        .select('clase_numero, hora_inicio, hora_fin')
+        .select('clase_numero, hora_inicio, hora_fin, capacidad')
         .eq('dia_semana', 1) // Usar lunes como referencia (todas las clases tienen los mismos horarios todos los días)
         .eq('activo', true)
         .order('clase_numero');
@@ -101,7 +101,8 @@ export const FeriadosConfigModal = ({
           clase_numero: h.clase_numero,
           hora_inicio: h.hora_inicio.substring(0, 5), // Formato HH:MM
           hora_fin: h.hora_fin.substring(0, 5),
-          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`
+          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`,
+          capacidad: h.capacidad || 4 // Capacidad por defecto
         }));
         setClasesDisponibles(clases);
       }
@@ -125,6 +126,7 @@ export const FeriadosConfigModal = ({
       let query = supabase
         .from('feriados')
         .select('*')
+        .eq('tipo', 'dia_habil_feriado') // Solo días hábiles feriados en este modal
         .order('fecha', { ascending: false });
 
       // Si hay fecha seleccionada, filtrar por esa fecha
@@ -132,13 +134,9 @@ export const FeriadosConfigModal = ({
         const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
         query = query.eq('fecha', fechaStr);
       } else {
-        // Si no hay fecha seleccionada, aplicar filtros del usuario
+        // Si no hay fecha seleccionada, aplicar filtro de fecha del usuario
         if (fechaFiltro) {
           query = query.eq('fecha', fechaFiltro);
-        }
-
-        if (tipoFiltro !== 'todos') {
-          query = query.eq('tipo', tipoFiltro);
         }
       }
 
@@ -166,10 +164,10 @@ export const FeriadosConfigModal = ({
   };
 
   const agregarHorario = () => {
-    // Agregar un horario vacío que se completará con el dropdown
+    // Agregar un horario vacío que se completará con el dropdown (capacidad obligatoria)
     setHorariosPersonalizados([
       ...horariosPersonalizados,
-      { hora_inicio: '', hora_fin: '', clase_numero: undefined }
+      { hora_inicio: '', hora_fin: '', clase_numero: undefined, capacidad: 0 }
     ]);
   };
 
@@ -182,10 +180,22 @@ export const FeriadosConfigModal = ({
     if (!claseSeleccionada) return;
 
     const nuevos = [...horariosPersonalizados];
+    // Mantener la capacidad existente (el admin debe configurarla manualmente)
+    const capacidadExistente = nuevos[index]?.capacidad || 0;
     nuevos[index] = {
       hora_inicio: claseSeleccionada.hora_inicio,
       hora_fin: claseSeleccionada.hora_fin,
-      clase_numero: claseNumero
+      clase_numero: claseNumero,
+      capacidad: capacidadExistente
+    };
+    setHorariosPersonalizados(nuevos);
+  };
+
+  const actualizarCapacidad = (index: number, capacidad: number) => {
+    const nuevos = [...horariosPersonalizados];
+    nuevos[index] = {
+      ...nuevos[index],
+      capacidad: Math.max(1, capacidad) // Mínimo 1
     };
     setHorariosPersonalizados(nuevos);
   };
@@ -194,6 +204,15 @@ export const FeriadosConfigModal = ({
     if (!fecha) {
       showError('Debes seleccionar una fecha');
       return;
+    }
+
+    // Validar que todos los horarios tengan capacidad configurada
+    if (horariosPersonalizados.length > 0) {
+      const sinCapacidad = horariosPersonalizados.some(h => !h.capacidad || h.capacidad < 1);
+      if (sinCapacidad) {
+        showError('Debes configurar la capacidad para todos los horarios');
+        return;
+      }
     }
 
     let loadingToast: string | number | undefined;
@@ -208,16 +227,9 @@ export const FeriadosConfigModal = ({
       const diaSemana = fechaObjValidacion.getDay();
       const esFinSemana = diaSemana === 0 || diaSemana === 6;
 
-      // Validar que el tipo coincida con el día
-      if (esFinSemana && tipo === 'dia_habil_feriado') {
-        showError('No puedes marcar un fin de semana como día hábil feriado. Usa "Fin de semana habilitado"');
-        dismissToast(loadingToast);
-        setLoading(false);
-        return;
-      }
-
-      if (!esFinSemana && tipo === 'fin_semana_habilitado') {
-        showError('Solo puedes habilitar fines de semana (sábados y domingos)');
+      // Este modal solo maneja días hábiles - validar que no sea fin de semana
+      if (esFinSemana) {
+        showError('Este modal es solo para días hábiles. Para habilitar un fin de semana, usa click derecho sobre un sábado o domingo.');
         dismissToast(loadingToast);
         setLoading(false);
         return;
@@ -225,7 +237,7 @@ export const FeriadosConfigModal = ({
 
       const datosFeriado: any = {
         fecha,
-        tipo,
+        tipo: 'dia_habil_feriado', // Siempre día hábil feriado en este modal
         motivo: motivo || null,
         horarios_personalizados: horariosPersonalizados.length > 0 ? horariosPersonalizados : null,
         activo: true,
@@ -648,7 +660,7 @@ export const FeriadosConfigModal = ({
   const editarFeriado = (feriado: Feriado) => {
     setEditandoFeriado(feriado);
     setFecha(feriado.fecha);
-    setTipo(feriado.tipo);
+    setTipo('dia_habil_feriado'); // Este modal solo maneja días hábiles feriados
     setMotivo(feriado.motivo || '');
     
     // Intentar asociar horarios existentes con clases disponibles
@@ -720,17 +732,16 @@ export const FeriadosConfigModal = ({
     if (!fechaSeleccionada && open) {
       cargarFeriados();
     }
-  }, [fechaFiltro, tipoFiltro]);
+  }, [fechaFiltro]);
 
   const feriadosFiltrados = feriados.filter(f => {
     if (fechaFiltro && f.fecha !== fechaFiltro) return false;
-    if (tipoFiltro !== 'todos' && f.tipo !== tipoFiltro) return false;
     return true;
   });
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-4xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="w-[95vw] max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
@@ -738,8 +749,8 @@ export const FeriadosConfigModal = ({
           </DialogTitle>
           <DialogDescription>
             {fechaSeleccionada 
-              ? `Configura el feriado para ${format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}`
-              : 'Visualiza y gestiona todos los feriados configurados. Usa click derecho en un día del calendario para crear nuevos feriados.'
+              ? `Configura el feriado para ${format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}. Este modal es solo para días hábiles (lunes a viernes).`
+              : 'Visualiza y gestiona los feriados de días hábiles. Usa click derecho en un día del calendario para crear nuevos feriados.'
             }
           </DialogDescription>
         </DialogHeader>
@@ -762,32 +773,16 @@ export const FeriadosConfigModal = ({
                       className="w-full"
                     />
                   </div>
-                  <div>
-                    <Label className="mb-2 block">Filtrar por tipo</Label>
-                    <Select value={tipoFiltro} onValueChange={(v: any) => {
-                      setTipoFiltro(v);
-                    }}>
-                      <SelectTrigger className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todos los tipos</SelectItem>
-                        <SelectItem value="dia_habil_feriado">Día hábil feriado</SelectItem>
-                        <SelectItem value="fin_semana_habilitado">Fin de semana habilitado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  {(fechaFiltro || tipoFiltro !== 'todos') && (
+                  {fechaFiltro && (
                     <Button 
                       onClick={() => {
                         setFechaFiltro('');
-                        setTipoFiltro('todos');
                       }} 
                       variant="ghost" 
                       size="sm"
                       className="w-full"
                     >
-                      Limpiar Filtros
+                      Limpiar Filtro
                     </Button>
                   )}
                 </div>
@@ -799,7 +794,7 @@ export const FeriadosConfigModal = ({
           {!mostrarFormulario && fechaSeleccionada && (
             <Button onClick={() => setMostrarFormulario(true)} className="w-full">
               <Plus className="h-4 w-4 mr-2" />
-              Crear Feriado para {format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}
+              Crear feriado para {format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}
             </Button>
           )}
 
@@ -809,7 +804,7 @@ export const FeriadosConfigModal = ({
               <CardContent className="pt-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold">
-                    {editandoFeriado ? 'Editar Feriado' : 'Nuevo Feriado'}
+                    {editandoFeriado ? 'Editar feriado' : 'Nuevo feriado'}
                   </h3>
                   <Button
                     variant="ghost"
@@ -820,34 +815,19 @@ export const FeriadosConfigModal = ({
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <Label>Fecha</Label>
-                    <Input
-                      type="date"
-                      value={fecha}
-                      onChange={(e) => setFecha(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <Label>Tipo</Label>
-                    <Select value={tipo} onValueChange={(v: any) => setTipo(v)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="dia_habil_feriado">Día hábil feriado</SelectItem>
-                        <SelectItem value="fin_semana_habilitado">Fin de semana habilitado</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+                <div>
+                  <Label>Fecha</Label>
+                  <Input
+                    type="date"
+                    value={fecha}
+                    onChange={(e) => setFecha(e.target.value)}
+                    required
+                  />
                 </div>
 
                 <div>
                   <Label>Motivo (opcional)</Label>
-                  <Textarea
+                  <Input
                     value={motivo}
                     onChange={(e) => setMotivo(e.target.value)}
                     placeholder="Ej: Día de la Independencia"
@@ -880,42 +860,62 @@ export const FeriadosConfigModal = ({
                   )}
                   {horariosPersonalizados.map((horario, index) => (
                     <Card key={index} className="p-4 mb-2">
-                      <div className="flex items-center gap-4">
-                        <div className="flex-1">
-                          <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
-                          {clasesDisponibles.length > 0 ? (
-                            <Select
-                              value={horario.clase_numero?.toString() || ''}
-                              onValueChange={(value) => seleccionarClase(index, parseInt(value))}
-                            >
-                              <SelectTrigger id={`clase_${index}`} className="mt-1">
-                                <SelectValue placeholder="Selecciona una clase" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {clasesDisponibles.map((clase) => (
-                                  <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
-                                    {clase.nombre}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
-                              Cargando clases...
-                            </div>
-                          )}
-                          {horario.hora_inicio && horario.hora_fin && (
-                            <p className="text-sm text-muted-foreground mt-1">
-                              Horario: {horario.hora_inicio} - {horario.hora_fin}
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
+                            {clasesDisponibles.length > 0 ? (
+                              <Select
+                                value={horario.clase_numero?.toString() || ''}
+                                onValueChange={(value) => seleccionarClase(index, parseInt(value))}
+                              >
+                                <SelectTrigger id={`clase_${index}`} className="mt-1">
+                                  <SelectValue placeholder="Selecciona una clase" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {clasesDisponibles.map((clase) => (
+                                    <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
+                                      {clase.nombre}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
+                                Cargando clases...
+                              </div>
+                            )}
+                            {horario.hora_inicio && horario.hora_fin && (
+                              <p className="text-sm text-muted-foreground mt-1">
+                                Horario: {horario.hora_inicio} - {horario.hora_fin}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <Label htmlFor={`capacidad_${index}`} className="flex items-center gap-1">
+                              Capacidad (cupos) <span className="text-destructive">*</span>
+                            </Label>
+                            <Input
+                              id={`capacidad_${index}`}
+                              type="number"
+                              min="1"
+                              max="50"
+                              value={horario.capacidad || ''}
+                              onChange={(e) => actualizarCapacidad(index, parseInt(e.target.value) || 0)}
+                              className={`mt-1 w-24 ${!horario.capacidad || horario.capacidad < 1 ? 'border-destructive' : ''}`}
+                              required
+                            />
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Obligatorio - Define cuántos alumnos pueden reservar
                             </p>
-                          )}
+                          </div>
                         </div>
                         <Button
                           type="button"
                           variant="ghost"
                           size="icon"
                           onClick={() => eliminarHorario(index)}
-                          className="text-destructive hover:text-destructive"
+                          className="text-destructive hover:text-destructive mt-6"
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -924,18 +924,6 @@ export const FeriadosConfigModal = ({
                   ))}
                 </div>
 
-                <div className="flex gap-2">
-                  <Button 
-                    onClick={guardarFeriado} 
-                    disabled={loading} 
-                    className="flex-1 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
-                  >
-                    {editandoFeriado ? 'Actualizar' : 'Guardar'}
-                  </Button>
-                  <Button onClick={resetearFormulario} variant="outline">
-                    Cancelar
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           )}
@@ -943,7 +931,7 @@ export const FeriadosConfigModal = ({
           {/* Lista de feriados - Siempre visible para gestión */}
           <div className="space-y-2">
             <h3 className="font-semibold">
-              {fechaSeleccionada ? 'Feriado del Día' : 'Feriados Configurados'}
+              {fechaSeleccionada ? 'Feriado del día' : 'Feriados configurados'}
             </h3>
             {loading && feriados.length === 0 ? (
               <p className="text-sm text-muted-foreground">Cargando...</p>
@@ -960,9 +948,7 @@ export const FeriadosConfigModal = ({
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-2">
-                          <Badge variant={feriado.tipo === 'dia_habil_feriado' ? 'destructive' : 'default'}>
-                            {feriado.tipo === 'dia_habil_feriado' ? 'Día hábil feriado' : 'Fin de semana habilitado'}
-                          </Badge>
+                          <Badge variant="destructive">Feriado</Badge>
                           <span className="font-medium">
                             {(() => {
                               // Parsear la fecha manualmente para evitar problemas de zona horaria
@@ -982,7 +968,9 @@ export const FeriadosConfigModal = ({
                           <div className="flex items-center gap-2 text-sm">
                             <Clock className="h-4 w-4" />
                             <span>
-                              {feriado.horarios_personalizados.map(h => `${h.hora_inicio}-${h.hora_fin}`).join(', ')}
+                              {feriado.horarios_personalizados.map(h => 
+                                `${h.hora_inicio}-${h.hora_fin} (${h.capacidad} cupos)`
+                              ).join(', ')}
                             </span>
                           </div>
                         )}
@@ -1011,15 +999,19 @@ export const FeriadosConfigModal = ({
           </div>
         </div>
 
-        <DialogFooter>
-          {fechaSeleccionada && mostrarFormulario && (
-            <Button onClick={resetearFormulario} variant="outline">
-              Cancelar
-            </Button>
-          )}
-          <Button onClick={onClose} variant="outline">
+        <DialogFooter className="gap-2">
+          <Button onClick={onClose} variant="outline" className="bg-gray-500 text-white hover:bg-gray-600">
             Cerrar
           </Button>
+          {mostrarFormulario && (
+            <Button 
+              onClick={guardarFeriado} 
+              disabled={loading} 
+              className="bg-white text-gray-900 hover:bg-gray-100"
+            >
+              {editandoFeriado ? 'Actualizar' : 'Guardar'}
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

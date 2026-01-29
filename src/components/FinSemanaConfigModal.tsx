@@ -15,6 +15,7 @@ interface HorarioPersonalizado {
   hora_inicio: string;
   hora_fin: string;
   clase_numero?: number; // Para identificar qué clase fue seleccionada
+  capacidad: number; // Capacidad OBLIGATORIA para este horario
 }
 
 interface ClaseDisponible {
@@ -22,6 +23,7 @@ interface ClaseDisponible {
   hora_inicio: string;
   hora_fin: string;
   nombre: string;
+  capacidad: number; // Capacidad de la clase
 }
 
 interface FinSemanaHabilitado {
@@ -106,7 +108,7 @@ export const FinSemanaConfigModal = ({
     try {
       const { data, error } = await supabase
         .from('horarios_semanales')
-        .select('clase_numero, hora_inicio, hora_fin')
+        .select('clase_numero, hora_inicio, hora_fin, capacidad')
         .eq('dia_semana', 1) // Usar lunes como referencia (todas las clases tienen los mismos horarios todos los días)
         .eq('activo', true)
         .order('clase_numero');
@@ -121,7 +123,8 @@ export const FinSemanaConfigModal = ({
           clase_numero: h.clase_numero,
           hora_inicio: h.hora_inicio.substring(0, 5), // Formato HH:MM
           hora_fin: h.hora_fin.substring(0, 5),
-          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`
+          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`,
+          capacidad: h.capacidad || 4
         }));
         setClasesDisponibles(clases);
       }
@@ -165,10 +168,10 @@ export const FinSemanaConfigModal = ({
   };
 
   const agregarHorario = () => {
-    // Agregar un horario vacío que se completará con el dropdown
+    // Agregar un horario vacío que se completará con el dropdown (capacidad obligatoria)
     setHorariosPersonalizados([
       ...horariosPersonalizados,
-      { hora_inicio: '', hora_fin: '', clase_numero: undefined }
+      { hora_inicio: '', hora_fin: '', clase_numero: undefined, capacidad: 0 }
     ]);
   };
 
@@ -181,10 +184,22 @@ export const FinSemanaConfigModal = ({
     if (!claseSeleccionada) return;
 
     const nuevosHorarios = [...horariosPersonalizados];
+    // Mantener la capacidad existente (el admin debe configurarla manualmente)
+    const capacidadExistente = nuevosHorarios[index]?.capacidad || 0;
     nuevosHorarios[index] = {
       hora_inicio: claseSeleccionada.hora_inicio,
       hora_fin: claseSeleccionada.hora_fin,
-      clase_numero: claseNumero
+      clase_numero: claseNumero,
+      capacidad: capacidadExistente
+    };
+    setHorariosPersonalizados(nuevosHorarios);
+  };
+
+  const actualizarCapacidad = (index: number, capacidad: number) => {
+    const nuevosHorarios = [...horariosPersonalizados];
+    nuevosHorarios[index] = {
+      ...nuevosHorarios[index],
+      capacidad: Math.max(1, capacidad)
     };
     setHorariosPersonalizados(nuevosHorarios);
   };
@@ -204,6 +219,13 @@ export const FinSemanaConfigModal = ({
     const horariosInvalidos = horariosPersonalizados.some(h => !h.hora_inicio || !h.hora_fin);
     if (horariosInvalidos) {
       showError('Todos los horarios deben tener hora de inicio y fin');
+      return;
+    }
+
+    // Validar que todos los horarios tengan capacidad configurada
+    const sinCapacidad = horariosPersonalizados.some(h => !h.capacidad || h.capacidad < 1);
+    if (sinCapacidad) {
+      showError('Debes configurar la capacidad para todos los horarios');
       return;
     }
 
@@ -363,42 +385,62 @@ export const FinSemanaConfigModal = ({
               <div className="space-y-3">
                 {horariosPersonalizados.map((horario, index) => (
                   <Card key={index} className="p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex-1">
-                        <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
-                        {clasesDisponibles.length > 0 ? (
-                          <Select
-                            value={horario.clase_numero?.toString() || ''}
-                            onValueChange={(value) => seleccionarClase(index, parseInt(value))}
-                          >
-                            <SelectTrigger id={`clase_${index}`} className="mt-1">
-                              <SelectValue placeholder="Selecciona una clase" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clasesDisponibles.map((clase) => (
-                                <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
-                                  {clase.nombre}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        ) : (
-                          <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
-                            Cargando clases...
-                          </div>
-                        )}
-                        {horario.hora_inicio && horario.hora_fin && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Horario: {horario.hora_inicio} - {horario.hora_fin}
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 space-y-3">
+                        <div>
+                          <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
+                          {clasesDisponibles.length > 0 ? (
+                            <Select
+                              value={horario.clase_numero?.toString() || ''}
+                              onValueChange={(value) => seleccionarClase(index, parseInt(value))}
+                            >
+                              <SelectTrigger id={`clase_${index}`} className="mt-1">
+                                <SelectValue placeholder="Selecciona una clase" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {clasesDisponibles.map((clase) => (
+                                  <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
+                                    {clase.nombre}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
+                              Cargando clases...
+                            </div>
+                          )}
+                          {horario.hora_inicio && horario.hora_fin && (
+                            <p className="text-sm text-muted-foreground mt-1">
+                              Horario: {horario.hora_inicio} - {horario.hora_fin}
+                            </p>
+                          )}
+                        </div>
+                        <div>
+                          <Label htmlFor={`capacidad_${index}`} className="flex items-center gap-1">
+                            Capacidad (cupos) <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            id={`capacidad_${index}`}
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={horario.capacidad || ''}
+                            onChange={(e) => actualizarCapacidad(index, parseInt(e.target.value) || 0)}
+                            className={`mt-1 w-24 ${!horario.capacidad || horario.capacidad < 1 ? 'border-destructive' : ''}`}
+                            required
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">
+                            Obligatorio - Define cuántos alumnos pueden reservar
                           </p>
-                        )}
+                        </div>
                       </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon"
                         onClick={() => eliminarHorario(index)}
-                        className="text-destructive hover:text-destructive"
+                        className="text-destructive hover:text-destructive mt-6"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
