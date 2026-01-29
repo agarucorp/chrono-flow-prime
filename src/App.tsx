@@ -1281,6 +1281,7 @@ const AppContent = ({ loading }: { loading: boolean }) => {
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginFormSimple onLogin={() => {}} />} />
         <Route path="/reset-password" element={<ResetPasswordForm />} />
+        <Route path="/dashboard" element={<Navigate to="/user" replace />} />
         <Route 
           path="/user" 
           element={
