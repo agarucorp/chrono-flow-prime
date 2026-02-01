@@ -25,6 +25,14 @@ type CuotaMensual = {
 function getTargetPeriod(override?: { anio?: number; mes?: number }) {
   const now = new Date();
   if (override?.anio && override?.mes) return { anio: override.anio, mes: override.mes };
+  // Si estamos en los primeros días del mes (1-5), enviar para el mes ACTUAL
+  // Si estamos después del día 5, enviar para el mes SIGUIENTE (comportamiento original)
+  const dayOfMonth = now.getDate();
+  if (dayOfMonth <= 5) {
+    // Mes actual (ideal para enviar el 1ro de cada mes)
+    return { anio: now.getFullYear(), mes: now.getMonth() + 1 };
+  }
+  // Mes siguiente (comportamiento original, para pruebas manuales a mitad de mes)
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   return { anio: nextMonth.getFullYear(), mes: nextMonth.getMonth() + 1 };
 }
