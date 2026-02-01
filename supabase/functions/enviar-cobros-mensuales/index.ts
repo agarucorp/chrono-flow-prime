@@ -184,6 +184,9 @@ async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, an
   return enriched as CuotaMensual[];
 }
 
+// Helper para evitar rate limit de Resend (2 req/seg en plan free)
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: number }) {
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
   const resendFrom = Deno.env.get("RESEND_FROM") || "Notificaciones <noreply@example.com>";
@@ -238,6 +241,8 @@ async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: n
       const msg = (err as any)?.message || JSON.stringify(err);
       results.push({ usuario_id: row.usuario_id, status: "error", error: msg });
     }
+    // Delay de 600ms entre envíos para evitar rate limit de Resend (2 req/seg)
+    await sleep(600);
   }
   return results;
 }
