@@ -15,6 +15,7 @@ import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { format } from 'date-fns';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -977,7 +978,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       }
 
       showSuccess('¡Entrenamiento reservado!',
-        `Has reservado entrenamiento para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
+        `Has reservado entrenamiento para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} (${formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)})`);
 
       // Recargar turnos
       await fetchTurnos();
@@ -1107,7 +1108,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     <div key={key} className="p-2 border border-dashed border-green-300 rounded bg-green-50 cursor-pointer hover:bg-green-100 transition-colors">
       <div className="flex items-center justify-between">
         <div className="text-xs text-green-700 font-medium">Slot Disponible</div>
-        <div className="text-xs text-green-600 font-medium">{horaInicio} - {horaFin}</div>
+        <div className="text-xs text-green-600 font-medium">{formatClockRangeAmPm(horaInicio, horaFin)}</div>
         <div className="text-xs text-green-600">Click para reservar</div>
       </div>
     </div>
@@ -1118,7 +1119,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     <div key={key} className="p-2 border border-dashed border-green-300 rounded bg-green-50 cursor-pointer hover:bg-green-100 transition-colors">
       <div className="flex items-center justify-between">
         <div className="text-xs text-green-700 font-medium">Slot Disponible</div>
-        <div className="text-xs text-green-600 font-medium">{turno.hora_inicio} - {turno.hora_fin}</div>
+        <div className="text-xs text-green-600 font-medium">{formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}</div>
         <div className="text-xs text-green-600">Click para reservar</div>
       </div>
     </div>
@@ -1333,16 +1334,6 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       };
     });
 
-    // Función para formatear hora de "08:00" a "8am" o "15:00" a "3pm"
-    const formatearHora = (hora: string): string => {
-      const [horaStr] = hora.split(':');
-      const horaNum = parseInt(horaStr);
-      if (horaNum === 0) return '12am';
-      if (horaNum < 12) return `${horaNum}am`;
-      if (horaNum === 12) return '12pm';
-      return `${horaNum - 12}pm`;
-    };
-
     // Si es vista de admin, mostrar información de alumnos
     if (isAdminView) {
       if (loadingAlumnos) {
@@ -1371,7 +1362,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                   >
                     <div className="flex items-center gap-2">
                       <span className="font-light text-foreground text-[12px] sm:text-base">
-                        {formatearHora(slot.horaInicio)} - {formatearHora(slot.horaFin)}
+                        {formatClockRangeAmPm(slot.horaInicio, slot.horaFin)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -1569,7 +1560,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                   <div className="flex items-center">
                     <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
                       }`} />
-                    <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
+                    <span className="font-medium text-[10px] sm:text-xs">{formatClockRangeAmPm(slot.horaInicio, slot.horaFin)}</span>
                   </div>
                   {slot.estado === 'disponible' && (
                     <Badge
@@ -1603,7 +1594,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                   <div className="flex items-center">
                     <Clock className={`h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 ${slot.estado === 'disponible' ? 'text-primary-foreground' : 'text-muted-foreground'
                       }`} />
-                    <span className="font-medium text-[10px] sm:text-xs">{slot.horaInicio} - {slot.horaFin}</span>
+                    <span className="font-medium text-[10px] sm:text-xs">{formatClockRangeAmPm(slot.horaInicio, slot.horaFin)}</span>
                   </div>
                   {slot.estado === 'disponible' && (
                     <Badge
@@ -1772,7 +1763,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                   <div>
                     <p className="text-[12px] font-medium">Horario</p>
                     <p className="text-[12px] text-muted-foreground">
-                      {selectedAlumno.hora_inicio} - {selectedAlumno.hora_fin}
+                      {formatClockRangeAmPm(selectedAlumno.hora_inicio, selectedAlumno.hora_fin)}
                     </p>
                   </div>
                 </div>
@@ -1831,7 +1822,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           <DialogHeader className="pb-3 flex-shrink-0">
             <DialogTitle className="text-sm sm:text-base">Agregar Usuario a Clase</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              Selecciona un usuario para agregar a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}
+              Selecciona un usuario para agregar a la clase de {formatClockRangeAmPm(selectedSlot?.horaInicio, selectedSlot?.horaFin)}
             </DialogDescription>
           </DialogHeader>
 
@@ -1893,7 +1884,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           <DialogHeader className="pb-2 sm:pb-3 flex-shrink-0">
             <DialogTitle className="text-sm sm:text-base">Confirmar agregar usuario</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              ¿Estás seguro de que quieres agregar a <strong>{selectedUser?.full_name}</strong> a la clase de {selectedSlot?.horaInicio} - {selectedSlot?.horaFin}?
+              ¿Estás seguro de que quieres agregar a <strong>{selectedUser?.full_name}</strong> a la clase de {formatClockRangeAmPm(selectedSlot?.horaInicio, selectedSlot?.horaFin)}?
             </DialogDescription>
           </DialogHeader>
 

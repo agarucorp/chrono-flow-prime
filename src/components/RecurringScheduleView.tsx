@@ -22,6 +22,7 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSam
 import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
+import { normalizeTimeToHhMm, formatClockAmPm, formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface HorarioRecurrente {
   id: string;
@@ -170,11 +171,6 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     return created;
   })();
 
-  // Función para formatear horas sin segundos
-  const formatTime = (timeString: string) => {
-    if (!timeString) return '';
-    return timeString.substring(0, 5); // Toma solo HH:mm
-  };
   const normalizeDateKey = (value: string) => {
     if (!value) return '';
     return String(value).substring(0, 10);
@@ -1299,7 +1295,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
         const cancelacionesPorFecha = (cancelacionesMes || []).reduce<Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>>((acc, c: any) => {
           if (!acc[c.turno_fecha]) acc[c.turno_fecha] = new Map<string, 'usuario' | 'admin' | 'sistema'>();
-          const clave = `${formatTime(c.turno_hora_inicio)}-${formatTime(c.turno_hora_fin)}`;
+          const clave = `${normalizeTimeToHhMm(c.turno_hora_inicio)}-${normalizeTimeToHhMm(c.turno_hora_fin)}`;
           acc[c.turno_fecha].set(clave, (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema');
           return acc;
         }, {});
@@ -1533,8 +1529,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
     const clasesConCancelaciones = horariosDelDia
       .map((horario) => {
-        const horaInicioNorm = formatTime(horario.hora_inicio);
-        const horaFinNorm = formatTime(horario.hora_fin);
+        const horaInicioNorm = normalizeTimeToHhMm(horario.hora_inicio);
+        const horaFinNorm = normalizeTimeToHhMm(horario.hora_fin);
         const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
         const estaCancelada = cancelacionesMap.has(claveCancelacion);
         let tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
@@ -1756,8 +1752,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     if (turno.es_slot_feriado_habilitado) return true;
     if (String(turno.id || '').startsWith('fallback_feriado_')) return true;
     const fechaStr = normalizeDateKey(turno.turno_fecha || '');
-    const hIni = formatTime(turno.turno_hora_inicio || '');
-    const hFin = formatTime(turno.turno_hora_fin || '');
+    const hIni = normalizeTimeToHhMm(turno.turno_hora_inicio || '');
+    const hFin = normalizeTimeToHhMm(turno.turno_hora_fin || '');
     if (!fechaStr || !hIni || !hFin) return false;
     return feriados.some((f) => {
       if (!f.activo || normalizeDateKey(f.fecha) !== fechaStr) return false;
@@ -1765,8 +1761,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       if (hp.length === 0) return false;
       return hp.some(
         (slot: any) =>
-          formatTime(slot?.hora_inicio || '') === hIni &&
-          formatTime(slot?.hora_fin || '') === hFin
+          normalizeTimeToHhMm(slot?.hora_inicio || '') === hIni &&
+          normalizeTimeToHhMm(slot?.hora_fin || '') === hFin
       );
     });
   };
@@ -2136,7 +2132,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                       ? 'text-green-600 dark:text-green-400'
                                       : ''
                               }`}>
-                                {formatTime(clase.horario.hora_inicio)} - {formatTime(clase.horario.hora_fin)}
+                                {formatClockRangeAmPm(clase.horario.hora_inicio, clase.horario.hora_fin)}
                               </span>
                               {clase.horario.esVariable && !clase.horario.cancelada && (
                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium">
@@ -2500,7 +2496,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                           `} />
                           <div className="flex-1">
                             <div className="font-medium text-sm">
-                              Clase {primerTurno.clase_numero || ''} - {formatTime(primerTurno.turno_hora_inicio)} a {formatTime(primerTurno.turno_hora_fin)}
+                              Clase {primerTurno.clase_numero || ''} - {formatClockRangeAmPm(primerTurno.turno_hora_inicio, primerTurno.turno_hora_fin, ' a ')}
                             </div>
                             <div className="text-xs text-muted-foreground mt-1">
                               {clase.tieneCupos 
@@ -2575,11 +2571,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Hora de Inicio</label>
-                  <p className="text-sm">{formatTime(selectedClase.horario.hora_inicio)}</p>
+                  <p className="text-sm">{formatClockAmPm(selectedClase.horario.hora_inicio)}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Hora de Fin</label>
-                  <p className="text-sm">{formatTime(selectedClase.horario.hora_fin)}</p>
+                  <p className="text-sm">{formatClockAmPm(selectedClase.horario.hora_fin)}</p>
                 </div>
               </div>
 
@@ -2694,7 +2690,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Horario</label>
-                  <p className="text-sm">{formatTime(turnoToReserve.turno_hora_inicio)} - {formatTime(turnoToReserve.turno_hora_fin)}</p>
+                  <p className="text-sm">{formatClockRangeAmPm(turnoToReserve.turno_hora_inicio, turnoToReserve.turno_hora_fin)}</p>
                 </div>
               </div>
 

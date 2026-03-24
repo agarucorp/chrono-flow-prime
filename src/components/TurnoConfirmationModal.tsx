@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -40,10 +41,6 @@ export const TurnoConfirmationModal = ({
       month: 'long',
       day: 'numeric'
     });
-  };
-
-  const formatTime = (time: string) => {
-    return time.substring(0, 5); // Asegura formato HH:MM
   };
 
   const getStatusColor = (estado: string) => {
@@ -104,7 +101,7 @@ export const TurnoConfirmationModal = ({
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Horario</p>
                   <p className="font-medium">
-                    {formatTime(turno.hora_inicio)} - {formatTime(turno.hora_fin)}
+                    {formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}
                   </p>
                 </div>
               </div>
@@ -115,8 +112,8 @@ export const TurnoConfirmationModal = ({
                 <div>
                   <p className="text-sm font-medium text-muted-foreground">Duración</p>
                   <p className="font-medium">
-                    {Math.round((new Date(`2000-01-01T${turno.hora_fin}`).getTime() - 
-                                new Date(`2000-01-01T${turno.hora_inicio}`).getTime()) / (1000 * 60))} minutos
+                    {Math.round((new Date(`2000-01-01T${normalizeTimeToHhMm(turno.hora_fin)}:00`).getTime() -
+                                new Date(`2000-01-01T${normalizeTimeToHhMm(turno.hora_inicio)}:00`).getTime()) / (1000 * 60))} minutos
                   </p>
                 </div>
               </div>

@@ -18,6 +18,7 @@ import { Turno, ResumenMensual, ResumenDiario } from '@/types/historial';
 import { HistorialService } from '@/services/historialService';
 import { supabase } from '@/lib/supabase';
 import { format } from 'date-fns';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 export const HistorialBalance: React.FC = () => {
   const [añoSeleccionado, setAñoSeleccionado] = useState(new Date().getFullYear());
@@ -557,7 +558,7 @@ export const HistorialBalance: React.FC = () => {
       new Date(turno.fecha).toLocaleDateString('es-ES', { weekday: 'long' }),
       turno.usuario.full_name,
       turno.usuario.email,
-      `${turno.hora_inicio} - ${turno.hora_fin}`,
+      formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin),
       `${duracionClaseFija}h`,
       turno.estado_pago === 'pagado' ? 'Pagado' : 'Pendiente',
       `$${turno.tarifa_aplicada.toLocaleString()}`,
@@ -820,7 +821,7 @@ export const HistorialBalance: React.FC = () => {
                     </td>
                     <td className="p-3">
                       <div className="text-sm">
-                        {turno.hora_inicio} - {turno.hora_fin}
+                        {formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}
                       </div>
                     </td>
                     <td className="p-3">

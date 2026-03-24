@@ -2,6 +2,7 @@ import React from 'react';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, User, CheckCircle } from 'lucide-react';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface TurnoReserva {
   id: string;
@@ -61,7 +62,7 @@ export const ReservaConfirmationModal: React.FC<ReservaConfirmationModalProps> =
             <div className="flex items-center space-x-2">
               <Clock className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">
-                {turno.hora_inicio} - {turno.hora_fin}
+                {formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}
               </span>
             </div>
             

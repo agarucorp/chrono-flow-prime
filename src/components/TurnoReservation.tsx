@@ -11,6 +11,7 @@ import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoConfirmationModal } from '@/components/TurnoConfirmationModal';
 import { CancelacionConfirmationModal } from '@/components/CancelacionConfirmationModal';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -270,7 +271,7 @@ export const TurnoReservation = () => {
       }
 
       showSuccess('¡Turno reservado exitosamente!', 
-        `Has reservado ${turno.servicio} para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} a las ${turno.hora_inicio}`);
+        `Has reservado ${turno.servicio} para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} (${formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)})`);
       
       // Cerrar modal y limpiar estado
       setShowConfirmationModal(false);
@@ -446,7 +447,7 @@ export const TurnoReservation = () => {
                           <div className="flex items-center space-x-2">
                             <Clock className="h-3 w-3 text-muted-foreground" />
                             <span className="text-xs">
-                              {turno.hora_inicio} - {turno.hora_fin}
+                              {formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}
                             </span>
                           </div>
                           <div className="flex items-center space-x-2">

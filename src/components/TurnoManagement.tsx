@@ -11,6 +11,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface HorarioClase {
   id: number;
@@ -723,16 +724,6 @@ export const TurnoManagement = () => {
   // Generar opciones para días (1-31)
   const dias = Array.from({ length: 31 }, (_, i) => i + 1);
 
-  // Función para convertir hora 24h a 12h
-  const convertirHoraA12h = (hora24: string) => {
-    const [hora] = hora24.split(':');
-    const horaNum = parseInt(hora);
-    
-    if (horaNum === 0) return '12am';
-    if (horaNum < 12) return `${horaNum}am`;
-    if (horaNum === 12) return '12pm';
-    return `${horaNum - 12}pm`;
-  };
   const meses = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
@@ -775,7 +766,7 @@ export const TurnoManagement = () => {
                                 {horario.nombre}
                               </Label>
                               <span className="text-[10px] text-muted-foreground">
-                                {horario.horaInicio} - {horario.horaFin}
+                                {formatClockRangeAmPm(horario.horaInicio, horario.horaFin)}
                               </span>
                             </div>
                             <Select
@@ -1080,7 +1071,7 @@ export const TurnoManagement = () => {
                               className="h-10 flex flex-col items-center justify-center"
                             >
                               <span className="text-xs font-light" style={{ fontSize: '10px' }}>{clase.nombre}</span>
-                              <span className="text-xs font-light" style={{ fontSize: '10px' }}>{convertirHoraA12h(clase.horaInicio)} - {convertirHoraA12h(clase.horaFin)}</span>
+                              <span className="text-xs font-light" style={{ fontSize: '10px' }}>{formatClockRangeAmPm(clase.horaInicio, clase.horaFin)}</span>
                             </Button>
                           ))}
                         </div>

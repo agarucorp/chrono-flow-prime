@@ -479,14 +479,9 @@ const Dashboard = () => {
       description: 'En esta plataforma vas a poder setear tus clases en MaldaGym de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.',
       images: [
         {
-          src: '/tutorial/logovertical.png',
-          alt: 'Logo Malda',
-          mobileOnly: true
-        },
-        {
-          src: '/tutorial/maldadesktop.png',
-          alt: 'Logo Malda',
-          desktopOnly: true
+          src: '/tutorial/bannermalda.png',
+          alt: 'Malda — entrenamientos personalizados',
+          variant: 'logo' as const
         }
       ]
     },
@@ -717,9 +712,9 @@ const Dashboard = () => {
   }, [user?.id]);
 
   return (
-    <div className="min-h-screen bg-background bg-[url('/gymobile-background.png')] sm:bg-[url('/gymdesktop-background.png')] bg-cover bg-center bg-no-repeat relative">
-      {/* Overlay oscuro en mobile y desktop */}
-      <div className="absolute inset-0 bg-black/50 sm:bg-black/60 pointer-events-none"></div>
+    <div className="min-h-screen bg-background sm:bg-[url('/gymdesktop-background.png')] sm:bg-cover sm:bg-center sm:bg-no-repeat relative">
+      {/* Overlay solo con imagen de fondo (desktop) */}
+      <div className="hidden sm:block absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
       {/* Header restaurado */}
       <header className="relative z-10 bg-black shadow-card">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

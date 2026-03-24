@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -296,7 +297,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
               </div>
               <div>
                 <Label className="text-xs sm:text-sm font-medium text-muted-foreground">Horario</Label>
-                <p className="font-medium text-xs sm:text-sm">{turno.hora_inicio} - {turno.hora_fin}</p>
+                <p className="font-medium text-xs sm:text-sm">{formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}</p>
               </div>
             </div>
 

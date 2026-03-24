@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface HorarioClase {
   id: string;
@@ -231,12 +232,6 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       setLoading(false);
     }
   };
-
-  const formatTime = (t?: string) => {
-    if (!t) return ''
-    // Espera formato HH:MM:SS → devuelve HH:MM
-    return t.slice(0, 5)
-  }
 
   const toggleHorario = (horarioId: string, diaSemana: number) => {
     // Validar que el horario no esté lleno antes de permitir la selección
@@ -699,7 +694,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                     disabled={!puedeSeleccionar || estaLleno}
                                     title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
                                   >
-                                    {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                    {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
                                     {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                   </Button>
                                 );
@@ -761,7 +756,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                   disabled={!puedeSeleccionar || estaLleno}
                                   title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
                                 >
-                                  {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                  {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
                                   {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                 </Button>
                               );
@@ -821,7 +816,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                     return (
                       <li key={id} className="flex items-center space-x-2">
                         <Check className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
-                        <span>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</span>
+                        <span>{dia}: {formatClockRangeAmPm(h?.hora_inicio, h?.hora_fin)}</span>
                       </li>
                     );
                   })}

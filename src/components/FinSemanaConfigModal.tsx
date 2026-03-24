@@ -10,6 +10,7 @@ import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { normalizeTimeToHhMm, formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface HorarioPersonalizado {
   hora_inicio: string;
@@ -119,13 +120,17 @@ export const FinSemanaConfigModal = ({
       }
 
       if (data && data.length > 0) {
-        const clases = data.map((h: any) => ({
-          clase_numero: h.clase_numero,
-          hora_inicio: h.hora_inicio.substring(0, 5), // Formato HH:MM
-          hora_fin: h.hora_fin.substring(0, 5),
-          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`,
-          capacidad: h.capacidad || 4
-        }));
+        const clases = data.map((h: any) => {
+          const hi = normalizeTimeToHhMm(h.hora_inicio);
+          const hf = normalizeTimeToHhMm(h.hora_fin);
+          return {
+            clase_numero: h.clase_numero,
+            hora_inicio: hi,
+            hora_fin: hf,
+            nombre: `Clase ${h.clase_numero} (${formatClockRangeAmPm(hi, hf)})`,
+            capacidad: h.capacidad || 4,
+          };
+        });
         setClasesDisponibles(clases);
       }
     } catch (error) {
@@ -412,7 +417,7 @@ export const FinSemanaConfigModal = ({
                           )}
                           {horario.hora_inicio && horario.hora_fin && (
                             <p className="text-sm text-muted-foreground mt-1">
-                              Horario: {horario.hora_inicio} - {horario.hora_fin}
+                              Horario: {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
                             </p>
                           )}
                         </div>

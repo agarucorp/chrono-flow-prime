@@ -5,6 +5,8 @@ interface TutorialSlideImage {
   alt: string
   desktopOnly?: boolean
   mobileOnly?: boolean
+  /** Logo u horizontal: evita alturas fijas pequeñas que pixelan el PNG */
+  variant?: 'default' | 'logo'
 }
 
 interface TutorialSlide {
@@ -85,14 +87,8 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
           </div>
 
           <div className={`relative w-full overflow-hidden flex-1 flex items-center justify-center ${shouldCenterImage ? 'sm:items-center sm:justify-center' : 'sm:items-start sm:justify-start'}`}>
-            <div
-              key={`${currentIndex}-${direction}`}
-              className="w-full transition-transform duration-700 ease-[cubic-bezier(0.83,0,0.17,1)]"
-              style={{
-                transform: direction === 'forward' ? 'translateX(0)' : 'translateX(0)',
-                animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
-              }}
-            >
+            {/* Sin transform/animación en el ancestro de la imagen: evita suavizado al escalar PNG HD */}
+            <div key={`${currentIndex}-${direction}`} className="w-full">
               <div className={`flex flex-col items-center ${shouldCenterImage ? 'sm:items-center' : 'sm:items-start'}`}>
                 {currentSlide.images?.length ? (
                   <>
@@ -105,16 +101,29 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                         : image.mobileOnly
                           ? 'sm:hidden'
                           : ''
+                      const isLogo = image.variant === 'logo'
+                      /** Desktop: 125px × 1.3 ≈ 162px. Móvil: vh como antes. */
+                      const logoSlot =
+                        'flex w-full items-center sm:h-[162px] sm:shrink-0'
+                      const rowJustifySm =
+                        isLogo || shouldCenterImage ? 'sm:justify-center' : 'sm:justify-start'
+                      const imgClass = isLogo
+                        ? `max-h-[min(46vh,520px)] max-w-full w-auto h-auto object-contain object-center sm:max-h-full sm:max-w-full sm:mx-auto`
+                        : `mx-auto h-[220px] sm:h-48 w-auto rounded-2xl object-contain ${shouldCenterImage ? 'sm:mx-auto' : 'sm:mx-0'}`
                       return (
                         <div
                           key={`${image.src}-${index}`}
-                          className={`relative overflow-hidden flex justify-center w-full ${shouldCenterImage ? 'sm:justify-center' : 'sm:justify-start'} ${extraClass} ${visibilityClass}`}
+                          className={`relative flex justify-center w-full ${isLogo ? logoSlot : ''} ${rowJustifySm} ${extraClass} ${visibilityClass}`}
                         >
                           <img
                             src={image.src}
                             alt={image.alt}
-                            className={`mx-auto h-[220px] sm:h-48 w-auto rounded-2xl object-contain ${shouldCenterImage ? 'sm:mx-auto' : 'sm:mx-0'}`}
-                            loading="lazy"
+                            width={isLogo ? 1920 : undefined}
+                            height={isLogo ? 1080 : undefined}
+                            sizes={isLogo ? '(max-width: 640px) 100vw, 768px' : undefined}
+                            className={imgClass}
+                            loading="eager"
+                            decoding="async"
                           />
                         </div>
                       )
@@ -136,18 +145,18 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                   </div>
                 )}
 
-                <div className={`relative overflow-hidden mt-8 sm:mt-8 w-full flex flex-col items-center ${shouldCenterImage ? 'sm:items-center' : 'sm:items-start'}`}>
+                <div className="relative overflow-hidden mt-8 sm:mt-8 w-full flex flex-col items-start">
                   <div
                     key={`content-${currentIndex}-${direction}`}
-                    className={`space-y-0 sm:space-y-0 flex flex-col items-center ${shouldCenterImage ? 'sm:items-center text-center sm:text-center' : 'sm:items-start text-center sm:text-left'}`}
+                    className="w-full space-y-0 sm:space-y-0 flex flex-col items-start text-left"
                     style={{
                       animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
                     }}
                   >
-                    <h2 className="text-[19px] sm:text-[20px] font-semibold tracking-tight text-white">
+                    <h2 className="text-[19px] sm:text-[20px] font-semibold tracking-tight text-white text-left w-full">
                       {currentSlide.title}
                     </h2>
-                    <p className="text-[15px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed">
+                    <p className="text-[15px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed text-left w-full">
                       {currentSlide.description}
                     </p>
                   </div>

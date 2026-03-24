@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Calendar, X, Plus, Trash2, Clock, AlertCircle } from 'lucide-react';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -11,6 +11,27 @@ import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { normalizeTimeToHhMm, formatClockRangeAmPm } from '@/lib/timeFormat';
+
+/** Franjas de 1 h para el dropdown de feriados (7:00–8:00 … 20:00–21:00). No usa numeración de clase. */
+const FRANJAS_FERIADO_DROPDOWN: { id: string; hora_inicio: string; hora_fin: string; label: string }[] = (() => {
+  const rows: { id: string; hora_inicio: string; hora_fin: string; label: string }[] = [];
+  for (let h = 7; h < 21; h++) {
+    const hi = `${String(h).padStart(2, '0')}:00`;
+    const hf = `${String(h + 1).padStart(2, '0')}:00`;
+    rows.push({
+      id: `${hi}-${hf}`,
+      hora_inicio: hi,
+      hora_fin: hf,
+      label: formatClockRangeAmPm(hi, hf),
+    });
+  }
+  return rows;
+})();
+
+function esFranjaFeriadoEstandar(hi: string, hf: string): boolean {
+  return FRANJAS_FERIADO_DROPDOWN.some((f) => f.hora_inicio === hi && f.hora_fin === hf);
+}
 
 interface HorarioPersonalizado {
   hora_inicio: string;
@@ -99,13 +120,17 @@ export const FeriadosConfigModal = ({
       }
 
       if (data && data.length > 0) {
-        const clases = data.map((h: any) => ({
-          clase_numero: h.clase_numero,
-          hora_inicio: h.hora_inicio.substring(0, 5), // Formato HH:MM
-          hora_fin: h.hora_fin.substring(0, 5),
-          nombre: `Clase ${h.clase_numero} (${h.hora_inicio.substring(0, 5)} - ${h.hora_fin.substring(0, 5)})`,
-          capacidad: h.capacidad || 4 // Capacidad por defecto
-        }));
+        const clases = data.map((h: any) => {
+          const hi = normalizeTimeToHhMm(h.hora_inicio);
+          const hf = normalizeTimeToHhMm(h.hora_fin);
+          return {
+            clase_numero: h.clase_numero,
+            hora_inicio: hi,
+            hora_fin: hf,
+            nombre: `Clase ${h.clase_numero} (${formatClockRangeAmPm(hi, hf)})`,
+            capacidad: h.capacidad || 4,
+          };
+        });
         setClasesDisponibles(clases);
       }
     } catch (error) {
@@ -184,11 +209,6 @@ export const FeriadosConfigModal = ({
         return;
       }
 
-      const normalizarHora = (hora: string | null | undefined) => {
-        if (!hora) return '';
-        return hora.substring(0, 5); // HH:mm
-      };
-
       const getNombreAlumno = (profile: any) => {
         if (!profile) return 'Alumno';
         const fullName = (profile.full_name || '').toString().trim();
@@ -200,7 +220,7 @@ export const FeriadosConfigModal = ({
 
       const historial = (turnosVariables || []).reduce<Record<string, Record<string, string[]>>>((acc, t: any) => {
         const fechaKey = t.turno_fecha;
-        const slotKey = `${normalizarHora(t.turno_hora_inicio)}-${normalizarHora(t.turno_hora_fin)}`;
+        const slotKey = `${normalizeTimeToHhMm(t.turno_hora_inicio)}-${normalizeTimeToHhMm(t.turno_hora_fin)}`;
         const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles;
         const nombre = getNombreAlumno(profile);
 
@@ -233,18 +253,18 @@ export const FeriadosConfigModal = ({
     setHorariosPersonalizados(horariosPersonalizados.filter((_, i) => i !== index));
   };
 
-  const seleccionarClase = (index: number, claseNumero: number) => {
-    const claseSeleccionada = clasesDisponibles.find(c => c.clase_numero === claseNumero);
-    if (!claseSeleccionada) return;
+  /** Solo modal feriados: franjas 7:00–21:00 (sin numeración de clase). */
+  const seleccionarFranjaFeriado = (index: number, value: string) => {
+    const m = value.match(/^(\d{2}:\d{2})-(\d{2}:\d{2})$/);
+    if (!m) return;
 
     const nuevos = [...horariosPersonalizados];
-    // Mantener la capacidad existente (el admin debe configurarla manualmente)
     const capacidadExistente = nuevos[index]?.capacidad || 0;
     nuevos[index] = {
-      hora_inicio: claseSeleccionada.hora_inicio,
-      hora_fin: claseSeleccionada.hora_fin,
-      clase_numero: claseNumero,
-      capacidad: capacidadExistente
+      hora_inicio: m[1],
+      hora_fin: m[2],
+      clase_numero: undefined,
+      capacidad: capacidadExistente,
     };
     setHorariosPersonalizados(nuevos);
   };
@@ -726,27 +746,22 @@ export const FeriadosConfigModal = ({
     setMotivo(feriado.motivo || '');
     
     // Intentar asociar horarios existentes con clases disponibles
-    const horariosConClase = (feriado.horarios_personalizados || []).map(horario => {
-      // Si ya tiene clase_numero, mantenerlo
+    const horariosConClase = (feriado.horarios_personalizados || []).map((horario) => {
+      const horaInicio = normalizeTimeToHhMm(horario.hora_inicio);
+      const horaFin = normalizeTimeToHhMm(horario.hora_fin);
+      // Franjas estándar del dropdown: no asociar a clase_numero del gimnasio
+      if (esFranjaFeriadoEstandar(horaInicio, horaFin)) {
+        return { ...horario, hora_inicio: horaInicio, hora_fin: horaFin, clase_numero: undefined };
+      }
       if (horario.clase_numero) {
         return horario;
       }
-      
-      // Intentar encontrar la clase que coincida con este horario
-      const horaInicio = horario.hora_inicio.substring(0, 5);
-      const horaFin = horario.hora_fin.substring(0, 5);
       const claseEncontrada = clasesDisponibles.find(
-        c => c.hora_inicio === horaInicio && c.hora_fin === horaFin
+        (c) => c.hora_inicio === horaInicio && c.hora_fin === horaFin
       );
-      
       if (claseEncontrada) {
-        return {
-          ...horario,
-          clase_numero: claseEncontrada.clase_numero
-        };
+        return { ...horario, clase_numero: claseEncontrada.clase_numero };
       }
-      
-      // Si no se encuentra, mantener el horario sin clase_numero
       return horario;
     });
     
@@ -757,27 +772,21 @@ export const FeriadosConfigModal = ({
   // Actualizar horarios con clase_numero cuando se cargan las clases disponibles
   useEffect(() => {
     if (clasesDisponibles.length > 0 && editandoFeriado && horariosPersonalizados.length > 0) {
-      const horariosConClase = horariosPersonalizados.map(horario => {
-        // Si ya tiene clase_numero, mantenerlo
+      const horariosConClase = horariosPersonalizados.map((horario) => {
+        const horaInicio = normalizeTimeToHhMm(horario.hora_inicio);
+        const horaFin = normalizeTimeToHhMm(horario.hora_fin);
+        if (esFranjaFeriadoEstandar(horaInicio, horaFin)) {
+          return { ...horario, clase_numero: undefined };
+        }
         if (horario.clase_numero) {
           return horario;
         }
-        
-        // Intentar encontrar la clase que coincida con este horario
-        const horaInicio = horario.hora_inicio?.substring(0, 5) || '';
-        const horaFin = horario.hora_fin?.substring(0, 5) || '';
         const claseEncontrada = clasesDisponibles.find(
-          c => c.hora_inicio === horaInicio && c.hora_fin === horaFin
+          (c) => c.hora_inicio === horaInicio && c.hora_fin === horaFin
         );
-        
         if (claseEncontrada) {
-          return {
-            ...horario,
-            clase_numero: claseEncontrada.clase_numero
-          };
+          return { ...horario, clase_numero: claseEncontrada.clase_numero };
         }
-        
-        // Si no se encuentra, mantener el horario sin clase_numero
         return horario;
       });
       
@@ -809,12 +818,6 @@ export const FeriadosConfigModal = ({
             <Calendar className="h-5 w-5" />
             {fechaSeleccionada ? 'Configurar feriado' : 'Gestionar feriados'}
           </DialogTitle>
-          <DialogDescription>
-            {fechaSeleccionada 
-              ? ''
-              : 'Visualiza y gestiona los feriados de días hábiles. Usa click derecho en un día del calendario para crear nuevos feriados.'
-            }
-          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
@@ -932,33 +935,40 @@ export const FeriadosConfigModal = ({
                       <div className="flex items-start gap-4">
                         <div className="flex-1 space-y-3">
                           <div>
-                            <Label htmlFor={`clase_${index}`}>Seleccionar clase</Label>
-                            {clasesDisponibles.length > 0 ? (
-                              <Select
-                                value={horario.clase_numero?.toString() || ''}
-                                onValueChange={(value) => seleccionarClase(index, parseInt(value))}
-                              >
-                                <SelectTrigger id={`clase_${index}`} className="mt-1">
-                                  <SelectValue placeholder="Selecciona una clase" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {clasesDisponibles.map((clase) => (
-                                    <SelectItem key={clase.clase_numero} value={clase.clase_numero.toString()}>
-                                      {clase.nombre}
+                            <Label htmlFor={`franja_${index}`}>Franja horaria</Label>
+                            <Select
+                              value={(() => {
+                                const hi = normalizeTimeToHhMm(horario.hora_inicio);
+                                const hf = normalizeTimeToHhMm(horario.hora_fin);
+                                if (!hi || !hf) return '';
+                                return `${hi}-${hf}`;
+                              })()}
+                              onValueChange={(value) => seleccionarFranjaFeriado(index, value)}
+                            >
+                              <SelectTrigger id={`franja_${index}`} className="mt-1">
+                                <SelectValue placeholder="Elegí un horario (7:00 a 21:00)" />
+                              </SelectTrigger>
+                              <SelectContent className="max-h-[min(70vh,320px)]">
+                                {(() => {
+                                  const hi = normalizeTimeToHhMm(horario.hora_inicio);
+                                  const hf = normalizeTimeToHhMm(horario.hora_fin);
+                                  const slotId = hi && hf ? `${hi}-${hf}` : '';
+                                  const esEstandar = slotId
+                                    ? FRANJAS_FERIADO_DROPDOWN.some((f) => f.id === slotId)
+                                    : false;
+                                  return slotId && !esEstandar ? (
+                                    <SelectItem key={`legacy-${slotId}`} value={slotId}>
+                                      Horario guardado: {formatClockRangeAmPm(hi, hf)}
                                     </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            ) : (
-                              <div className="mt-1 p-2 border rounded-md text-sm text-muted-foreground">
-                                Cargando clases...
-                              </div>
-                            )}
-                            {horario.hora_inicio && horario.hora_fin && (
-                              <p className="text-sm text-muted-foreground mt-1">
-                                Horario: {horario.hora_inicio} - {horario.hora_fin}
-                              </p>
-                            )}
+                                  ) : null;
+                                })()}
+                                {FRANJAS_FERIADO_DROPDOWN.map((franja) => (
+                                  <SelectItem key={franja.id} value={franja.id}>
+                                    {franja.label}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </div>
                           <div>
                             <Label htmlFor={`capacidad_${index}`} className="flex items-center gap-1">
@@ -1036,13 +1046,13 @@ export const FeriadosConfigModal = ({
                         {feriado.horarios_personalizados && feriado.horarios_personalizados.length > 0 && (
                           <div className="space-y-2 text-sm">
                             {feriado.horarios_personalizados.map((h, idx) => {
-                              const slotKey = `${(h.hora_inicio || '').substring(0, 5)}-${(h.hora_fin || '').substring(0, 5)}`;
+                              const slotKey = `${normalizeTimeToHhMm(h.hora_inicio)}-${normalizeTimeToHhMm(h.hora_fin)}`;
                               const alumnos = alumnosPorFeriado[feriado.fecha]?.[slotKey] || [];
                               return (
                                 <div key={`${feriado.id || feriado.fecha}-${idx}`} className="flex items-start gap-2">
                                   <Clock className="h-4 w-4 mt-0.5" />
                                   <div>
-                                    <p className="font-medium">{`${h.hora_inicio}-${h.hora_fin}`}</p>
+                                    <p className="font-medium">{formatClockRangeAmPm(h.hora_inicio, h.hora_fin)}</p>
                                     <p className="text-muted-foreground">
                                       {alumnos.length > 0
                                         ? `Alumnos: ${alumnos.join(', ')}`

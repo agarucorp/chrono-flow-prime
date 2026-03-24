@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { CancelacionConfirmationModal } from './CancelacionConfirmationModal';
 import { format, parse } from 'date-fns';
 import { es } from 'date-fns/locale';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -762,7 +763,7 @@ export const AdminTurnoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: Admi
               </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Horario</Label>
-              <p className="font-medium">{turno.hora_inicio} - {turno.hora_fin}</p>
+              <p className="font-medium">{formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}</p>
             </div>
             <div>
               <Label className="text-sm font-medium text-muted-foreground">Estado</Label>

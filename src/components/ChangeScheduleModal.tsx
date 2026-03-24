@@ -8,6 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
+import { formatClockRangeAmPm } from '@/lib/timeFormat';
 
 interface HorarioClase {
   id: string;
@@ -203,11 +204,6 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatTime = (t?: string) => {
-    if (!t) return '';
-    return t.slice(0, 5);
   };
 
   const getHorariosPorDia = (dia: number) => {
@@ -665,7 +661,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                         disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
                                         title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
                                       >
-                                        {formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}
+                                        {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
                                         {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                         {estaSeleccionado && (
                                           <X className="absolute right-2 h-4 w-4 text-zinc-500 hover:text-zinc-700" />
@@ -729,7 +725,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                       disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
                                       title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
                                     >
-                                      <span>{formatTime(horario.hora_inicio)} - {formatTime(horario.hora_fin)}</span>
+                                      <span>{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
                                       {estaLleno && !estaSeleccionado && ' (Lleno)'}
                                       {estaSeleccionado && (
                                         <X className="h-3.5 w-3.5 text-zinc-500 hover:text-zinc-700" />
@@ -794,7 +790,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                     return (
                       <li key={id} className="flex items-center space-x-2">
                         <Check className="h-3.5 w-3.5 text-white sm:h-4 sm:w-4" />
-                        <span>{dia}: {formatTime(h?.hora_inicio)} - {formatTime(h?.hora_fin)}</span>
+                        <span>{dia}: {formatClockRangeAmPm(h?.hora_inicio, h?.hora_fin)}</span>
                       </li>
                     );
                   })}
