@@ -167,10 +167,11 @@ export const useAdmin = () => {
 
   const fetchHorariosRecurrentes = useCallback(async (): Promise<Record<string, Set<string>>> => {
     try {
+      const hoyISO = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
-        .from('vista_horarios_usuarios')
-        .select('usuario_id, dia_semana, activo')
-        .eq('activo', true);
+        .from('horarios_recurrentes_usuario')
+        .select('usuario_id, dia_semana, activo, fecha_fin')
+        .or('activo.eq.true,activo.is.null');
 
       if (error) {
         console.error('❌ Error obteniendo horarios recurrentes:', error);
@@ -178,6 +179,8 @@ export const useAdmin = () => {
       }
 
       return (data || []).reduce<Record<string, Set<string>>>((acc, row: any) => {
+        // No contar horarios cerrados en el pasado.
+        if (row?.fecha_fin && row.fecha_fin < hoyISO) return acc;
         const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
         if (!diaNombre) return acc;
         if (!acc[row.usuario_id]) {
@@ -195,10 +198,11 @@ export const useAdmin = () => {
   // Nueva función para obtener horarios con horas de inicio
   const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string }>>> => {
     try {
+      const hoyISO = new Date().toISOString().split('T')[0];
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
-        .select('usuario_id, dia_semana, hora_inicio, activo')
-        .eq('activo', true);
+        .select('usuario_id, dia_semana, hora_inicio, activo, fecha_fin')
+        .or('activo.eq.true,activo.is.null');
 
       if (error) {
         console.error('❌ Error obteniendo horarios con horas:', error);
@@ -206,11 +210,15 @@ export const useAdmin = () => {
       }
 
       return (data || []).reduce<Record<string, Array<{ dia: string; hora_inicio: string }>>>((acc, row: any) => {
+        // No contar horarios cerrados en el pasado.
+        if (row?.fecha_fin && row.fecha_fin < hoyISO) return acc;
         const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
         if (!diaNombre) return acc;
         if (!acc[row.usuario_id]) {
           acc[row.usuario_id] = [];
         }
+        // Deduplicar por día para evitar repetir badges en la tabla admin.
+        if (acc[row.usuario_id].some((item) => item.dia === diaNombre)) return acc;
         acc[row.usuario_id].push({ dia: diaNombre, hora_inicio: row.hora_inicio });
         return acc;
       }, {});

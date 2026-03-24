@@ -79,7 +79,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const [selectedVacantesDate, setSelectedVacantesDate] = useState<Date | null>(null);
   const [showVacantesDayModal, setShowVacantesDayModal] = useState(false);
   const [vacantesCalendarMonth, setVacantesCalendarMonth] = useState(new Date());
-  const [horariosSemanales, setHorariosSemanales] = useState<Array<{ dia_semana: number; hora_inicio: string; hora_fin: string; clase_numero?: number }>>([]);
+  const [horariosSemanales, setHorariosSemanales] = useState<Array<{ dia_semana: number; hora_inicio: string; hora_fin: string; clase_numero?: number; capacidad?: number }>>([]);
   
   // Refs para rastrear qué vistas ya han sido cargadas (persisten entre renders)
   const misClasesLoadedRef = useRef<boolean>(false);
@@ -153,6 +153,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   
   // Estado para feriados
   const [feriados, setFeriados] = useState<Array<{
+    id?: string;
     fecha: string;
     tipo: 'dia_habil_feriado' | 'fin_semana_habilitado';
     horarios_personalizados: Array<{ hora_inicio: string; hora_fin: string }> | null;
@@ -173,6 +174,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const formatTime = (timeString: string) => {
     if (!timeString) return '';
     return timeString.substring(0, 5); // Toma solo HH:mm
+  };
+  const normalizeDateKey = (value: string) => {
+    if (!value) return '';
+    return String(value).substring(0, 10);
   };
 
   const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
@@ -235,6 +240,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeView]);
+
+  useEffect(() => {
+    if (user?.id && activeView === 'turnos-disponibles' && horariosSemanales.length > 0) {
+      cargarTurnosCancelados(false, false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [horariosSemanales, user?.id, activeView]);
 
   // Escuchar confirmación de cierre de sesión desde menús
   useEffect(() => {
@@ -327,7 +339,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     try {
       const { data, error } = await supabase
         .from('feriados')
-        .select('fecha, tipo, horarios_personalizados, activo')
+        .select('id, fecha, tipo, horarios_personalizados, activo')
         .eq('activo', true);
 
       if (error) {
@@ -336,10 +348,44 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         return;
       }
 
-      setFeriados(data || []);
+      setFeriados(
+        (data || []).map((f: any) => ({
+          ...f,
+          // Normalizar por seguridad (si llega timestamp) para comparar por día.
+          fecha: normalizeDateKey(f.fecha)
+        }))
+      );
     } catch (error) {
       console.error('Error inesperado cargando feriados:', error);
       setFeriados([]);
+    }
+  };
+
+  const cargarHorariosSemanales = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('horarios_semanales')
+        .select('dia_semana, hora_inicio, hora_fin, clase_numero, capacidad, activo')
+        .eq('activo', true)
+        .order('dia_semana', { ascending: true })
+        .order('clase_numero', { ascending: true });
+
+      if (error) {
+        console.error('Error cargando horarios_semanales:', error);
+        setHorariosSemanales([]);
+        return;
+      }
+
+      setHorariosSemanales((data || []).map((h: any) => ({
+        dia_semana: h.dia_semana,
+        hora_inicio: h.hora_inicio,
+        hora_fin: h.hora_fin,
+        clase_numero: h.clase_numero ?? undefined,
+        capacidad: Number(h.capacidad) || 1
+      })));
+    } catch (error) {
+      console.error('Error inesperado cargando horarios_semanales:', error);
+      setHorariosSemanales([]);
     }
   };
 
@@ -443,57 +489,67 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       setLoadingTurnosCancelados(true);
     }
     try {
-      // Obtener todas las clases disponibles usando la función SQL
+      // Mes actual + siguiente (incluye hoy)
       const fechaHoy = new Date();
-      const fechaManana = format(addDays(fechaHoy, 1), 'yyyy-MM-dd');
-      
-      // Calcular el último día del MES SIGUIENTE (para tener datos de 2 meses)
+      const fechaDesde = format(fechaHoy, 'yyyy-MM-dd');
       const ultimoDiaMesSiguiente = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 2, 0);
       const fechaHasta = format(ultimoDiaMesSiguiente, 'yyyy-MM-dd');
-      
-      // Llamar a la función SQL que calcula todas las clases disponibles (mes actual + siguiente)
-      const { data: clasesDisponibles, error: errorClases } = await supabase
-        .rpc('obtener_clases_disponibles', {
-          p_fecha_desde: fechaManana,
-          p_fecha_hasta: fechaHasta
-        });
 
-      if (errorClases) {
-        console.error('❌ Error al cargar clases disponibles:', errorClases);
+      // Fuente única de vacantes: turnos_disponibles
+      const { data: disponiblesRows, error: errorDisponibles } = await supabase
+        .from('turnos_disponibles')
+        .select('id, turno_fecha, turno_hora_inicio, turno_hora_fin, creado_desde_cancelacion_id, creado_desde_feriado_id')
+        .gte('turno_fecha', fechaDesde)
+        .lte('turno_fecha', fechaHasta);
+
+      if (errorDisponibles) {
+        console.error('❌ Error al cargar turnos_disponibles:', errorDisponibles);
         setLoadingTurnosCancelados(false);
-        setTurnosCancelados([]); // Asegurar que el array esté vacío en caso de error
+        setTurnosCancelados([]);
         return;
       }
 
-      // Si no hay datos, asegurar que el array esté vacío
-      if (!clasesDisponibles || clasesDisponibles.length === 0) {
+      if (!disponiblesRows || disponiblesRows.length === 0) {
         setTurnosCancelados([]);
         setLoadingTurnosCancelados(false);
         return;
       }
 
-      // Obtener turnos reservados por el usuario del mes actual
-      const { data: reservados, error: errorReservados } = await supabase
+      // Reservas confirmadas originadas en turnos_disponibles (para descontar cupos reales)
+      const { data: reservadosTodos, error: errorReservadosTodos } = await supabase
+        .from('turnos_variables')
+        .select('turno_fecha, turno_hora_inicio, turno_hora_fin, creado_desde_disponible_id')
+        .eq('estado', 'confirmada')
+        .not('creado_desde_disponible_id', 'is', null)
+        .gte('turno_fecha', fechaDesde)
+        .lte('turno_fecha', fechaHasta);
+
+      if (errorReservadosTodos) {
+        console.error('Error al cargar reservas confirmadas:', errorReservadosTodos);
+      }
+
+      // Reservas confirmadas del usuario (para ocultar solo sus slots ya tomados)
+      const { data: reservadosUsuario, error: errorReservadosUsuario } = await supabase
         .from('turnos_variables')
         .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
         .eq('cliente_id', user.id)
         .eq('estado', 'confirmada')
-        .gte('turno_fecha', fechaManana)
+        .gte('turno_fecha', fechaDesde)
         .lte('turno_fecha', fechaHasta);
 
-      if (errorReservados) {
-        console.error('Error al cargar turnos reservados:', errorReservados);
+      if (errorReservadosUsuario) {
+        console.error('Error al cargar turnos reservados del usuario:', errorReservadosUsuario);
       }
 
       // Crear un Set de turnos reservados por el usuario para verificación rápida
       const turnosReservadosSet = new Set(
-        (reservados || []).map(r => 
-          `${r.turno_fecha}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
+        (reservadosUsuario || []).map(r => 
+          `${normalizeDateKey(r.turno_fecha)}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
         )
       );
 
       // Obtener información de cancelaciones si existen
-      const idsCancelaciones = (clasesDisponibles || [])
+      const idsCancelaciones = (disponiblesRows || [])
         .filter(c => c.creado_desde_cancelacion_id)
         .map(c => c.creado_desde_cancelacion_id);
       
@@ -511,48 +567,226 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         }
       }
 
-      // Crear un mapa para búsqueda rápida
+      // Mapa rápido de cancelaciones
       const cancelacionesMap = new Map();
       cancelaciones.forEach(c => {
         cancelacionesMap.set(c.id, c);
       });
 
-      // Expandir cada clase disponible en múltiples entradas según cupos disponibles
+      // Capacidades personalizadas por feriado (si aplica)
+      const feriadoIds = Array.from(new Set(
+        (disponiblesRows || [])
+          .map((r: any) => r.creado_desde_feriado_id)
+          .filter(Boolean)
+      ));
+      const feriadosMap = new Map<string, any>();
+      if (feriadoIds.length > 0) {
+        const { data: feriadosData, error: errorFeriados } = await supabase
+          .from('feriados')
+          .select('id, horarios_personalizados')
+          .in('id', feriadoIds);
+        if (errorFeriados) {
+          console.error('Error al cargar feriados para vacantes:', errorFeriados);
+        } else {
+          (feriadosData || []).forEach((f: any) => feriadosMap.set(f.id, f));
+        }
+      }
+
+      // Conteo de reservas por turno_disponible (id) y por slot (fallback)
+      const reservasPorDisponibleId = new Map<string, number>();
+      const reservasPorSlot = new Map<string, number>();
+      (reservadosTodos || []).forEach((r: any) => {
+        if (r.creado_desde_disponible_id) {
+          const disponibleId = String(r.creado_desde_disponible_id);
+          reservasPorDisponibleId.set(disponibleId, (reservasPorDisponibleId.get(disponibleId) || 0) + 1);
+        }
+        const k = `${normalizeDateKey(r.turno_fecha)}_${r.turno_hora_inicio}_${r.turno_hora_fin}`;
+        reservasPorSlot.set(k, (reservasPorSlot.get(k) || 0) + 1);
+      });
+
+      // Agrupar disponibles por horario para calcular cupos reales
+      const gruposPorSlot = new Map<string, any[]>();
+      (disponiblesRows || []).forEach((r: any) => {
+        const fechaKey = normalizeDateKey(r.turno_fecha);
+        const k = `${fechaKey}_${r.turno_hora_inicio}_${r.turno_hora_fin}`;
+        if (!gruposPorSlot.has(k)) gruposPorSlot.set(k, []);
+        gruposPorSlot.get(k)!.push({ ...r, turno_fecha: fechaKey });
+      });
+      const slotsDefinidosEnDisponibles = new Set<string>(Array.from(gruposPorSlot.keys()));
+
+      // Expandir cada horario en N entradas según cupos disponibles
       const turnosExpandidos: any[] = [];
-      (clasesDisponibles || []).forEach((clase) => {
-        const turnoKey = `${clase.turno_fecha}_${clase.turno_hora_inicio}_${clase.turno_hora_fin}`;
+      gruposPorSlot.forEach((rows, turnoKey) => {
+        const clase = rows[0];
         const estaReservado = turnosReservadosSet.has(turnoKey);
-        
-        // Solo agregar si no está reservado por este usuario
-        if (!estaReservado) {
-          const cancelacion = clase.creado_desde_cancelacion_id 
-            ? cancelacionesMap.get(clase.creado_desde_cancelacion_id)
-            : null;
-          
-          // Crear una entrada por cada cupo disponible
-          for (let i = 0; i < clase.cupos_disponibles; i++) {
-            turnosExpandidos.push({
-              id: clase.turno_disponible_id || `virtual_${clase.turno_fecha}_${clase.turno_hora_inicio}_${i}`,
-              turno_fecha: clase.turno_fecha,
-              turno_hora_inicio: clase.turno_hora_inicio,
-              turno_hora_fin: clase.turno_hora_fin,
-              capacidad_total: clase.capacidad_total,
-              alumnos_reservados: clase.alumnos_reservados,
-              cupos_disponibles: clase.cupos_disponibles,
-              clase_numero: clase.clase_numero,
-              dia_semana: clase.dia_semana,
-              es_cancelacion: clase.es_cancelacion,
-              creado_desde_cancelacion_id: clase.creado_desde_cancelacion_id,
-              creado_desde_feriado_id: clase.creado_desde_feriado_id,
-              cliente_que_cancelo: cancelacion?.cliente_id,
-              tipo_cancelacion: cancelacion?.tipo_cancelacion,
-              reservado: false,
-              canceladoPorUsuario: cancelacion?.cliente_id === user.id,
-              es_virtual: !clase.turno_disponible_id // Marcar si es una entrada virtual (no existe en turnos_disponibles)
-            });
-          }
+
+        // Si el usuario ya reservó ese mismo horario en esa fecha, ocultarlo para él.
+        if (estaReservado) return;
+
+        const feriadoId = clase.creado_desde_feriado_id as string | null;
+        const fecha = clase.turno_fecha;
+        const hIni = (clase.turno_hora_inicio || '').substring(0, 5);
+        const hFin = (clase.turno_hora_fin || '').substring(0, 5);
+
+        // Regla de capacidad:
+        // - Vacantes desde feriado/fin de semana: usar capacidad personalizada de ese horario.
+        // - Vacantes por cancelación: cada fila en turnos_disponibles representa 1 cupo.
+        let capacidadTotal = rows.length;
+        if (feriadoId && feriadosMap.has(feriadoId)) {
+          const f = feriadosMap.get(feriadoId);
+          const horarios = Array.isArray(f?.horarios_personalizados) ? f.horarios_personalizados : [];
+          const match = horarios.find((hp: any) =>
+            (hp?.hora_inicio || '').substring(0, 5) === hIni &&
+            (hp?.hora_fin || '').substring(0, 5) === hFin
+          );
+          const capacidadFeriado = Number(match?.capacidad || 0);
+          if (capacidadFeriado > 0) capacidadTotal = capacidadFeriado;
+        }
+
+        // Para evitar sobrecontar, priorizar reservas enlazadas a ids concretos de turnos_disponibles.
+        // Si no hay ninguna enlazada, usar fallback por franja.
+        const reservadosPorIds = rows.reduce((acc, row: any) => {
+          if (!row?.id) return acc;
+          return acc + (reservasPorDisponibleId.get(String(row.id)) || 0);
+        }, 0);
+        const alumnosReservados = reservadosPorIds > 0 ? reservadosPorIds : (reservasPorSlot.get(turnoKey) || 0);
+        const cuposDisponibles = Math.max(0, capacidadTotal - alumnosReservados);
+        if (cuposDisponibles <= 0) return;
+
+        const cancelacion = clase.creado_desde_cancelacion_id
+          ? cancelacionesMap.get(clase.creado_desde_cancelacion_id)
+          : null;
+
+        for (let i = 0; i < cuposDisponibles; i++) {
+          turnosExpandidos.push({
+            id: rows[i]?.id || `virtual_${fecha}_${clase.turno_hora_inicio}_${i}`,
+            turno_fecha: normalizeDateKey(fecha),
+            turno_hora_inicio: clase.turno_hora_inicio,
+            turno_hora_fin: clase.turno_hora_fin,
+            capacidad_total: capacidadTotal,
+            alumnos_reservados: alumnosReservados,
+            cupos_disponibles: cuposDisponibles,
+            clase_numero: null,
+            dia_semana: null,
+            es_cancelacion: Boolean(clase.creado_desde_cancelacion_id),
+            creado_desde_cancelacion_id: clase.creado_desde_cancelacion_id,
+            creado_desde_feriado_id: feriadoId,
+            es_slot_feriado_habilitado: Boolean(feriadoId),
+            cliente_que_cancelo: cancelacion?.cliente_id,
+            tipo_cancelacion: cancelacion?.tipo_cancelacion,
+            reservado: false,
+            canceladoPorUsuario: cancelacion?.cliente_id === user.id,
+            es_virtual: !rows[i]?.id
+          });
         }
       });
+
+      // Fallback: generar vacantes desde horarios_semanales cuando no exista
+      // slot explícito en turnos_disponibles para fecha+franja.
+      if (horariosSemanales.length > 0) {
+        const slotsYaAgregados = new Set<string>(
+          turnosExpandidos.map((t: any) => `${normalizeDateKey(t.turno_fecha)}_${t.turno_hora_inicio}_${t.turno_hora_fin}`)
+        );
+        const diasRango = eachDayOfInterval({
+          start: new Date(`${fechaDesde}T00:00:00`),
+          end: new Date(`${fechaHasta}T00:00:00`)
+        });
+
+        for (const dia of diasRango) {
+          const fechaStr = format(dia, 'yyyy-MM-dd');
+          const diaSemanaDB = dia.getDay() === 0 ? 7 : dia.getDay();
+
+          const feriadoInfo = feriados.find(f => normalizeDateKey(f.fecha) === fechaStr && f.activo);
+          const horariosFeriado = Array.isArray(feriadoInfo?.horarios_personalizados)
+            ? feriadoInfo!.horarios_personalizados
+            : [];
+
+          // Si es feriado sin horarios personalizados: día cerrado, no mostrar vacantes.
+          if (feriadoInfo && horariosFeriado.length === 0) continue;
+
+          // Si es feriado con horarios personalizados, SOLO mostrar esos horarios (no la grilla normal).
+          if (feriadoInfo && horariosFeriado.length > 0) {
+            for (const hp of horariosFeriado) {
+              const horaInicio = hp?.hora_inicio;
+              const horaFin = hp?.hora_fin;
+              if (!horaInicio || !horaFin) continue;
+
+              const slotKey = `${fechaStr}_${horaInicio}_${horaFin}`;
+              if (slotsDefinidosEnDisponibles.has(slotKey)) continue;
+              if (slotsYaAgregados.has(slotKey)) continue;
+              if (turnosReservadosSet.has(slotKey)) continue;
+
+              const capacidadTotal = Math.max(1, Number(hp?.capacidad) || 1);
+              const alumnosReservados = reservasPorSlot.get(slotKey) || 0;
+              const cuposDisponibles = Math.max(0, capacidadTotal - alumnosReservados);
+              if (cuposDisponibles <= 0) continue;
+
+              for (let i = 0; i < cuposDisponibles; i++) {
+                turnosExpandidos.push({
+                  id: `fallback_feriado_${fechaStr}_${horaInicio}_${horaFin}_${i}`,
+                  turno_fecha: fechaStr,
+                  turno_hora_inicio: horaInicio,
+                  turno_hora_fin: horaFin,
+                  capacidad_total: capacidadTotal,
+                  alumnos_reservados: alumnosReservados,
+                  cupos_disponibles: cuposDisponibles,
+                  clase_numero: hp?.clase_numero ?? null,
+                  dia_semana: diaSemanaDB,
+                  es_cancelacion: false,
+                  creado_desde_cancelacion_id: null,
+                  creado_desde_feriado_id: feriadoInfo.id ?? null,
+                  es_slot_feriado_habilitado: true,
+                  cliente_que_cancelo: null,
+                  tipo_cancelacion: null,
+                  reservado: false,
+                  canceladoPorUsuario: false,
+                  es_virtual: true
+                });
+              }
+              slotsYaAgregados.add(slotKey);
+            }
+            continue;
+          }
+
+          // Día normal (no feriado): usar horarios_semanales.
+          for (const h of horariosSemanales) {
+            if (!h || h.dia_semana !== diaSemanaDB) continue;
+
+            const slotKey = `${fechaStr}_${h.hora_inicio}_${h.hora_fin}`;
+            if (slotsDefinidosEnDisponibles.has(slotKey)) continue;
+            if (slotsYaAgregados.has(slotKey)) continue;
+            if (turnosReservadosSet.has(slotKey)) continue;
+
+            const capacidadTotal = Math.max(1, Number(h.capacidad) || 1);
+            const alumnosReservados = reservasPorSlot.get(slotKey) || 0;
+            const cuposDisponibles = Math.max(0, capacidadTotal - alumnosReservados);
+            if (cuposDisponibles <= 0) continue;
+
+            for (let i = 0; i < cuposDisponibles; i++) {
+              turnosExpandidos.push({
+                id: `fallback_${fechaStr}_${h.hora_inicio}_${h.hora_fin}_${i}`,
+                turno_fecha: fechaStr,
+                turno_hora_inicio: h.hora_inicio,
+                turno_hora_fin: h.hora_fin,
+                capacidad_total: capacidadTotal,
+                alumnos_reservados: alumnosReservados,
+                cupos_disponibles: cuposDisponibles,
+                clase_numero: h.clase_numero ?? null,
+                dia_semana: h.dia_semana,
+                es_cancelacion: false,
+                creado_desde_cancelacion_id: null,
+                creado_desde_feriado_id: null,
+                cliente_que_cancelo: null,
+                tipo_cancelacion: null,
+                reservado: false,
+                canceladoPorUsuario: false,
+                es_virtual: true
+              });
+            }
+            slotsYaAgregados.add(slotKey);
+          }
+        }
+      }
 
       console.log('✅ cargarTurnosCancelados completado', { turnosExpandidos: turnosExpandidos.length });
       setTurnosCancelados(turnosExpandidos);
@@ -575,7 +809,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       turnosCancelados
         .filter(turno => turno && turno.turno_fecha)
         .forEach(turno => {
-          const fechaStr = turno.turno_fecha;
+          const fechaStr = normalizeDateKey(turno.turno_fecha);
           const claseKey = `${turno.turno_hora_inicio}-${turno.turno_hora_fin}`;
           const key = `${fechaStr}-${claseKey}`;
           
@@ -693,6 +927,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         cargarTurnosCancelados(false, false);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_semanales' }, () => {
+        cargarHorariosSemanales();
         cargarTurnosCancelados(false, false);
       })
       .subscribe();
@@ -826,6 +1061,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       
       // Cargar feriados
       cargarFeriados();
+      // Cargar grilla base de clases para fallback de vacantes/estado de calendario
+      cargarHorariosSemanales();
       
       // Timeout de seguridad para evitar loading infinito
       const timeoutId = setTimeout(() => {
@@ -1047,8 +1284,28 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       
       // Cargar horarios recurrentes si existen
       if (horariosActuales && horariosActuales.length > 0) {
+        const desdeMes = format(startOfMonth(monthToUse), 'yyyy-MM-dd');
+        const hastaMes = format(endOfMonth(monthToUse), 'yyyy-MM-dd');
+        const { data: cancelacionesMes, error: errorCancelacionesMes } = await supabase
+          .from('turnos_cancelados')
+          .select('turno_fecha, turno_hora_inicio, turno_hora_fin, tipo_cancelacion')
+          .eq('cliente_id', user.id)
+          .gte('turno_fecha', desdeMes)
+          .lte('turno_fecha', hastaMes);
+
+        if (errorCancelacionesMes) {
+          console.error('Error al cargar cancelaciones del mes:', errorCancelacionesMes);
+        }
+
+        const cancelacionesPorFecha = (cancelacionesMes || []).reduce<Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>>((acc, c: any) => {
+          if (!acc[c.turno_fecha]) acc[c.turno_fecha] = new Map<string, 'usuario' | 'admin' | 'sistema'>();
+          const clave = `${formatTime(c.turno_hora_inicio)}-${formatTime(c.turno_hora_fin)}`;
+          acc[c.turno_fecha].set(clave, (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema');
+          return acc;
+        }, {});
+
         for (const dia of diasDelMes) {
-          const clasesDelDia = await getClasesDelDia(dia, horariosActuales);
+          const clasesDelDia = await getClasesDelDia(dia, horariosActuales, cancelacionesPorFecha);
           todasLasClases.push(...clasesDelDia);
         }
       }
@@ -1227,7 +1484,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   };
 
   // Obtener clases del día
-  const getClasesDelDia = async (dia: Date, horariosParaUsar?: HorarioRecurrente[]) => {
+  const getClasesDelDia = async (
+    dia: Date,
+    horariosParaUsar?: HorarioRecurrente[],
+    cancelacionesPorFecha?: Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>
+  ) => {
     if (userStartDate && startOfDay(dia) < userStartDate) {
       return [];
     }
@@ -1257,84 +1518,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     
     const fechaFormateada = format(dia, 'yyyy-MM-dd');
     
-    // Debug para feriados
-    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
-      console.log('🔍 [GET_CLASES] Fecha:', fechaFormateada);
-      console.log('📅 [GET_CLASES] Día semana JS:', diaSemanaJS, 'DB:', diaSemanaDB);
-      console.log('📋 [GET_CLASES] Horarios filtrados:', horariosDelDia.length);
-      if (horariosDelDia.length > 0) {
-        console.log('📝 [GET_CLASES] Horarios encontrados:', horariosDelDia.map(h => ({
-          id: h.id,
-          hora_inicio: h.hora_inicio,
-          hora_fin: h.hora_fin,
-          dia_semana: h.dia_semana
-        })));
-      }
-    }
-    
     if (horariosDelDia.length === 0) return [];
 
-    // Obtener todas las cancelaciones del día de una sola vez (incluyendo tipo_cancelacion)
-    // También obtener todas las cancelaciones sin filtrar por cliente para debug
-    const { data: cancelaciones, error: errorCancelaciones } = await supabase
-      .from('turnos_cancelados')
-      .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
-      .eq('cliente_id', user?.id)
-      .eq('turno_fecha', fechaFormateada);
-
-    if (errorCancelaciones) {
-      console.error('❌ [GET_CLASES] Error obteniendo cancelaciones:', errorCancelaciones);
-    }
-
-    // Debug para feriados: también buscar todas las cancelaciones de ese día sin filtrar por cliente
-    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
-      console.log('🔍 [GET_CLASES] Buscando cancelaciones para:', {
-        fecha: fechaFormateada,
-        cliente_id: user?.id
-      });
-      console.log('🚫 [GET_CLASES] Cancelaciones encontradas (filtradas por cliente):', cancelaciones?.length || 0);
-      if (cancelaciones && cancelaciones.length > 0) {
-        console.log('📝 [GET_CLASES] Cancelaciones:', cancelaciones.map(c => ({
-          hora_inicio: c.turno_hora_inicio,
-          hora_fin: c.turno_hora_fin,
-          tipo: c.tipo_cancelacion,
-          cliente_id: c.cliente_id
-        })));
-      }
-      
-      // También buscar todas las cancelaciones del día para ver si existen pero con otro cliente_id
-      const { data: todasCancelaciones } = await supabase
-        .from('turnos_cancelados')
-        .select('turno_hora_inicio, turno_hora_fin, tipo_cancelacion, cliente_id')
-        .eq('turno_fecha', fechaFormateada)
-        .eq('tipo_cancelacion', 'sistema');
-      
-      console.log('🔍 [GET_CLASES] Todas las cancelaciones del día (sistema):', todasCancelaciones?.length || 0);
-      if (todasCancelaciones && todasCancelaciones.length > 0) {
-        console.log('📝 [GET_CLASES] Todas las cancelaciones sistema:', todasCancelaciones.map(c => ({
-          hora_inicio: c.turno_hora_inicio,
-          hora_fin: c.turno_hora_fin,
-          tipo: c.tipo_cancelacion,
-          cliente_id: c.cliente_id
-        })));
-      }
-    }
-
-    // Crear un Map para búsqueda rápida de cancelaciones con su tipo
-    // Normalizar horas a formato HH:MM para comparación consistente
-    const cancelacionesMap = new Map(
-      (cancelaciones || []).map(c => {
-        const horaInicioNorm = formatTime(c.turno_hora_inicio);
-        const horaFinNorm = formatTime(c.turno_hora_fin);
-        const clave = `${horaInicioNorm}-${horaFinNorm}`;
-        return [clave, c.tipo_cancelacion || 'usuario'];
-      })
-    );
-
-    // Debug para feriados
-    if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
-      console.log('🗺️ [GET_CLASES] Mapa de cancelaciones:', Array.from(cancelacionesMap.entries()));
-    }
+    // Usar cancelaciones precargadas del mes (evita consultas por día).
+    const cancelacionesMap = cancelacionesPorFecha?.[fechaFormateada] || new Map<string, 'usuario' | 'admin' | 'sistema'>();
 
     // Verificar si el día es feriado (día hábil feriado sin horarios personalizados)
     const esFeriado = feriados.some(f => 
@@ -1358,18 +1545,6 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         }
         
         const estaBloqueada = estaClaseBloqueada(dia, horario.clase_numero);
-        
-        // Debug para feriados
-        if (fechaFormateada === '2026-01-13' || fechaFormateada === '2026-01-30') {
-          console.log(`🔄 [GET_CLASES] Horario ${horaInicioNorm}-${horaFinNorm}:`, {
-            claveCancelacion,
-            estaCancelada,
-            tipoCancelacion,
-            esFeriado,
-            horaInicioOriginal: horario.hora_inicio,
-            horaFinOriginal: horario.hora_fin
-          });
-        }
         
         return {
           id: `${horario.id}-${fechaFormateada}`,
@@ -1574,6 +1749,28 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     setShowReservaModal(true);
   };
 
+  /** Cupo de feriado/fin de semana habilitado: la clase recurrente de ese día no aplica; se permite reservar. */
+  const esVacanteDesdeFeriadoHabilitado = (turno: any): boolean => {
+    if (!turno) return false;
+    if (turno.creado_desde_feriado_id) return true;
+    if (turno.es_slot_feriado_habilitado) return true;
+    if (String(turno.id || '').startsWith('fallback_feriado_')) return true;
+    const fechaStr = normalizeDateKey(turno.turno_fecha || '');
+    const hIni = formatTime(turno.turno_hora_inicio || '');
+    const hFin = formatTime(turno.turno_hora_fin || '');
+    if (!fechaStr || !hIni || !hFin) return false;
+    return feriados.some((f) => {
+      if (!f.activo || normalizeDateKey(f.fecha) !== fechaStr) return false;
+      const hp = Array.isArray(f.horarios_personalizados) ? f.horarios_personalizados : [];
+      if (hp.length === 0) return false;
+      return hp.some(
+        (slot: any) =>
+          formatTime(slot?.hora_inicio || '') === hIni &&
+          formatTime(slot?.hora_fin || '') === hFin
+      );
+    });
+  };
+
   // Manejar confirmación de reserva
   const handleConfirmarReserva = async () => {
     if (!turnoToReserve || !user?.id) return;
@@ -1602,34 +1799,37 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
-    // Verificar si el usuario ya tiene este horario como recurrente
-    const fechaTurno = new Date(turnoToReserve.turno_fecha);
-    const diaSemana = fechaTurno.getDay() === 0 ? 7 : fechaTurno.getDay(); // 1-7 (Lunes-Domingo)
-    
-    const { data: horarioRecurrente, error: errorRecurrente } = await supabase
-      .from('horarios_recurrentes_usuario')
-      .select('id')
-      .eq('usuario_id', user.id)
-      .eq('dia_semana', diaSemana)
-      .eq('hora_inicio', turnoToReserve.turno_hora_inicio)
-      .eq('hora_fin', turnoToReserve.turno_hora_fin)
-      .eq('activo', true)
-      .or(`fecha_inicio.is.null,fecha_inicio.lte.${turnoToReserve.turno_fecha}`)
-      .or(`fecha_fin.is.null,fecha_fin.gte.${turnoToReserve.turno_fecha}`)
-      .maybeSingle();
+    // En feriados con horarios habilitados (o fin de semana habilitado), la recurrente de ese día
+    // no cuenta como “ya reservada” para esa fecha concreta.
+    if (!esVacanteDesdeFeriadoHabilitado(turnoToReserve)) {
+      const fechaTurno = new Date(turnoToReserve.turno_fecha);
+      const diaSemana = fechaTurno.getDay() === 0 ? 7 : fechaTurno.getDay(); // 1-7 (Lunes-Domingo)
 
-    if (errorRecurrente && errorRecurrente.code !== 'PGRST116') {
-      console.error('Error verificando horario recurrente:', errorRecurrente);
-    }
+      const { data: horarioRecurrente, error: errorRecurrente } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select('id')
+        .eq('usuario_id', user.id)
+        .eq('dia_semana', diaSemana)
+        .eq('hora_inicio', turnoToReserve.turno_hora_inicio)
+        .eq('hora_fin', turnoToReserve.turno_hora_fin)
+        .eq('activo', true)
+        .or(`fecha_inicio.is.null,fecha_inicio.lte.${turnoToReserve.turno_fecha}`)
+        .or(`fecha_fin.is.null,fecha_fin.gte.${turnoToReserve.turno_fecha}`)
+        .maybeSingle();
 
-    if (horarioRecurrente) {
-      toast({
-        title: "Horario ya reservado",
-        description: "Ya tenés este horario como parte de tu plan recurrente. No es necesario reservarlo nuevamente.",
-        variant: "destructive",
-      });
-      setShowReservaModal(false);
-      return;
+      if (errorRecurrente && errorRecurrente.code !== 'PGRST116') {
+        console.error('Error verificando horario recurrente:', errorRecurrente);
+      }
+
+      if (horarioRecurrente) {
+        toast({
+          title: "Horario ya reservado",
+          description: "Ya tenés este horario como parte de tu plan recurrente. No es necesario reservarlo nuevamente.",
+          variant: "destructive",
+        });
+        setShowReservaModal(false);
+        return;
+      }
     }
 
     setConfirmingReserva(true);

@@ -338,28 +338,8 @@ export default function Admin() {
     return diasUnicos.map(d => getDiaCorto(d)).join(', ');
   };
 
-  // Función para formatear hora (HH:mm) a formato legible (8am, 5pm)
-  const formatHora = (horaInicio: string) => {
-    if (!horaInicio) return '';
-    try {
-      const partes = horaInicio.split(':');
-      if (partes.length < 2) return horaInicio; // Si no tiene formato esperado, devolver como está
-      const horas = partes[0];
-      const minutos = partes[1] || '00';
-      const h = parseInt(horas, 10);
-      if (isNaN(h)) return horaInicio;
-      const m = minutos.substring(0, 2); // Solo tomar los primeros 2 caracteres de minutos
-      const esPM = h >= 12;
-      const hora12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-      return `${hora12}${m !== '00' ? ':' + m : ''}${esPM ? 'pm' : 'am'}`;
-    } catch (error) {
-      console.error('Error formateando hora:', error, horaInicio);
-      return horaInicio; // Devolver el valor original si hay error
-    }
-  };
-
-  // Función para obtener horarios del usuario ordenados por día
-  const getHorariosUsuario = (userId: string) => {
+  // Función para obtener los días de asistencia del usuario (1..5, sin repetidos)
+  const getHorariosUsuario = (userId: string): string[] => {
     try {
       const horarios = horariosConHoras[userId];
       if (!horarios || !Array.isArray(horarios) || horarios.length === 0) {
@@ -372,12 +352,18 @@ export default function Admin() {
         'Viernes': 5, 'Sábado': 6, 'Domingo': 7
       };
 
-      // Ordenar por día de la semana (crear copia para no mutar el original)
-      return [...horarios].sort((a, b) => {
-        const numA = diaMap[a?.dia] || 99;
-        const numB = diaMap[b?.dia] || 99;
-        return numA - numB;
-      });
+      const diasUnicos = Array.from(
+        new Set(
+          horarios
+            .map((h) => h?.dia)
+            .filter((d): d is string => Boolean(d && diaMap[d]))
+        )
+      );
+
+      return diasUnicos
+        .sort((a, b) => (diaMap[a] || 99) - (diaMap[b] || 99))
+        .slice(0, 5)
+        .map((d) => getDiaCorto(diaMap[d]));
     } catch (error) {
       console.error('Error obteniendo horarios usuario:', error, userId);
       return [];
@@ -649,47 +635,48 @@ export default function Admin() {
       // Cargar cuotas desde la base de datos
       const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
       
-      // Si no hay cuotas, no procesar
-      if (cuotas.length === 0) {
-        setBalanceRows([]);
-        setBalanceTotals({ totalAbonado: 0, totalPendiente: 0 });
-        return;
-      }
-      
-      // Construir filas para Balance usando datos de la BD
+      const clientes = allUsers.filter(
+        (u) => u.role === 'client' && !((u.email || '').toLowerCase().includes('test'))
+      );
+
+      // Construir filas para Balance mostrando SIEMPRE todos los clientes
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
-      
-      // Procesar cada cuota de la base de datos
+
+      const cuotasPorUsuario = new Map<string, any>();
       for (const cuota of cuotas) {
-        const usuario = allUsers.find(u => u.id === cuota.usuario_id);
-        if (!usuario) continue;
-        
-        const nombre = usuario.first_name || usuario.last_name ? 
-          `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim() : 
-          (usuario.full_name || usuario.email);
+        cuotasPorUsuario.set(cuota.usuario_id, cuota);
+      }
+
+      for (const usuario of clientes) {
+        const cuota = cuotasPorUsuario.get(usuario.id);
+        const nombre = usuario.first_name || usuario.last_name
+          ? `${usuario.first_name || ''} ${usuario.last_name || ''}`.trim()
+          : (usuario.full_name || usuario.email);
         const email = usuario.email || '';
-        
-        const montoOriginal = Number(cuota.monto_total) || 0;
-        const descuentoPorcentaje = Number(cuota.descuento_porcentaje) || 0;
-        const montoConDescuento = Number(cuota.monto_con_descuento) || montoOriginal;
-        const estado = (cuota.estado_pago as any) || 'pendiente';
-        const tipoPago = tipoPagoMap[cuota.usuario_id] || 'transferencia';
-        
-        rows.push({ 
-          usuario_id: cuota.usuario_id, 
-          nombre, 
-          email, 
-          monto: montoConDescuento, 
+
+        const montoOriginal = Number(cuota?.monto_total) || 0;
+        const descuentoPorcentaje = Number(cuota?.descuento_porcentaje) || 0;
+        const montoConDescuento = Number(cuota?.monto_con_descuento) || montoOriginal;
+        const estado = ((cuota?.estado_pago as any) || 'pendiente') as 'pendiente'|'abonada'|'vencida';
+        const tipoPago = tipoPagoMap[usuario.id] || 'transferencia';
+
+        rows.push({
+          usuario_id: usuario.id,
+          nombre,
+          email,
+          monto: montoConDescuento,
           montoOriginal,
-          estado, 
+          estado,
           descuento: descuentoPorcentaje,
           tipoPago
         });
-        
-        if (estado === 'abonada') totalAbonado += montoConDescuento; 
-        else totalPendiente += montoConDescuento;
+
+        if (cuota) {
+          if (estado === 'abonada') totalAbonado += montoConDescuento;
+          else totalPendiente += montoConDescuento;
+        }
       }
       
       // Ordenar filas alfabéticamente por nombre
@@ -951,18 +938,15 @@ export default function Admin() {
                                 }
                                 return (
                                   <div className="flex flex-wrap gap-1.5">
-                                    {horarios.map((horario, idx) => {
-                                      const horaFormateada = formatHora(horario.hora_inicio);
-                                      return (
-                                        <Badge 
-                                          key={idx} 
-                                          variant="outline" 
-                                          className="text-xs px-2 py-0.5"
-                                        >
-                                          {horaFormateada}
-                                        </Badge>
-                                      );
-                                    })}
+                                    {horarios.map((dia) => (
+                                      <Badge 
+                                        key={dia} 
+                                        variant="outline" 
+                                        className="text-xs px-2 py-0.5"
+                                      >
+                                        {dia}
+                                      </Badge>
+                                    ))}
                                   </div>
                                 );
                               })()}
@@ -1049,18 +1033,15 @@ export default function Admin() {
                                 <span className="text-[10px] text-muted-foreground">—</span>
                               ) : (
                                 <div className="flex flex-wrap gap-0.5 justify-center">
-                                  {horarios.map((horario, idx) => {
-                                    const horaFormateada = formatHora(horario.hora_inicio);
-                                    return (
-                                      <Badge 
-                                        key={idx} 
-                                        variant="outline" 
-                                        className="text-[9px] px-1 py-0"
-                                      >
-                                        {horaFormateada}
-                                      </Badge>
-                                    );
-                                  })}
+                                  {horarios.map((dia) => (
+                                    <Badge 
+                                      key={dia} 
+                                      variant="outline" 
+                                      className="text-[9px] px-1 py-0"
+                                    >
+                                      {dia}
+                                    </Badge>
+                                  ))}
                                 </div>
                               )}
                             </div>

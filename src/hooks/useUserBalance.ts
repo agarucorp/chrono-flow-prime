@@ -57,6 +57,14 @@ const getDateOnly = (value: string | Date) => {
   return date;
 };
 
+const normalizeDateKey = (value: string | Date) => String(value).substring(0, 10);
+
+// DB: 1..7 (lunes..domingo) | JS: 0..6 (domingo..sábado)
+const toDbWeekday = (date: Date) => {
+  const day = date.getDay();
+  return day === 0 ? 7 : day;
+};
+
 export const useUserBalance = (): UseUserBalanceReturn => {
   const { user } = useAuthContext();
   const [history, setHistory] = useState<BalanceEntry[]>([]);
@@ -169,9 +177,8 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const { data: cancelacionesData } = await supabase
           .from('turnos_cancelados')
-          .select('id')
+          .select('id, cancelacion_tardia, tipo_cancelacion, turno_fecha')
           .eq('cliente_id', user.id)
-          .eq('cancelacion_tardia', false)
           .gte('turno_fecha', currentStartISO)
           .lte('turno_fecha', currentEndISO);
 
@@ -214,10 +221,17 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         const feriadosSinClases = new Set(
           (feriadosData || [])
             .filter(f => f.tipo === 'dia_habil_feriado')
-            .map(f => f.fecha)
+            .map(f => normalizeDateKey(f.fecha))
         );
 
-        const cancelacionesUsuarioCount = cancelacionesData?.length ?? 0;
+        // Considerar todas las cancelaciones del usuario (anticipadas y tardías)
+        // para el ajuste del mes siguiente, excluyendo las generadas por sistema/admin.
+        const cancelacionesUsuarioCount = (cancelacionesData || []).filter(
+          (c: any) => {
+            const tipo = (c?.tipo_cancelacion || '').toString().toLowerCase();
+            return tipo !== 'sistema' && tipo !== 'admin';
+          }
+        ).length;
         const vacantesCount = vacantesData?.length ?? 0;
 
         const ausenciasCount = (() => {
@@ -233,7 +247,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           }));
 
           const countForDate = (date: Date, clasesCanceladas?: number[] | null) => {
-            const weekday = date.getDay();
+            const weekday = toDbWeekday(date);
             const matches = schedule.filter((hr) => hr.diaSemana === weekday);
             if (matches.length === 0) return 0;
             if (clasesCanceladas && clasesCanceladas.length > 0) {
@@ -383,10 +397,10 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             let clasesCalculadas = 0;
             for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
-              const diaSemanaJS = fecha.getDay();
+              const diaSemanaDB = toDbWeekday(fecha);
               const fechaStr = fecha.toISOString().split('T')[0];
 
-              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
 
               // Verificar si es feriado (día sin clases)
               const esFeriado = feriadosSinClases.has(fechaStr);
@@ -563,7 +577,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           const feriadosProximoSinClases = new Set(
             (feriadosProximo || [])
               .filter(f => f.tipo === 'dia_habil_feriado')
-              .map(f => f.fecha)
+              .map(f => normalizeDateKey(f.fecha))
           );
 
           let clasesEstimadas = 0;
@@ -571,11 +585,11 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           if (horariosRecurrentes && horariosRecurrentes.length > 0) {
             for (let dia = 1; dia <= lastDayNextMonth; dia++) {
               const fecha = new Date(nextYear, nextMonthNum - 1, dia);
-              const diaSemanaJS = fecha.getDay();
+              const diaSemanaDB = toDbWeekday(fecha);
               const fechaStr = fecha.toISOString().split('T')[0];
 
               const tieneHorario = horariosRecurrentes.some((hr: any) => {
-                if (hr.dia_semana !== diaSemanaJS) return false;
+                if (hr.dia_semana !== diaSemanaDB) return false;
                 if (hr.fecha_inicio) {
                   const fechaInicio = new Date(hr.fecha_inicio);
                   fechaInicio.setHours(0, 0, 0, 0);
@@ -674,10 +688,10 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
             for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
-              const diaSemanaJS = fecha.getDay();
+              const diaSemanaDB = toDbWeekday(fecha);
               const fechaStr = fecha.toISOString().split('T')[0];
 
-              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaJS);
+              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
 
               // Verificar si es feriado (día sin clases)
               const esFeriado = feriadosSinClases.has(fechaStr);

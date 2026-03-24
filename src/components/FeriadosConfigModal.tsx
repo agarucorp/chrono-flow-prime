@@ -53,6 +53,8 @@ export const FeriadosConfigModal = ({
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [feriados, setFeriados] = useState<Feriado[]>([]);
+  // Historial de alumnos por fecha y franja horaria (para mostrar en listado de feriados)
+  const [alumnosPorFeriado, setAlumnosPorFeriado] = useState<Record<string, Record<string, string[]>>>({});
   const [fechaFiltro, setFechaFiltro] = useState<string>('');
 
   // Estado para nuevo/editar feriado
@@ -71,7 +73,7 @@ export const FeriadosConfigModal = ({
       if (fechaSeleccionada) {
         const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
         setFecha(fechaStr);
-        // Si hay fecha seleccionada, siempre es día hábil feriado (los fines de semana usan otro modal)
+        // Si hay fecha seleccionada, este modal se usa solo para días hábiles.
         setTipo('dia_habil_feriado');
         setMostrarFormulario(true);
       } else {
@@ -155,6 +157,62 @@ export const FeriadosConfigModal = ({
       }));
 
       setFeriados(feriadosFormateados);
+
+      // Cargar historial de alumnos por cada feriado listado (confirmada/completada)
+      const fechasFeriados = Array.from(new Set(feriadosFormateados.map((f) => f.fecha)));
+      if (fechasFeriados.length === 0) {
+        setAlumnosPorFeriado({});
+        return;
+      }
+
+      const { data: turnosVariables, error: errorTurnos } = await supabase
+        .from('turnos_variables')
+        .select(`
+          turno_fecha,
+          turno_hora_inicio,
+          turno_hora_fin,
+          estado,
+          cliente_id,
+          profiles!cliente_id(full_name, first_name, last_name, email)
+        `)
+        .in('turno_fecha', fechasFeriados)
+        .in('estado', ['confirmada', 'completada']);
+
+      if (errorTurnos) {
+        console.error('Error cargando historial de alumnos por feriado:', errorTurnos);
+        setAlumnosPorFeriado({});
+        return;
+      }
+
+      const normalizarHora = (hora: string | null | undefined) => {
+        if (!hora) return '';
+        return hora.substring(0, 5); // HH:mm
+      };
+
+      const getNombreAlumno = (profile: any) => {
+        if (!profile) return 'Alumno';
+        const fullName = (profile.full_name || '').toString().trim();
+        if (fullName) return fullName;
+        const combined = `${profile.first_name || ''} ${profile.last_name || ''}`.trim();
+        if (combined) return combined;
+        return (profile.email || 'Alumno').toString();
+      };
+
+      const historial = (turnosVariables || []).reduce<Record<string, Record<string, string[]>>>((acc, t: any) => {
+        const fechaKey = t.turno_fecha;
+        const slotKey = `${normalizarHora(t.turno_hora_inicio)}-${normalizarHora(t.turno_hora_fin)}`;
+        const profile = Array.isArray(t.profiles) ? t.profiles[0] : t.profiles;
+        const nombre = getNombreAlumno(profile);
+
+        if (!acc[fechaKey]) acc[fechaKey] = {};
+        if (!acc[fechaKey][slotKey]) acc[fechaKey][slotKey] = [];
+        if (!acc[fechaKey][slotKey].includes(nombre)) {
+          acc[fechaKey][slotKey].push(nombre);
+        }
+        return acc;
+      }, {});
+
+      setAlumnosPorFeriado(historial);
     } catch (error: any) {
       console.error('Error cargando feriados:', error);
       showError('Error al cargar feriados');
@@ -201,7 +259,11 @@ export const FeriadosConfigModal = ({
   };
 
   const guardarFeriado = async () => {
-    if (!fecha) {
+    const fechaObjetivo = fechaSeleccionada
+      ? format(fechaSeleccionada, 'yyyy-MM-dd')
+      : fecha;
+
+    if (!fechaObjetivo) {
       showError('Debes seleccionar una fecha');
       return;
     }
@@ -221,7 +283,7 @@ export const FeriadosConfigModal = ({
       loadingToast = showLoading('Guardando feriado...');
 
       // Parsear la fecha manualmente para evitar problemas de zona horaria
-      const fechaParts = fecha.split('T')[0].split('-').map(Number);
+      const fechaParts = fechaObjetivo.split('T')[0].split('-').map(Number);
       const fechaObjValidacion = new Date(fechaParts[0], fechaParts[1] - 1, fechaParts[2]);
       fechaObjValidacion.setHours(0, 0, 0, 0);
       const diaSemana = fechaObjValidacion.getDay();
@@ -236,7 +298,7 @@ export const FeriadosConfigModal = ({
       }
 
       const datosFeriado: any = {
-        fecha,
+        fecha: fechaObjetivo,
         tipo: 'dia_habil_feriado', // Siempre día hábil feriado en este modal
         motivo: motivo || null,
         horarios_personalizados: horariosPersonalizados.length > 0 ? horariosPersonalizados : null,
@@ -276,7 +338,7 @@ export const FeriadosConfigModal = ({
         if (debeCancelar) {
           console.log('📌 [FERIADO] Llamando a cancelarTurnosDia con:', { fecha, feriadoId, horariosPersonalizados: horariosPersonalizados.length });
           try {
-            await cancelarTurnosDia(fecha, feriadoId, horariosPersonalizados);
+            await cancelarTurnosDia(fechaObjetivo, feriadoId, horariosPersonalizados);
             console.log('✅ [FERIADO] cancelarTurnosDia completado');
           } catch (cancelacionError) {
             console.error('❌ [FERIADO] Error en cancelarTurnosDia:', cancelacionError);
@@ -749,7 +811,7 @@ export const FeriadosConfigModal = ({
           </DialogTitle>
           <DialogDescription>
             {fechaSeleccionada 
-              ? `Configura el feriado para ${format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}. Este modal es solo para días hábiles (lunes a viernes).`
+              ? ''
               : 'Visualiza y gestiona los feriados de días hábiles. Usa click derecho en un día del calendario para crear nuevos feriados.'
             }
           </DialogDescription>
@@ -817,12 +879,18 @@ export const FeriadosConfigModal = ({
 
                 <div>
                   <Label>Fecha</Label>
-                  <Input
-                    type="date"
-                    value={fecha}
-                    onChange={(e) => setFecha(e.target.value)}
-                    required
-                  />
+                  {fechaSeleccionada ? (
+                    <div className="mt-2 px-3 py-2 rounded-md border bg-muted text-sm">
+                      {format(fechaSeleccionada, 'dd/MM/yyyy', { locale: es })}
+                    </div>
+                  ) : (
+                    <Input
+                      type="date"
+                      value={fecha}
+                      onChange={(e) => setFecha(e.target.value)}
+                      required
+                    />
+                  )}
                 </div>
 
                 <div>
@@ -842,6 +910,7 @@ export const FeriadosConfigModal = ({
                       variant="outline"
                       size="sm"
                       onClick={agregarHorario}
+                      className="bg-white text-gray-900 hover:bg-gray-100 border border-white"
                     >
                       <Plus className="h-4 w-4 mr-1" />
                       Agregar
@@ -850,7 +919,7 @@ export const FeriadosConfigModal = ({
                   {tipo === 'dia_habil_feriado' && (
                     <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-sm text-amber-800 dark:text-amber-200">
                       <AlertCircle className="h-4 w-4 inline mr-1" />
-                      Si no agregas horarios, el día estará completamente cerrado y se cancelarán todos los turnos.
+                      Día hábil: si no agregas horarios, el día se cierra completo y se cancelan todos los turnos.
                     </div>
                   )}
                   {horariosPersonalizados.length === 0 && (
@@ -965,13 +1034,24 @@ export const FeriadosConfigModal = ({
                           <p className="text-sm text-muted-foreground mb-2">{feriado.motivo}</p>
                         )}
                         {feriado.horarios_personalizados && feriado.horarios_personalizados.length > 0 && (
-                          <div className="flex items-center gap-2 text-sm">
-                            <Clock className="h-4 w-4" />
-                            <span>
-                              {feriado.horarios_personalizados.map(h => 
-                                `${h.hora_inicio}-${h.hora_fin} (${h.capacidad} cupos)`
-                              ).join(', ')}
-                            </span>
+                          <div className="space-y-2 text-sm">
+                            {feriado.horarios_personalizados.map((h, idx) => {
+                              const slotKey = `${(h.hora_inicio || '').substring(0, 5)}-${(h.hora_fin || '').substring(0, 5)}`;
+                              const alumnos = alumnosPorFeriado[feriado.fecha]?.[slotKey] || [];
+                              return (
+                                <div key={`${feriado.id || feriado.fecha}-${idx}`} className="flex items-start gap-2">
+                                  <Clock className="h-4 w-4 mt-0.5" />
+                                  <div>
+                                    <p className="font-medium">{`${h.hora_inicio}-${h.hora_fin}`}</p>
+                                    <p className="text-muted-foreground">
+                                      {alumnos.length > 0
+                                        ? `Alumnos: ${alumnos.join(', ')}`
+                                        : 'Sin alumnos registrados'}
+                                    </p>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
