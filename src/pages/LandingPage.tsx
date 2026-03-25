@@ -14,8 +14,9 @@ import heic2any from 'heic2any';
 
 /** Pantallas hero (portrait). Los .HEIC se convierten a JPEG en el navegador (Chrome/Firefox); Safari puede mostrar HEIC nativo. */
 const HERO_APP_SCREENSHOTS = [
-  { src: '/Hero/IMG_0903.HEIC', alt: 'App MALDA — vista en el teléfono' },
-  { src: '/Hero/IMG_9513.HEIC', alt: 'App MALDA — otra pantalla' },
+  // Desktop mockups: mockup1 = IMG_9513 1, mockup2 = IMG_0903 1
+  { src: '/galeria/IMG_9513%201.jpg', alt: 'App MALDA — otra pantalla' },
+  { src: '/galeria/IMG_0903%201.jpg', alt: 'App MALDA — vista en el teléfono' },
 ] as const;
 
 function isHeicPath(url: string) {
@@ -179,10 +180,11 @@ type GalleryItem =
   | { kind: 'video'; src: string; alt: string };
 
 const GALLERY_FOLDER_IMAGES: { src: string; alt: string }[] = [
-  { src: '/galeria/IMG_0806.HEIC', alt: 'MALDA — espacio de entrenamiento' },
-  { src: '/galeria/IMG_0831.HEIC', alt: 'MALDA — instalaciones' },
-  { src: '/galeria/IMG_9465.HEIC', alt: 'MALDA — entrenamiento' },
-  { src: '/galeria/IMG_9511.HEIC', alt: 'MALDA — ambiente' },
+  // Galería: usar JPG para evitar problemas de render (nombres originales con espacio + 1).
+  { src: '/galeria/IMG_0806%201.jpg', alt: 'MALDA — espacio de entrenamiento' },
+  { src: '/galeria/IMG_0831%201.jpg', alt: 'MALDA — instalaciones' },
+  { src: '/galeria/IMG_9465%201.jpg', alt: 'MALDA — entrenamiento' },
+  { src: '/galeria/IMG_9511%201.jpg', alt: 'MALDA — ambiente' },
 ];
 
 const GALLERY_VIDEO: GalleryItem = {
@@ -192,13 +194,15 @@ const GALLERY_VIDEO: GalleryItem = {
 };
 
 function buildGalleryDesktop(): GalleryItem[] {
-  return [...GALLERY_FOLDER_IMAGES.map((i) => ({ kind: 'image' as const, ...i })), GALLERY_VIDEO];
+  // Desktop: sin video (solo imágenes).
+  return [...GALLERY_FOLDER_IMAGES.map((i) => ({ kind: 'image' as const, ...i }))];
 }
 
 function buildGalleryMobile(): GalleryItem[] {
   return [
     ...GALLERY_FOLDER_IMAGES.map((i) => ({ kind: 'image' as const, ...i })),
-    { kind: 'image', src: '/Hero/IMG_0903.HEIC', alt: 'App MALDA' },
+    // Mobile gallery: todo excepto IMG_9513 1 (la del hero móvil).
+    { kind: 'image', src: '/galeria/IMG_0903%201.jpg', alt: 'MALDA — espacio' },
   ];
 }
 
@@ -220,12 +224,14 @@ function GallerySlide({ item }: { item: GalleryItem }) {
     );
   }
   return (
-    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
+    // Fijamos altura para que el placeholder no se estire y ocupe toda la pantalla en desktop.
+    <div className="relative h-[260px] sm:h-[300px] md:h-[340px] lg:h-[360px] w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
       <HeicOrStaticImg
         src={item.src}
         alt={item.alt}
         loading="eager"
-        imgClassName="absolute inset-0 h-full w-full object-cover"
+        // Evita el "zoom" de `object-cover` que puede hacer que se vea desenfocado cuando el aspect ratio cambia.
+        imgClassName="absolute inset-0 h-full w-full object-contain object-top"
       />
     </div>
   );
@@ -248,11 +254,8 @@ function HeroDeviceMockup({
       )}
     >
       <div className="w-full rounded-[2.5rem] bg-gradient-to-b from-zinc-500 via-zinc-800 to-zinc-950 p-[3px] shadow-[0_28px_56px_-12px_rgba(0,0,0,0.92),0_0_40px_rgba(255,255,255,0.04)] ring-1 ring-white/[0.07]">
-        <div className="w-full rounded-[2.35rem] bg-black p-2.5 sm:p-3">
-          <div className="flex justify-center pb-2" aria-hidden>
-            <div className="h-[10px] w-[68px] rounded-full bg-zinc-950 ring-1 ring-white/[0.06]" />
-          </div>
-          <div className="relative isolate overflow-hidden rounded-[1.35rem] bg-zinc-900 ring-1 ring-white/[0.08] aspect-[10/19.2] w-full">
+        <div className="w-full rounded-[2.35rem] bg-gray-900 p-2.5">
+          <div className="relative isolate aspect-[10/19.2] w-full overflow-hidden rounded-[1.35rem] bg-gray-900 ring-1 ring-white/[0.08]">
             <HeroScreenshotImage src={src} alt={alt} />
           </div>
         </div>
@@ -279,12 +282,12 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-sm">
+      <header className="fixed top-0 left-0 right-0 z-50 bg-black/[0.62] backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
+          <div className="flex h-20 items-center justify-between md:h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <img src="/tutorial/malda.png" alt="MALDA Logo" className="h-20 w-auto" />
+              <img src="/tutorial/malda.png" alt="MALDA Logo" className="h-[4.5rem] w-auto md:h-20" />
             </div>
 
             {/* Navegación Desktop - Centrada */}
@@ -339,40 +342,37 @@ const LandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      {/* max-lg:overflow-hidden evita scroll horizontal del glow; desde lg overflow-visible para no recortar mockups con rotate (sm:) */}
-      <section className="relative flex items-center bg-black px-4 pt-28 pb-14 max-lg:overflow-hidden sm:px-6 sm:pt-32 sm:pb-20 lg:overflow-visible lg:px-8">
-        {/* Desktop: hero.jpg | Mobile: captura HEIC (9513) */}
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0 z-0 hidden bg-cover bg-center bg-no-repeat grayscale brightness-[0.62] lg:block"
-          style={{ backgroundImage: "url('/Hero/hero.jpg')" }}
-        />
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-0 min-h-full overflow-hidden lg:hidden">
-          <HeicOrStaticImg
-            src="/Hero/IMG_9513.HEIC"
-            alt=""
-            loading="eager"
-            imgClassName="absolute inset-0 z-0 min-h-full min-w-full object-cover object-center grayscale brightness-[0.62]"
+      <section className="bg-black">
+        {/* Mobile: imagen ampliada (~156% = 130% × 1.2); texto y CTAs en overlay */}
+        <div className="relative lg:hidden max-lg:overflow-x-hidden">
+          <div className="w-full overflow-hidden">
+            <img
+              src="/galeria/IMG_9513%201.jpg"
+              alt="MALDA"
+              className="relative left-1/2 block h-auto w-[156%] max-w-none -translate-x-1/2 object-top grayscale brightness-[0.82]"
+              loading="eager"
+              decoding="async"
+              draggable={false}
+            />
+          </div>
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-[1] bg-black/18 bg-gradient-to-b from-black/20 via-black/10 to-black/35"
           />
-        </div>
-        <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] bg-black/35" />
-        <div className="relative z-10 mx-auto grid w-full min-w-0 max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(580px,1fr)] lg:gap-14 xl:gap-20">
-          <div className="text-left relative z-0 min-w-0">
-            <h1 className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px] font-bold mb-6 leading-[1.1] tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
+          <div className="absolute inset-0 z-10 flex flex-col justify-center gap-6 px-4 pb-12 pt-20 sm:px-6 sm:pb-14 md:pt-16">
+            <h1 className="text-[47px] font-bold leading-[1.1] tracking-tight drop-shadow-md" style={{ fontFamily: 'Poppins, sans-serif' }}>
               Entrenamiento
               <br />
-              <span className="text-[43px] sm:text-[55px] md:text-[67px] lg:text-[79px]">100%</span>
+              <span className="text-[53px]">100%</span>
               <br />
-              <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">personalizado.</span>
+              <span className="text-[47px]">personalizado.</span>
               <br />
-              <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">Sin vueltas.</span>
+              <span className="text-[47px]">Sin vueltas.</span>
             </h1>
-
-            <p className="text-[12px] sm:text-[14px] text-gray-300 max-w-2xl mb-10 leading-relaxed mt-8" style={{ fontFamily: 'Poppins, sans-serif' }}>
+            <p className="text-[16px] text-gray-200 max-w-2xl py-3 leading-relaxed drop-shadow-sm" style={{ fontFamily: 'Poppins, sans-serif' }}>
               MALDA no es un gimnasio convencional ni una clase grupal. Es un espacio de entrenamiento personalizado donde tenés tu propio circuito, un cupo reservado y seguimiento directo.
             </p>
-
-            <div className="flex flex-col sm:flex-row gap-6 mt-10">
+            <div className="flex flex-col gap-6">
               <Button
                 onClick={() => navigate('/login')}
                 className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
@@ -387,36 +387,93 @@ const LandingPage = () => {
               </Button>
             </div>
           </div>
+        </div>
 
-          {/* Mockups: columna con min-w-0 para grid; overflow-visible para sombras/rotate en desktop */}
-          {/* min-w-max: index.css aplica .flex { min-width: 0 }; sin override el bloque puede quedar más estrecho que los dos teléfonos y body (overflow-x:hidden) recorta en desktop. */}
-          <div className="relative z-10 hidden min-w-[580px] justify-center overflow-visible lg:flex">
-            <div
-              className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[640px] max-h-[90vh] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.09),transparent_62%)] blur-3xl"
-              aria-hidden
-            />
-            <div className="relative flex min-w-max flex-row flex-nowrap items-center justify-center gap-3 sm:gap-7 lg:gap-8">
-              <HeroDeviceMockup
-                src={HERO_APP_SCREENSHOTS[0].src}
-                alt={HERO_APP_SCREENSHOTS[0].alt}
-                className="shrink-0 sm:-rotate-[4deg] z-10"
+        {/* Desktop: igual que antes (fondo + overlay + grid + mockups) */}
+        <div className="relative hidden items-center overflow-visible px-4 pt-28 pb-14 sm:px-6 sm:pt-32 sm:pb-20 lg:flex lg:px-8 lg:pt-20">
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 z-0 bg-cover bg-center bg-no-repeat grayscale brightness-[0.62]"
+            style={{ backgroundImage: "url('/Hero/hero.jpg')" }}
+          />
+          <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] bg-black/35" />
+          <div className="relative z-10 mx-auto grid w-full min-w-0 max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(580px,1fr)] lg:gap-14 xl:gap-20">
+            <div className="text-left relative z-0 min-w-0">
+              <h1 className="text-[37px] sm:text-[43px] md:text-[55px] lg:text-[67px] font-bold mb-6 leading-[1.1] tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                Entrenamiento
+                <br />
+                <span className="text-[43px] sm:text-[55px] md:text-[67px] lg:text-[79px]">100%</span>
+                <br />
+                <span className="text-[37px] sm:text-[43px] md:text-[55px] lg:text-[67px]">personalizado.</span>
+                <br />
+                <span className="text-[37px] sm:text-[43px] md:text-[55px] lg:text-[67px]">Sin vueltas.</span>
+              </h1>
+              <p className="text-[12px] sm:text-[14px] text-gray-300 max-w-2xl mb-10 leading-relaxed mt-8" style={{ fontFamily: 'Poppins, sans-serif' }}>
+                MALDA no es un gimnasio convencional ni una clase grupal. Es un espacio de entrenamiento personalizado donde tenés tu propio circuito, un cupo reservado y seguimiento directo.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-6 mt-10">
+                <Button
+                  onClick={() => navigate('/login')}
+                  className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
+                >
+                  Ver planes
+                </Button>
+                <Button
+                  onClick={() => navigate('/login')}
+                  className="bg-gray-800 text-white border border-gray-700 hover:bg-gray-700 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200"
+                >
+                  Ya soy alumno
+                </Button>
+              </div>
+            </div>
+            <div className="relative z-10 hidden min-w-[580px] justify-center overflow-visible lg:flex">
+              <div
+                className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[640px] max-h-[90vh] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.09),transparent_62%)] blur-3xl"
+                aria-hidden
               />
-              <HeroDeviceMockup
-                src={HERO_APP_SCREENSHOTS[1].src}
-                alt={HERO_APP_SCREENSHOTS[1].alt}
-                className="shrink-0 sm:rotate-[4deg] z-20"
-              />
+              <div className="relative flex min-w-max flex-row flex-nowrap items-center justify-center gap-3 sm:gap-7 lg:gap-8">
+                <HeroDeviceMockup
+                  src={HERO_APP_SCREENSHOTS[0].src}
+                  alt={HERO_APP_SCREENSHOTS[0].alt}
+                  className="shrink-0 sm:-rotate-[4deg] z-10"
+                />
+                <HeroDeviceMockup
+                  src={HERO_APP_SCREENSHOTS[1].src}
+                  alt={HERO_APP_SCREENSHOTS[1].alt}
+                  className="shrink-0 sm:rotate-[4deg] z-20"
+                />
+              </div>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Mockup solo mobile: mismo fondo que sección "Un modelo de entrenamiento…" (bg-gray-900) */}
+      <div className="flex justify-center bg-gray-900 px-4 py-8 sm:px-6 lg:hidden">
+        <div className="relative w-full max-w-[280px]">
+          <div className="w-full rounded-[2.5rem] bg-gradient-to-b from-zinc-500 via-zinc-800 to-zinc-950 p-[3px] shadow-[0_28px_56px_-12px_rgba(0,0,0,0.92),0_0_40px_rgba(255,255,255,0.04)] ring-1 ring-white/[0.07]">
+            <div className="w-full rounded-[2.35rem] bg-gray-900 p-2.5">
+              <div className="relative aspect-[10/19.2] w-full overflow-hidden rounded-[1.35rem] bg-gray-900 ring-1 ring-white/[0.08]">
+                <img
+                  src="/galeria/IMG_0903%201.jpg"
+                  alt="App MALDA"
+                  className="absolute inset-0 h-full w-full object-cover object-top select-none"
+                  loading="eager"
+                  decoding="async"
+                  draggable={false}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Sección de Características */}
       <section className="py-20 px-4 sm:px-6 lg:px-8 bg-gray-900" id="como-funciona">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-[26px] sm:text-[32px] md:text-[44px] font-bold mb-6">
-              Un modelo de entrenamiento diseñado para el rendimiento
+              Un modelo de entrenamiento diseñado para rendir
             </h2>
             <p className="text-[14px] sm:text-[16px] text-gray-400 max-w-3xl mx-auto leading-relaxed">
               En MALDA no pagás una cuota para "venir cuando quieras" - Pagás por un espacio garantizado, un plan profesional y una dinámica de trabajo eficiente.
@@ -453,7 +510,7 @@ const LandingPage = () => {
       </section>
 
       {/* Sección Comparativa */}
-      <section className="py-20 px-4 sm:px-6 lg:px-8 bg-[#F5F5DC] relative overflow-hidden">
+      <section className="px-4 pt-14 pb-20 sm:px-6 md:py-20 lg:px-8 bg-[#F5F5DC] relative overflow-hidden">
         {/* Elementos decorativos de fondo */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-20 left-10 w-72 h-72 bg-white rounded-full blur-3xl"></div>
@@ -759,7 +816,7 @@ const LandingPage = () => {
       </section>
 
       {/* Sección App */}
-      <section id="app" className="py-20 px-4 sm:px-6 lg:px-8 bg-[#F5F5DC] relative overflow-hidden">
+      <section id="app" className="px-4 pt-14 pb-20 sm:px-6 md:py-20 lg:px-8 bg-[#F5F5DC] relative overflow-hidden">
         {/* Elementos decorativos de fondo */}
         <div className="absolute inset-0 opacity-5">
           <div className="absolute top-20 right-10 w-72 h-72 bg-black rounded-full blur-3xl"></div>
@@ -903,44 +960,6 @@ const LandingPage = () => {
             >
               Acceder a mi panel
             </Button>
-          </div>
-        </div>
-      </section>
-
-      {/* Galería (antes de ubicación): desktop = carpeta galería + video; mobile = galería + IMG_0903 (9513 va al hero) */}
-      <section id="galeria" className="scroll-mt-24 bg-black px-4 py-16 sm:px-6 lg:scroll-mt-28 lg:px-8 lg:py-20">
-        <div className="mx-auto max-w-7xl">
-          <div className="mb-10 text-center">
-            <h2 className="mb-4 text-[26px] font-bold text-white sm:text-[32px] md:text-[40px]">Galería</h2>
-            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-base">
-              Un vistazo al espacio y la experiencia MALDA.
-            </p>
-            <div className="mx-auto mt-6 h-1 w-24 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
-          </div>
-          <div className="relative mx-auto max-w-4xl px-11 sm:px-12 md:max-w-5xl md:px-14">
-            <Carousel
-              key={isLg ? 'gallery-desktop' : 'gallery-mobile'}
-              opts={{ loop: true, align: 'center' }}
-              className="w-full"
-            >
-              <CarouselContent className="-ml-2 sm:-ml-4">
-                {galleryItems.map((item, i) => (
-                  <CarouselItem key={`${item.kind}-${item.src}-${i}`} className="basis-full pl-2 sm:basis-full sm:pl-4">
-                    <GallerySlide item={item} />
-                  </CarouselItem>
-                ))}
-              </CarouselContent>
-              <CarouselPrevious
-                variant="outline"
-                type="button"
-                className="left-0 top-1/2 h-9 w-9 -translate-y-1/2 border-white/40 bg-black/70 text-white hover:bg-black/90 hover:text-white"
-              />
-              <CarouselNext
-                variant="outline"
-                type="button"
-                className="right-0 top-1/2 h-9 w-9 -translate-y-1/2 border-white/40 bg-black/70 text-white hover:bg-black/90 hover:text-white"
-              />
-            </Carousel>
           </div>
         </div>
       </section>
