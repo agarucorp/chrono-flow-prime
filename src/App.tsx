@@ -888,7 +888,7 @@ const Dashboard = () => {
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
-                          Mis Clases
+                          Mis clases
                         </button>
                         <button
                           onClick={() => setBalanceSubView('vacantes')}
@@ -908,7 +908,7 @@ const Dashboard = () => {
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
-                          Balance
+                          Balance y pagos
                         </button>
                       </div>
                     </div>
@@ -1089,7 +1089,7 @@ const Dashboard = () => {
                   aria-current={activeTab === 'clases'}
                 >
                   <Dumbbell className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Mis Clases</span>
+                  <span className="text-[10px] font-medium">Mis clases</span>
                 </button>
                 {/* Vacantes */}
                 <button
@@ -1176,7 +1176,7 @@ const Dashboard = () => {
                   infoGuideSection === 'clases' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
                 }`}
               >
-                Mis Clases
+                Mis clases
               </button>
               <button
                 type="button"
@@ -1185,7 +1185,7 @@ const Dashboard = () => {
                   infoGuideSection === 'balance' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
                 }`}
               >
-                Balance
+                Balance y pagos
               </button>
             </div>
             <div className="md:hidden">
@@ -1196,11 +1196,11 @@ const Dashboard = () => {
             {/* Desktop: títulos centrados sobre sus respectivas cards */}
             <div className="hidden gap-6 md:grid md:grid-cols-2">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Mis Clases</h3>
+                <h3 className="text-lg font-semibold text-center">Mis clases</h3>
                 {misClasesGuide}
               </div>
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Balance</h3>
+                <h3 className="text-lg font-semibold text-center">Balance y pagos</h3>
                 {balanceGuide}
               </div>
             </div>

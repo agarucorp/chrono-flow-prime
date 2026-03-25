@@ -1,10 +1,272 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+} from '@/components/ui/carousel';
+import heic2any from 'heic2any';
+
+/** Pantallas hero (portrait). Los .HEIC se convierten a JPEG en el navegador (Chrome/Firefox); Safari puede mostrar HEIC nativo. */
+const HERO_APP_SCREENSHOTS = [
+  { src: '/Hero/IMG_0903.HEIC', alt: 'App MALDA — vista en el teléfono' },
+  { src: '/Hero/IMG_9513.HEIC', alt: 'App MALDA — otra pantalla' },
+] as const;
+
+function isHeicPath(url: string) {
+  return /\.hei[cf]$/i.test(url);
+}
+
+/** Safari (iOS/macOS) suele mostrar HEIC en <img> sin conversión. */
+function browserLikelySupportsHeicInImg(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  if (/Macintosh/i.test(ua) && /Safari/i.test(ua) && !/Chrom|Chromium|Edg/i.test(ua)) return true;
+  return false;
+}
+
+async function heicBlobToJpegObjectUrl(blob: Blob): Promise<string> {
+  const typed =
+    blob.type && blob.type !== 'application/octet-stream'
+      ? blob
+      : new Blob([blob], { type: 'image/heic' });
+
+  const converted = await heic2any({
+    blob: typed,
+    toType: 'image/jpeg',
+    quality: 0.85,
+  });
+
+  const out = Array.isArray(converted) ? converted[0] : converted;
+  return URL.createObjectURL(out);
+}
+
+/**
+ * HEIC: Safari intenta URL directa; el resto usa heic2any (import dinámico).
+ * JPG/WebP/PNG: src directo.
+ */
+function HeicOrStaticImg({
+  src,
+  alt,
+  imgClassName,
+  loading = 'lazy',
+}: {
+  src: string;
+  alt: string;
+  imgClassName?: string;
+  loading?: 'eager' | 'lazy';
+}) {
+  const [displayUrl, setDisplayUrl] = useState<string | null>(() =>
+    isHeicPath(src) ? null : src
+  );
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const urlRef = { current: null as string | null };
+
+    if (!isHeicPath(src)) {
+      setDisplayUrl(src);
+      setFailed(false);
+      return () => {};
+    }
+
+    setDisplayUrl(null);
+    setFailed(false);
+
+    (async () => {
+      try {
+        const res = await fetch(src);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const blob = await res.blob();
+        const u = await heicBlobToJpegObjectUrl(blob);
+        if (cancelled) {
+          URL.revokeObjectURL(u);
+          return;
+        }
+        urlRef.current = u;
+        setDisplayUrl(u);
+      } catch (e) {
+        // Fallback: intentar mostrar HEIC directo (si el navegador lo soporta).
+        console.error('[HEIC] conversión:', src, e);
+        if (!cancelled) {
+          setDisplayUrl(src);
+          setFailed(true);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      if (urlRef.current) URL.revokeObjectURL(urlRef.current);
+      urlRef.current = null;
+    };
+  }, [src]);
+
+  if (failed) {
+    return (
+      <div
+        className={cn(
+          'flex items-center justify-center rounded-md border border-red-400/60 bg-red-500/10 text-center text-xs text-red-100',
+          imgClassName
+        )}
+      >
+        Error HEIC
+      </div>
+    );
+  }
+  if (!displayUrl) {
+    return (
+      <div
+        className={cn(
+          'animate-pulse rounded-md border border-red-400/30 bg-red-950/30',
+          imgClassName
+        )}
+        aria-hidden
+      />
+    );
+  }
+
+  return (
+    <img
+      src={displayUrl}
+      alt={alt}
+      className={imgClassName}
+      loading={loading}
+      decoding="async"
+      draggable={false}
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/** Chromium no decodifica HEIC en <img>; convertimos con heic2any (WASM). JPG/WebP/PNG se usan tal cual. */
+function HeroScreenshotImage({ src, alt, className }: { src: string; alt: string; className?: string }) {
+  return (
+    <div className={cn('absolute inset-0', className)}>
+      <HeicOrStaticImg
+        src={src}
+        alt={alt}
+        loading="eager"
+        imgClassName="pointer-events-none absolute inset-0 z-10 h-full w-full select-none object-cover object-top"
+      />
+    </div>
+  );
+}
+
+function useIsLg() {
+  const [lg, setLg] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const on = () => setLg(mq.matches);
+    on();
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return lg;
+}
+
+type GalleryItem =
+  | { kind: 'image'; src: string; alt: string }
+  | { kind: 'video'; src: string; alt: string };
+
+const GALLERY_FOLDER_IMAGES: { src: string; alt: string }[] = [
+  { src: '/galeria/IMG_0806.HEIC', alt: 'MALDA — espacio de entrenamiento' },
+  { src: '/galeria/IMG_0831.HEIC', alt: 'MALDA — instalaciones' },
+  { src: '/galeria/IMG_9465.HEIC', alt: 'MALDA — entrenamiento' },
+  { src: '/galeria/IMG_9511.HEIC', alt: 'MALDA — ambiente' },
+];
+
+const GALLERY_VIDEO: GalleryItem = {
+  kind: 'video',
+  src: '/galeria/video.MOV',
+  alt: 'Video MALDA',
+};
+
+function buildGalleryDesktop(): GalleryItem[] {
+  return [...GALLERY_FOLDER_IMAGES.map((i) => ({ kind: 'image' as const, ...i })), GALLERY_VIDEO];
+}
+
+function buildGalleryMobile(): GalleryItem[] {
+  return [
+    ...GALLERY_FOLDER_IMAGES.map((i) => ({ kind: 'image' as const, ...i })),
+    { kind: 'image', src: '/Hero/IMG_0903.HEIC', alt: 'App MALDA' },
+  ];
+}
+
+function GallerySlide({ item }: { item: GalleryItem }) {
+  if (item.kind === 'video') {
+    return (
+      <div className="relative aspect-video w-full max-h-[min(70vh,520px)] overflow-hidden rounded-xl border border-white/10 bg-black">
+        <video
+          className="h-full w-full object-cover"
+          controls
+          playsInline
+          preload="metadata"
+          aria-label={item.alt}
+        >
+          <source src={item.src} type="video/quicktime" />
+          <source src={item.src} />
+        </video>
+      </div>
+    );
+  }
+  return (
+    <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-white/10 bg-zinc-900">
+      <HeicOrStaticImg
+        src={item.src}
+        alt={item.alt}
+        loading="eager"
+        imgClassName="absolute inset-0 h-full w-full object-cover"
+      />
+    </div>
+  );
+}
+
+function HeroDeviceMockup({
+  src,
+  alt,
+  className,
+}: {
+  src: string;
+  alt: string;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        'relative w-[42vw] max-w-[200px] sm:w-[220px] sm:max-w-none lg:w-[248px]',
+        className
+      )}
+    >
+      <div className="w-full rounded-[2.5rem] bg-gradient-to-b from-zinc-500 via-zinc-800 to-zinc-950 p-[3px] shadow-[0_28px_56px_-12px_rgba(0,0,0,0.92),0_0_40px_rgba(255,255,255,0.04)] ring-1 ring-white/[0.07]">
+        <div className="w-full rounded-[2.35rem] bg-black p-2.5 sm:p-3">
+          <div className="flex justify-center pb-2" aria-hidden>
+            <div className="h-[10px] w-[68px] rounded-full bg-zinc-950 ring-1 ring-white/[0.06]" />
+          </div>
+          <div className="relative isolate overflow-hidden rounded-[1.35rem] bg-zinc-900 ring-1 ring-white/[0.08] aspect-[10/19.2] w-full">
+            <HeroScreenshotImage src={src} alt={alt} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const LandingPage = () => {
   const navigate = useNavigate();
+  /** Solo mobile: alterna qué columna del cuadro «¿Por qué MALDA?» se muestra */
+  const [porQueMaldaVista, setPorQueMaldaVista] = useState<'propuesta' | 'diferencia'>('propuesta');
+  const isLg = useIsLg();
+  const galleryItems = isLg ? buildGalleryDesktop() : buildGalleryMobile();
 
   const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
     e.preventDefault();
@@ -77,36 +339,74 @@ const LandingPage = () => {
       </header>
 
       {/* Hero Section */}
-      <section className="pt-32 pb-20 px-4 sm:px-6 lg:px-8 bg-black min-h-screen flex items-center">
-        <div className="max-w-4xl text-left">
-          <h1 className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px] font-bold mb-6 leading-[1.1] tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            Entrenamiento
-            <br />
-            <span className="text-[43px] sm:text-[55px] md:text-[67px] lg:text-[79px]">100%</span>
-            <br />
-            <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">personalizado.</span>
-            <br />
-            <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">Sin vueltas.</span>
-          </h1>
-          
-          <p className="text-[12px] sm:text-[14px] text-gray-300 max-w-2xl mb-10 leading-relaxed mt-8" style={{ fontFamily: 'Poppins, sans-serif' }}>
-            MALDA no es un gimnasio convencional ni una clase grupal. Es un espacio de entrenamiento personalizado donde tenés tu propio circuito, un cupo reservado y seguimiento directo.
-          </p>
+      {/* max-lg:overflow-hidden evita scroll horizontal del glow; desde lg overflow-visible para no recortar mockups con rotate (sm:) */}
+      <section className="relative flex items-center bg-black px-4 pt-28 pb-14 max-lg:overflow-hidden sm:px-6 sm:pt-32 sm:pb-20 lg:overflow-visible lg:px-8">
+        {/* Desktop: hero.jpg | Mobile: captura HEIC (9513) */}
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-0 hidden bg-cover bg-center bg-no-repeat grayscale brightness-[0.62] lg:block"
+          style={{ backgroundImage: "url('/Hero/hero.jpg')" }}
+        />
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-0 min-h-full overflow-hidden lg:hidden">
+          <HeicOrStaticImg
+            src="/Hero/IMG_9513.HEIC"
+            alt=""
+            loading="eager"
+            imgClassName="absolute inset-0 z-0 min-h-full min-w-full object-cover object-center grayscale brightness-[0.62]"
+          />
+        </div>
+        <div aria-hidden className="pointer-events-none absolute inset-0 z-[1] bg-black/35" />
+        <div className="relative z-10 mx-auto grid w-full min-w-0 max-w-7xl items-center gap-12 lg:grid-cols-[minmax(0,1fr)_minmax(580px,1fr)] lg:gap-14 xl:gap-20">
+          <div className="text-left relative z-0 min-w-0">
+            <h1 className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px] font-bold mb-6 leading-[1.1] tracking-tight" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              Entrenamiento
+              <br />
+              <span className="text-[43px] sm:text-[55px] md:text-[67px] lg:text-[79px]">100%</span>
+              <br />
+              <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">personalizado.</span>
+              <br />
+              <span className="text-[31px] sm:text-[43px] md:text-[55px] lg:text-[67px]">Sin vueltas.</span>
+            </h1>
 
-          {/* Botones CTA */}
-          <div className="flex flex-col sm:flex-row gap-6 mt-10">
-            <Button
-              onClick={() => navigate('/login')}
-              className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
-            >
-              Ver planes
-            </Button>
-            <Button
-              onClick={() => navigate('/login')}
-              className="bg-gray-800 text-white border border-gray-700 hover:bg-gray-700 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200"
-            >
-              Ya soy alumno
-            </Button>
+            <p className="text-[12px] sm:text-[14px] text-gray-300 max-w-2xl mb-10 leading-relaxed mt-8" style={{ fontFamily: 'Poppins, sans-serif' }}>
+              MALDA no es un gimnasio convencional ni una clase grupal. Es un espacio de entrenamiento personalizado donde tenés tu propio circuito, un cupo reservado y seguimiento directo.
+            </p>
+
+            <div className="flex flex-col sm:flex-row gap-6 mt-10">
+              <Button
+                onClick={() => navigate('/login')}
+                className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
+              >
+                Ver planes
+              </Button>
+              <Button
+                onClick={() => navigate('/login')}
+                className="bg-gray-800 text-white border border-gray-700 hover:bg-gray-700 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200"
+              >
+                Ya soy alumno
+              </Button>
+            </div>
+          </div>
+
+          {/* Mockups: columna con min-w-0 para grid; overflow-visible para sombras/rotate en desktop */}
+          {/* min-w-max: index.css aplica .flex { min-width: 0 }; sin override el bloque puede quedar más estrecho que los dos teléfonos y body (overflow-x:hidden) recorta en desktop. */}
+          <div className="relative z-10 hidden min-w-[580px] justify-center overflow-visible lg:flex">
+            <div
+              className="pointer-events-none absolute left-1/2 top-1/2 h-[520px] w-[640px] max-h-[90vh] max-w-[90vw] -translate-x-1/2 -translate-y-1/2 rounded-[50%] bg-[radial-gradient(ellipse_at_center,rgba(255,255,255,0.09),transparent_62%)] blur-3xl"
+              aria-hidden
+            />
+            <div className="relative flex min-w-max flex-row flex-nowrap items-center justify-center gap-3 sm:gap-7 lg:gap-8">
+              <HeroDeviceMockup
+                src={HERO_APP_SCREENSHOTS[0].src}
+                alt={HERO_APP_SCREENSHOTS[0].alt}
+                className="shrink-0 sm:-rotate-[4deg] z-10"
+              />
+              <HeroDeviceMockup
+                src={HERO_APP_SCREENSHOTS[1].src}
+                alt={HERO_APP_SCREENSHOTS[1].alt}
+                className="shrink-0 sm:rotate-[4deg] z-20"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -126,25 +426,25 @@ const LandingPage = () => {
           {/* Tarjetas de características */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12">
             {/* Tarjeta 1 */}
-            <div className="border border-white rounded-xl p-8 bg-black hover:border-white transition-colors">
-              <h3 className="text-xl font-bold mb-4 text-white">Tu lugar reservado</h3>
-              <p className="text-gray-300 text-sm leading-relaxed">
+            <div className="group border border-white/50 rounded-xl p-8 bg-black transition-all duration-300 ease-out hover:bg-white hover:border-white hover:shadow-xl hover:shadow-black/25">
+              <h3 className="text-xl font-bold mb-4 text-white transition-colors duration-300 group-hover:text-black">Tu lugar reservado</h3>
+              <p className="text-gray-300 text-sm leading-relaxed transition-colors duration-300 group-hover:text-gray-700">
                 El caos de los gimnasios llenos ya no existe. Al inscribirte, elegís tus horarios fijos por mes. Ese cupo es tuyo y de nadie más. Esto nos permite asegurar que siempre tengas el espacio y el equipamiento necesario para completar tu sesión sin esperas.
               </p>
             </div>
 
             {/* Tarjeta 2 */}
-            <div className="border border-white rounded-xl p-8 bg-black hover:border-white transition-colors">
-              <h3 className="text-xl font-bold mb-4 text-white">Tu propio circuito</h3>
-              <p className="text-gray-300 text-sm leading-relaxed">
+            <div className="group border border-white/50 rounded-xl p-8 bg-black transition-all duration-300 ease-out hover:bg-white hover:border-white hover:shadow-xl hover:shadow-black/25">
+              <h3 className="text-xl font-bold mb-4 text-white transition-colors duration-300 group-hover:text-black">Tu propio circuito</h3>
+              <p className="text-gray-300 text-sm leading-relaxed transition-colors duration-300 group-hover:text-gray-700">
                 No damos clases grupales ni rutinas genéricas. Al llegar, el coach te asigna tu trabajo del día basado en tus objetivos y nivel. Aunque compartas la hora con otros alumnos, tu entrenamiento es individual. Entrenás a tu ritmo, con la técnica bajo supervisión constante.
               </p>
             </div>
 
             {/* Tarjeta 3 */}
-            <div className="border border-white rounded-xl p-8 bg-black hover:border-white transition-colors">
-              <h3 className="text-xl font-bold mb-4 text-white">Pagás lo que entrenás</h3>
-              <p className="text-gray-300 text-sm leading-relaxed">
+            <div className="group border border-white/50 rounded-xl p-8 bg-black transition-all duration-300 ease-out hover:bg-white hover:border-white hover:shadow-xl hover:shadow-black/25">
+              <h3 className="text-xl font-bold mb-4 text-white transition-colors duration-300 group-hover:text-black">Pagás lo que entrenás</h3>
+              <p className="text-gray-300 text-sm leading-relaxed transition-colors duration-300 group-hover:text-gray-700">
                 Nuestro sistema de pagos premia la constancia. Si por algún motivo tenés que cancelar una clase, lo hacés desde la App. Ese crédito no se pierde y se computa automáticamente como un descuento para tu cuota del mes siguiente. El sistema gestiona tu saldo con transparencia total.
               </p>
             </div>
@@ -171,96 +471,131 @@ const LandingPage = () => {
           {/* Tabla Comparativa Mejorada */}
           <div className="relative">
             {/* Contenedor principal con efecto vidrioso */}
-            <div className="bg-gray-800/90 backdrop-blur-xl rounded-2xl p-8 sm:p-10 md:p-12 border border-white/20 shadow-2xl">
-              {/* Encabezados con diseño mejorado */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 mb-10 pb-6 border-b border-white/20 relative">
+            <div className="rounded-2xl border border-white/20 bg-gray-800/90 p-5 shadow-2xl backdrop-blur-xl sm:p-10 md:p-12">
+              {/* Mobile: mismos conceptos que los títulos de columna, como botones conmutadores */}
+              <div
+                className="mb-6 grid grid-cols-2 gap-2 rounded-full bg-white/10 p-1 md:hidden"
+                role="tablist"
+                aria-label="Vista del cuadro comparativo"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={porQueMaldaVista === 'propuesta'}
+                  onClick={() => setPorQueMaldaVista('propuesta')}
+                  className={cn(
+                    'rounded-full px-2 py-2.5 text-center text-[11px] font-semibold leading-tight transition-colors sm:text-xs',
+                    porQueMaldaVista === 'propuesta'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-300 hover:text-white'
+                  )}
+                >
+                  Nuestra propuesta
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={porQueMaldaVista === 'diferencia'}
+                  onClick={() => setPorQueMaldaVista('diferencia')}
+                  className={cn(
+                    'rounded-full px-2 py-2.5 text-center text-[11px] font-semibold leading-tight transition-colors sm:text-xs',
+                    porQueMaldaVista === 'diferencia'
+                      ? 'bg-white text-black shadow-sm'
+                      : 'text-gray-300 hover:text-white'
+                  )}
+                >
+                  Diferencia con el resto
+                </button>
+              </div>
+
+              {/* Desktop: encabezados de columnas (igual que antes) */}
+              <div className="relative mb-10 hidden grid-cols-2 gap-16 border-b border-white/20 pb-6 md:grid">
                 <div className="relative">
-                  <div className="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-white/30 to-transparent rounded-full"></div>
-                  <h3 className="text-lg sm:text-xl font-bold uppercase tracking-wider text-white">
-                    MALDA ES...
-                  </h3>
-                  <div className="mt-2 text-[10px] text-gray-400 uppercase tracking-widest">Nuestra propuesta</div>
+                  <div className="absolute -left-4 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-white/30 to-transparent"></div>
+                  <h3 className="text-lg font-bold uppercase tracking-wider text-white sm:text-xl">MALDA ES...</h3>
+                  <div className="mt-2 text-[10px] uppercase tracking-widest text-gray-400">Nuestra propuesta</div>
                 </div>
                 <div className="relative">
-                  <div className="absolute -left-4 top-0 bottom-0 w-1 bg-gradient-to-b from-white/30 to-transparent rounded-full"></div>
-                  <h3 className="text-lg sm:text-xl font-bold uppercase tracking-wider text-white">
-                    DIFERENCIA CON EL RESTO
-                  </h3>
-                  <div className="mt-2 text-[10px] text-gray-400 uppercase tracking-widest">Lo que nos distingue</div>
+                  <div className="absolute -left-4 top-0 bottom-0 w-1 rounded-full bg-gradient-to-b from-white/30 to-transparent"></div>
+                  <h3 className="text-lg font-bold uppercase tracking-wider text-white sm:text-xl">DIFERENCIA CON EL RESTO</h3>
+                  <div className="mt-2 text-[10px] uppercase tracking-widest text-gray-400">Lo que nos distingue</div>
                 </div>
               </div>
 
-              {/* Filas Comparativas con diseño mejorado */}
               <div className="space-y-7 md:space-y-8">
                 {/* Fila 1 */}
                 <div className="group relative">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start">
-                    <div className="relative">
-                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight">
-                        Entrenamiento<br />Personalizado
+                  <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 md:gap-16">
+                    <div
+                      className={cn(
+                        'relative',
+                        porQueMaldaVista === 'diferencia' && 'hidden md:block'
+                      )}
+                    >
+                      <h4 className="mb-2 text-lg font-bold leading-tight text-white sm:text-xl">
+                        Entrenamiento personalizado
                       </h4>
-                      <div className="w-16 h-0.5 bg-gradient-to-r from-white/40 to-transparent"></div>
+                      <div className="h-0.5 w-16 bg-gradient-to-r from-white/40 to-transparent"></div>
                     </div>
-                    <div className="relative">
-                      <div className="absolute left-0 top-2 w-2 h-2 rounded-full bg-white/40 group-hover:bg-white/60 transition-all duration-300"></div>
-                      <p className="text-sm sm:text-base text-gray-300 font-light leading-relaxed pl-4">
+                    <div
+                      className={cn(
+                        'relative',
+                        porQueMaldaVista === 'propuesta' && 'hidden md:block'
+                      )}
+                    >
+                      <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-white/40 transition-all duration-300 group-hover:bg-white/60"></div>
+                      <p className="pl-4 text-sm font-light leading-relaxed text-gray-300 sm:text-base">
                         Tu plan es único. No seguimos coreografías ni rutinas genéricas.
                       </p>
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
 
                 {/* Fila 2 */}
                 <div className="group relative">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start">
-                    <div className="relative">
-                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight">
-                        Cupos Limitados
-                      </h4>
-                      <div className="w-16 h-0.5 bg-gradient-to-r from-white/40 to-transparent"></div>
+                  <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 md:gap-16">
+                    <div className={cn('relative', porQueMaldaVista === 'diferencia' && 'hidden md:block')}>
+                      <h4 className="mb-2 text-lg font-bold leading-tight text-white sm:text-xl">Cupos limitados</h4>
+                      <div className="h-0.5 w-16 bg-gradient-to-r from-white/40 to-transparent"></div>
                     </div>
-                    <div className="relative">
-                      <div className="absolute left-0 top-2 w-2 h-2 rounded-full bg-white/40 group-hover:bg-white/60 transition-all duration-300"></div>
-                      <p className="text-sm sm:text-base text-gray-300 font-light leading-relaxed pl-4">
+                    <div className={cn('relative', porQueMaldaVista === 'propuesta' && 'hidden md:block')}>
+                      <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-white/40 transition-all duration-300 group-hover:bg-white/60"></div>
+                      <p className="pl-4 text-sm font-light leading-relaxed text-gray-300 sm:text-base">
                         Entrenás con espacio y equipo siempre disponible. Sin amontonamientos.
                       </p>
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
 
                 {/* Fila 3 */}
                 <div className="group relative">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start">
-                    <div className="relative">
-                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight">
-                        Autogestión de Turnos
-                      </h4>
-                      <div className="w-16 h-0.5 bg-gradient-to-r from-white/40 to-transparent"></div>
+                  <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 md:gap-16">
+                    <div className={cn('relative', porQueMaldaVista === 'diferencia' && 'hidden md:block')}>
+                      <h4 className="mb-2 text-lg font-bold leading-tight text-white sm:text-xl">Autogestión de turnos</h4>
+                      <div className="h-0.5 w-16 bg-gradient-to-r from-white/40 to-transparent"></div>
                     </div>
-                    <div className="relative">
-                      <div className="absolute left-0 top-2 w-2 h-2 rounded-full bg-white/40 group-hover:bg-white/60 transition-all duration-300"></div>
-                      <p className="text-sm sm:text-base text-gray-300 font-light leading-relaxed pl-4">
+                    <div className={cn('relative', porQueMaldaVista === 'propuesta' && 'hidden md:block')}>
+                      <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-white/40 transition-all duration-300 group-hover:bg-white/60"></div>
+                      <p className="pl-4 text-sm font-light leading-relaxed text-gray-300 sm:text-base">
                         Cancelás y reprogramás desde la App. Tu saldo se ajusta solo.
                       </p>
                     </div>
                   </div>
-                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+                  <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
                 </div>
 
                 {/* Fila 4 */}
                 <div className="group relative">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-16 items-start">
-                    <div className="relative">
-                      <h4 className="text-lg sm:text-xl font-bold text-white mb-2 leading-tight">
-                        Atención Directa
-                      </h4>
-                      <div className="w-16 h-0.5 bg-gradient-to-r from-white/40 to-transparent"></div>
+                  <div className="grid grid-cols-1 items-start gap-6 md:grid-cols-2 md:gap-16">
+                    <div className={cn('relative', porQueMaldaVista === 'diferencia' && 'hidden md:block')}>
+                      <h4 className="mb-2 text-lg font-bold leading-tight text-white sm:text-xl">Atención directa</h4>
+                      <div className="h-0.5 w-16 bg-gradient-to-r from-white/40 to-transparent"></div>
                     </div>
-                    <div className="relative">
-                      <div className="absolute left-0 top-2 w-2 h-2 rounded-full bg-white/40 group-hover:bg-white/60 transition-all duration-300"></div>
-                      <p className="text-sm sm:text-base text-gray-300 font-light leading-relaxed pl-4">
+                    <div className={cn('relative', porQueMaldaVista === 'propuesta' && 'hidden md:block')}>
+                      <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-white/40 transition-all duration-300 group-hover:bg-white/60"></div>
+                      <p className="pl-4 text-sm font-light leading-relaxed text-gray-300 sm:text-base">
                         El canal de WhatsApp es para consultas específicas; la agenda la controlás vos.
                       </p>
                     </div>
@@ -295,10 +630,10 @@ const LandingPage = () => {
             <div className="w-24 h-1 bg-gradient-to-r from-transparent via-white to-transparent mx-auto mt-6"></div>
           </div>
 
-          {/* Grid de Planes */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 mt-12">
+          {/* Grid de Planes: una columna en mobile/tablet; 5 columnas desde lg */}
+          <div className="mx-auto mt-10 grid max-w-md grid-cols-1 gap-4 sm:mt-12 sm:max-w-none sm:gap-5 lg:grid-cols-5 lg:gap-6">
             {/* Plan 1 día */}
-            <div className="group relative bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-2xl p-6 border border-white/10 hover:border-white/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+            <div className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-2xl max-lg:from-zinc-800 max-lg:via-zinc-800 max-lg:to-zinc-900 max-lg:border-white/15 max-lg:shadow-md max-lg:shadow-black/30 sm:p-6 max-lg:touch-manipulation">
               <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-all duration-300">
                 <span className="text-lg font-bold text-white">1</span>
               </div>
@@ -320,7 +655,7 @@ const LandingPage = () => {
             </div>
 
             {/* Plan 2 días */}
-            <div className="group relative bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-2xl p-6 border border-white/10 hover:border-white/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+            <div className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-2xl max-lg:from-zinc-800 max-lg:via-zinc-800 max-lg:to-zinc-900 max-lg:border-white/15 max-lg:shadow-md max-lg:shadow-black/30 sm:p-6 max-lg:touch-manipulation">
               <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-all duration-300">
                 <span className="text-lg font-bold text-white">2</span>
               </div>
@@ -341,8 +676,8 @@ const LandingPage = () => {
               </div>
             </div>
 
-            {/* Plan 3 días - Destacado */}
-            <div className="group relative bg-gradient-to-br from-white/5 via-white/10 to-white/5 rounded-2xl p-6 border-2 border-white/30 hover:border-white/50 transition-all duration-300 hover:shadow-2xl hover:-translate-y-2 scale-105 sm:scale-100 lg:scale-105">
+            {/* Plan 3 días - Destacado (sin scale en mobile para evitar overflow) */}
+            <div className="group relative rounded-2xl border-2 border-white/30 bg-gradient-to-br from-white/5 via-white/10 to-white/5 p-5 transition-all duration-300 hover:-translate-y-2 hover:border-white/50 hover:shadow-2xl max-lg:from-zinc-800 max-lg:via-zinc-700 max-lg:to-zinc-800 max-lg:shadow-md max-lg:shadow-black/30 sm:p-6 lg:scale-105 max-lg:touch-manipulation">
               <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
                 <span className="bg-white text-black text-xs font-bold px-3 py-1 rounded-full">Más Popular</span>
               </div>
@@ -361,13 +696,13 @@ const LandingPage = () => {
               </div>
               <div className="pt-4 border-t border-white/20">
                 <p className="text-sm text-gray-300 leading-relaxed">
-                  Construye hábitos sólidos de entrenamiento
+                  Construí hábitos sólidos de entrenamiento
                 </p>
               </div>
             </div>
 
             {/* Plan 4 días */}
-            <div className="group relative bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-2xl p-6 border border-white/10 hover:border-white/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+            <div className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-2xl max-lg:from-zinc-800 max-lg:via-zinc-800 max-lg:to-zinc-900 max-lg:border-white/15 max-lg:shadow-md max-lg:shadow-black/30 sm:p-6 max-lg:touch-manipulation">
               <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-all duration-300">
                 <span className="text-lg font-bold text-white">4</span>
               </div>
@@ -389,7 +724,7 @@ const LandingPage = () => {
             </div>
 
             {/* Plan 5 días */}
-            <div className="group relative bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 rounded-2xl p-6 border border-white/10 hover:border-white/30 transition-all duration-300 hover:shadow-2xl hover:-translate-y-1">
+            <div className="group relative rounded-2xl border border-white/10 bg-gradient-to-br from-gray-950 via-gray-900 to-gray-950 p-5 transition-all duration-300 hover:-translate-y-1 hover:border-white/30 hover:shadow-2xl max-lg:from-zinc-800 max-lg:via-zinc-800 max-lg:to-zinc-900 max-lg:border-white/15 max-lg:shadow-md max-lg:shadow-black/30 sm:p-6 max-lg:touch-manipulation">
               <div className="absolute top-4 right-4 w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10 group-hover:bg-white/10 transition-all duration-300">
                 <span className="text-lg font-bold text-white">5</span>
               </div>
@@ -438,7 +773,7 @@ const LandingPage = () => {
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 text-black">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 1.5H8.25A2.25 2.25 0 006 3.75v16.5a2.25 2.25 0 002.25 2.25h7.5A2.25 2.25 0 0018 20.25V3.75a2.25 2.25 0 00-2.25-2.25H13.5m-3 0V3h3V1.5m-3 0h3m-3 18.75h3" />
               </svg>
-              <span className="text-sm text-black/70 uppercase tracking-wider">Aplicación móvil</span>
+              <span className="text-sm text-black/70 uppercase tracking-wider">Aplicacion web</span>
             </div>
             <h2 className="text-[26px] sm:text-[32px] md:text-[44px] font-bold mb-6 text-black">
               Tu panel de gestión
@@ -450,115 +785,112 @@ const LandingPage = () => {
           </div>
 
           {/* Sección principal con capturas móviles */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center mb-20">
-            {/* Columna izquierda: Mis Clases */}
-            <div className="order-2 lg:order-1">
-              <div className="bg-white rounded-3xl p-8 border-2 border-black/20 shadow-xl">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-black/5 border-2 border-black/20 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+          <div className="grid grid-cols-1 gap-12 lg:grid-cols-2 lg:items-stretch mb-20">
+            {/* Columna izquierda: Mis clases */}
+            <div className="order-2 flex min-h-0 lg:order-1">
+              <div className="flex h-full min-h-0 w-full flex-col rounded-3xl border-2 border-black/20 bg-white p-8 shadow-xl">
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border-2 border-black/20 bg-black/5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-black">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold text-black">Mis Clases</h3>
+                    <h3 className="text-2xl font-bold text-black">Mis clases</h3>
                     <p className="text-sm text-black/60">Gestioná tus horarios recurrentes</p>
                   </div>
                 </div>
-                <p className="text-black/80 text-sm leading-relaxed mb-6">
+                <p className="mb-6 text-sm leading-relaxed text-black/80">
                   Configurá tus horarios recurrentes de forma fácil. Una vez seleccionados, quedan reservados para vos cada semana. Podés visualizar todas tus clases programadas, cancelarlas cuando lo necesites y reprogramar sin complicaciones.
                 </p>
-                {/* Mockup móvil con captura */}
-                <div className="relative mx-auto" style={{ maxWidth: '280px' }}>
-                  <div className="relative bg-black rounded-[2.5rem] p-2 shadow-2xl border-4 border-gray-800">
-                    <div className="bg-black rounded-[2rem] overflow-hidden">
-                      <img 
-                        src="/tutorial/horariomobile.jpeg" 
-                        alt="Vista móvil de Mis Clases" 
-                        className="w-full h-auto"
+                {/* Mockup: caja fija = proporción intrínseca de horariomobile.jpeg (1080×1048); Balance encaja entero con contain */}
+                <div className="relative mx-auto mt-auto w-full max-w-[280px] shrink-0">
+                  <div className="relative rounded-[2.5rem] border-4 border-gray-800 bg-black p-2 shadow-2xl">
+                    <div className="relative w-full overflow-hidden rounded-[2rem] bg-black aspect-[1080/1048]">
+                      <img
+                        src="/tutorial/horariomobile.jpeg"
+                        alt="Vista móvil de Mis clases"
+                        className="absolute inset-0 h-full w-full object-contain object-top"
                       />
                     </div>
                   </div>
-                  {/* Brillo decorativo */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-[2.5rem] pointer-events-none"></div>
+                  <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] bg-gradient-to-br from-white/5 to-transparent" />
                 </div>
               </div>
             </div>
 
             {/* Columna derecha: Balance */}
-            <div className="order-1 lg:order-2">
-              <div className="bg-white rounded-3xl p-8 border-2 border-black/20 shadow-xl">
-                <div className="flex items-center gap-3 mb-6">
-                  <div className="w-12 h-12 rounded-xl bg-black/5 border-2 border-black/20 flex items-center justify-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+            <div className="order-1 flex min-h-0 lg:order-2">
+              <div className="flex h-full min-h-0 w-full flex-col rounded-3xl border-2 border-black/20 bg-white p-8 shadow-xl">
+                <div className="mb-6 flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-xl border-2 border-black/20 bg-black/5">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-black">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm0 0h.008v.008H18V10.5z" />
                     </svg>
                   </div>
                   <div>
-                    <h3 className="text-2xl font-bold text-black">Balance y Pagos</h3>
+                    <h3 className="text-2xl font-bold text-black">Balance y pagos</h3>
                     <p className="text-sm text-black/60">Controlá tus finanzas</p>
                   </div>
                 </div>
-                <p className="text-black/80 text-sm leading-relaxed mb-6">
+                <p className="mb-6 text-sm leading-relaxed text-black/80">
                   Visualizá tu cuota actual, la próxima y tu historial completo. El pago es por adelantado y todos los cambios se reflejan automáticamente. Tu saldo se gestiona con total transparencia.
                 </p>
-                {/* Mockup móvil con captura */}
-                <div className="relative mx-auto" style={{ maxWidth: '280px' }}>
-                  <div className="relative bg-black rounded-[2.5rem] p-2 shadow-2xl border-4 border-gray-800">
-                    <div className="bg-black rounded-[2rem] overflow-hidden">
-                      <img 
-                        src="/tutorial/balancemobile.jpeg" 
-                        alt="Vista móvil de Balance" 
-                        className="w-full h-auto"
+                <div className="relative mx-auto mt-auto w-full max-w-[280px] shrink-0">
+                  <div className="relative rounded-[2.5rem] border-4 border-gray-800 bg-black p-2 shadow-2xl">
+                    <div className="relative w-full overflow-hidden rounded-[2rem] bg-black aspect-[1080/1048]">
+                      <img
+                        src="/tutorial/balancemobile.jpeg"
+                        alt="Vista móvil de Balance"
+                        className="absolute inset-0 h-full w-full object-contain object-top"
                       />
                     </div>
                   </div>
-                  {/* Brillo decorativo */}
-                  <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-[2.5rem] pointer-events-none"></div>
+                  <div className="pointer-events-none absolute inset-0 rounded-[2.5rem] bg-gradient-to-br from-white/5 to-transparent" />
                 </div>
               </div>
             </div>
           </div>
 
           {/* Funcionalidades adicionales */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+          <div className="mb-12 grid grid-cols-1 gap-6 md:grid-cols-3 md:items-stretch">
             {/* Vacantes */}
-            <div className="bg-white rounded-2xl p-6 border-2 border-black/20 hover:border-black/40 transition-all duration-300 shadow-lg">
-              <div className="w-12 h-12 rounded-xl bg-black/5 border-2 border-black/20 flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+            <div className="flex h-full flex-col rounded-2xl border-2 border-black/20 bg-white p-6 shadow-lg transition-colors duration-300 hover:border-black/35 hover:bg-neutral-200/90">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border-2 border-black/20 bg-black/5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-black">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-black mb-2">Vacantes disponibles</h3>
-              <p className="text-black/70 text-sm leading-relaxed">
-                Reservá clases canceladas por otros alumnos en tiempo real.
+              <h3 className="mb-2 text-lg font-bold text-black">Vacantes disponibles</h3>
+              <p className="mt-auto text-sm leading-relaxed text-black/70">
+                Visualización y reserva de todos los cupos que no hayan sido agendados, o bien que hayan sido cancelados por otros alumnos.
               </p>
             </div>
 
             {/* Cancelación */}
-            <div className="bg-white rounded-2xl p-6 border-2 border-black/20 hover:border-black/40 transition-all duration-300 shadow-lg">
-              <div className="w-12 h-12 rounded-xl bg-black/5 border-2 border-black/20 flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+            <div className="flex h-full flex-col rounded-2xl border-2 border-black/20 bg-white p-6 shadow-lg transition-colors duration-300 hover:border-black/35 hover:bg-neutral-200/90">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border-2 border-black/20 bg-black/5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-black">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 9.75l4.5 4.5m0-4.5l-4.5 4.5M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-black mb-2">Cancelación fácil</h3>
-              <p className="text-black/70 text-sm leading-relaxed">
-                Cancelá tus clases desde la App y tu crédito se ajusta automáticamente.
+              <h3 className="mb-2 text-lg font-bold text-black">Cancelación fácil</h3>
+              <p className="mt-auto text-sm leading-relaxed text-black/70">
+                Cancelá tus clases desde la app y tu crédito se ajusta automáticamente.
               </p>
             </div>
 
             {/* Guía */}
-            <div className="bg-white rounded-2xl p-6 border-2 border-black/20 hover:border-black/40 transition-all duration-300 shadow-lg">
-              <div className="w-12 h-12 rounded-xl bg-black/5 border-2 border-black/20 flex items-center justify-center mb-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6 text-black">
+            <div className="flex h-full flex-col rounded-2xl border-2 border-black/20 bg-white p-6 shadow-lg transition-colors duration-300 hover:border-black/35 hover:bg-neutral-200/90">
+              <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-xl border-2 border-black/20 bg-black/5">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="h-6 w-6 text-black">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172-1.025 3.07-1.025 4.242 0 1.926 1.915 1.926 5.055 0 6.97l-1.509 1.499c-.32.319-.74.557-1.193.74a6.56 6.56 0 01-1.771.31c-.61 0-1.217-.103-1.771-.31a5.811 5.811 0 01-1.193-.74l-1.51-1.499a4.975 4.975 0 010-6.97z" />
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               </div>
-              <h3 className="text-lg font-bold text-black mb-2">Guía y soporte</h3>
-              <p className="text-black/70 text-sm leading-relaxed">
-                Accedé a la guía completa y contactanos por WhatsApp si tenés dudas.
+              <h3 className="mb-2 text-lg font-bold text-black">Guía y soporte</h3>
+              <p className="mt-auto text-sm leading-relaxed text-black/70">
+                Tutorial de bienvenida y acceso a la guía completa en tu panel. Contactános por WhatsApp si tenés dudas.
               </p>
             </div>
           </div>
@@ -571,6 +903,44 @@ const LandingPage = () => {
             >
               Acceder a mi panel
             </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Galería (antes de ubicación): desktop = carpeta galería + video; mobile = galería + IMG_0903 (9513 va al hero) */}
+      <section id="galeria" className="scroll-mt-24 bg-black px-4 py-16 sm:px-6 lg:scroll-mt-28 lg:px-8 lg:py-20">
+        <div className="mx-auto max-w-7xl">
+          <div className="mb-10 text-center">
+            <h2 className="mb-4 text-[26px] font-bold text-white sm:text-[32px] md:text-[40px]">Galería</h2>
+            <p className="mx-auto max-w-2xl text-sm leading-relaxed text-gray-400 sm:text-base">
+              Un vistazo al espacio y la experiencia MALDA.
+            </p>
+            <div className="mx-auto mt-6 h-1 w-24 bg-gradient-to-r from-transparent via-white/40 to-transparent" />
+          </div>
+          <div className="relative mx-auto max-w-4xl px-11 sm:px-12 md:max-w-5xl md:px-14">
+            <Carousel
+              key={isLg ? 'gallery-desktop' : 'gallery-mobile'}
+              opts={{ loop: true, align: 'center' }}
+              className="w-full"
+            >
+              <CarouselContent className="-ml-2 sm:-ml-4">
+                {galleryItems.map((item, i) => (
+                  <CarouselItem key={`${item.kind}-${item.src}-${i}`} className="basis-full pl-2 sm:basis-full sm:pl-4">
+                    <GallerySlide item={item} />
+                  </CarouselItem>
+                ))}
+              </CarouselContent>
+              <CarouselPrevious
+                variant="outline"
+                type="button"
+                className="left-0 top-1/2 h-9 w-9 -translate-y-1/2 border-white/40 bg-black/70 text-white hover:bg-black/90 hover:text-white"
+              />
+              <CarouselNext
+                variant="outline"
+                type="button"
+                className="right-0 top-1/2 h-9 w-9 -translate-y-1/2 border-white/40 bg-black/70 text-white hover:bg-black/90 hover:text-white"
+              />
+            </Carousel>
           </div>
         </div>
       </section>
@@ -723,7 +1093,19 @@ const LandingPage = () => {
           <div className="border-t border-white/10 pt-8">
             <div className="flex justify-center items-center gap-2">
               <span className="text-gray-500 text-sm">Powered by</span>
-              <img src="/agarucorp-logo.svg" alt="AgaruCorp" className="h-2.5 w-auto" />
+              <a
+                href="https://www.agarucorp.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block"
+                aria-label="AgaruCorp"
+              >
+                <img
+                  src="/agarucorp-logo.svg"
+                  alt="AgaruCorp"
+                  className="h-2.5 w-auto opacity-80 transition-opacity hover:opacity-100"
+                />
+              </a>
             </div>
           </div>
         </div>

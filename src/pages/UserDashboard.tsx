@@ -25,7 +25,7 @@ const UserDashboard = () => {
           <Card className="lg:col-span-2">
             <CardHeader>
               <div className="flex items-center justify-between w-full">
-                <CardTitle>Mis Clases</CardTitle>
+                <CardTitle>Mis clases</CardTitle>
                 <button className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600">
                   Turnos disponibles
                 </button>
