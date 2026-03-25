@@ -284,10 +284,10 @@ const LandingPage = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/[0.62] backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-20 items-center justify-between md:h-16">
+          <div className="flex h-20 items-center justify-between lg:h-16">
             {/* Logo */}
             <div className="flex items-center">
-              <img src="/tutorial/malda.png" alt="MALDA Logo" className="h-[4.5rem] w-auto md:h-20" />
+              <img src="/tutorial/malda.png" alt="MALDA Logo" className="h-[4.5rem] w-auto lg:h-20" />
             </div>
 
             {/* Navegación Desktop - Centrada */}
@@ -359,7 +359,7 @@ const LandingPage = () => {
             aria-hidden
             className="pointer-events-none absolute inset-0 z-[1] bg-black/18 bg-gradient-to-b from-black/20 via-black/10 to-black/35"
           />
-          <div className="absolute inset-0 z-10 flex flex-col justify-center gap-6 px-4 pb-12 pt-20 sm:px-6 sm:pb-14 md:pt-16">
+          <div className="absolute inset-0 z-10 flex flex-col justify-center gap-6 px-4 pb-12 pt-20 sm:px-6 sm:pb-14">
             <h1 className="text-[47px] font-bold leading-[1.1] tracking-tight drop-shadow-md" style={{ fontFamily: 'Poppins, sans-serif' }}>
               Entrenamiento
               <br />
