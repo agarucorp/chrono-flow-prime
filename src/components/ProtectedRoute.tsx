@@ -18,20 +18,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-gray-900"></div>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <img src="/assets/logovertical.svg" alt="Malda" className="max-w-[160px] md:max-w-[200px] opacity-90" />
       </div>
     )
   }
 
-  if (requireAuth && !user) {
-    // Guardar la ubicación actual para redirigir después del login
+  if (requireAuth && (!user || !user.email_confirmed_at)) {
     return <Navigate to={redirectTo} state={{ from: location }} replace />
   }
 
-  if (!requireAuth && user) {
-    // Si el usuario está autenticado y no debería estar en esta ruta
-    return <Navigate to="/" replace />
+  if (!requireAuth && user?.email_confirmed_at) {
+    return <Navigate to="/user" replace />
   }
 
   return <>{children}</>

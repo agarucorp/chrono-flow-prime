@@ -11,6 +11,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { normalizeTimeToHhMm, formatClockRangeAmPm } from '@/lib/timeFormat';
+import { lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface HorarioPersonalizado {
   hora_inicio: string;
@@ -306,6 +307,8 @@ export const FinSemanaConfigModal = ({
       resetearFormulario();
       onClose();
       window.dispatchEvent(new CustomEvent('feriados:updated'));
+      window.dispatchEvent(new CustomEvent('turnosDisponibles:updated'));
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
       onFinSemanaGuardado?.();
     } catch (error: any) {
       dismissToast(loadingToast);
@@ -342,6 +345,8 @@ export const FinSemanaConfigModal = ({
       resetearFormulario();
       onClose();
       window.dispatchEvent(new CustomEvent('feriados:updated'));
+      window.dispatchEvent(new CustomEvent('turnosDisponibles:updated'));
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
       onFinSemanaGuardado?.();
     } catch (error: any) {
       dismissToast(loadingToast);
@@ -352,7 +357,9 @@ export const FinSemanaConfigModal = ({
     }
   };
 
-  const fechaFormateada = fecha ? format(new Date(fecha + 'T00:00:00'), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }) : '';
+  const fechaFormateada = fecha
+    ? lowercaseSpanishMonths(format(new Date(fecha + 'T00:00:00'), "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))
+    : '';
 
   return (
     <Dialog open={open} onOpenChange={onClose}>

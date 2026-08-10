@@ -1,9 +1,16 @@
 // @ts-nocheck
 // Edge Function: enviar-cobros-mensuales
-// Env requeridas: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, RESEND_FROM
+// Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, CRON_SECRET,
+//      RESEND_API_KEY, RESEND_FROM, ALLOWED_ORIGINS (opcional, CSV)
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@3";
+import {
+  assertAuthorized,
+  corsHeaders,
+  createServiceClient,
+  getArgentinaNowParts,
+  jsonResponse,
+} from "../_shared/auth.ts";
 
 type CuotaMensual = {
   usuario_id: string;
@@ -23,24 +30,22 @@ type CuotaMensual = {
 };
 
 function getTargetPeriod(override?: { anio?: number; mes?: number }) {
-  const now = new Date();
   if (override?.anio && override?.mes) return { anio: override.anio, mes: override.mes };
-  // Si estamos en los primeros días del mes (1-5), enviar para el mes ACTUAL
-  // Si estamos después del día 5, enviar para el mes SIGUIENTE (comportamiento original)
-  const dayOfMonth = now.getDate();
-  if (dayOfMonth <= 5) {
-    // Mes actual (ideal para enviar el 1ro de cada mes)
-    return { anio: now.getFullYear(), mes: now.getMonth() + 1 };
+  const { year, month, day } = getArgentinaNowParts();
+  // Día 1–5: mes actual. Día 25+: mes siguiente (alineado con cron del 25).
+  // Resto del mes: mes siguiente (cobros adelantados).
+  if (day <= 5) {
+    return { anio: year, mes: month };
   }
-  // Mes siguiente (comportamiento original, para pruebas manuales a mitad de mes)
-  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  return { anio: nextMonth.getFullYear(), mes: nextMonth.getMonth() + 1 };
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  return { anio: nextYear, mes: nextMonth };
 }
 
 function getMonthNameEs(month: number) {
   const nombres = [
-    "enero","febrero","marzo","abril","mayo","junio",
-    "julio","agosto","septiembre","octubre","noviembre","diciembre"
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
   ];
   return nombres[(month - 1) % 12];
 }
@@ -73,10 +78,9 @@ function renderEmailHTML(data: {
     descuentoMonto,
     montoTotal,
     fechaCobro,
-    unsubscribeUrl
+    unsubscribeUrl,
   } = data;
 
-  // HTML basado en email-templates/cobro-mensual.html con variables reemplazadas
   return `<!DOCTYPE html>
 <html lang="es">
 <head>
@@ -115,16 +119,16 @@ function renderEmailHTML(data: {
         <p>Te informamos sobre el cobro correspondiente al mes de <strong class="month-name">${mesNombre} ${anio}</strong>.</p>
         <div class="summary-box">
           <div class="summary-title">Detalle de tu cuota mensual:</div>
-          ${valorClase ? `<div class=\"summary-item\"><span class=\"summary-label\">Valor por clase:</span><span class=\"summary-value\">$${Number(valorClase).toLocaleString('es-AR')}</span></div>` : ``}
-          ${clasesReservadas != null && clasesReservadas > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases previstas:</span><span class=\"summary-value\">${clasesReservadas} clase(s)</span></div>` : ``}
-          ${cancelacionesAnticipacion != null && cancelacionesAnticipacion > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Cancelaciones anticipadas:</span><span class=\"summary-value\">-${cancelacionesAnticipacion} clase(s)</span></div>` : ``}
-          ${cancelacionesTardia != null && cancelacionesTardia > 0 ? `<div class=\"summary-item\"><span class=\"summary-label\">Cancelaciones tardías:</span><span class=\"summary-value\">${cancelacionesTardia} clase(s) (se cobran)</span></div>` : ``}
-          ${clasesACobrar != null ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases a cobrar:</span><span class=\"summary-value\">${clasesACobrar} clase(s)</span></div>` : ``}
-          ${descuentoPorcentaje ? `<div class=\"summary-item\"><span class=\"summary-label\">Descuento (${descuentoPorcentaje}%):</span><span class=\"summary-value\">-$${Number(descuentoMonto || 0).toLocaleString('es-AR')}</span></div>` : ``}
-          <div class="summary-item"><span class="summary-label">Total a abonar:</span><span class="summary-value total-amount">$${Number(montoTotal).toLocaleString('es-AR')}</span></div>
+          ${valorClase ? `<div class="summary-item"><span class="summary-label">Valor por clase:</span><span class="summary-value">$${Number(valorClase).toLocaleString("es-AR")}</span></div>` : ``}
+          ${clasesReservadas != null && clasesReservadas > 0 ? `<div class="summary-item"><span class="summary-label">Clases previstas:</span><span class="summary-value">${clasesReservadas} clase(s)</span></div>` : ``}
+          ${cancelacionesAnticipacion != null && cancelacionesAnticipacion > 0 ? `<div class="summary-item"><span class="summary-label">Cancelaciones anticipadas:</span><span class="summary-value">-${cancelacionesAnticipacion} clase(s)</span></div>` : ``}
+          ${cancelacionesTardia != null && cancelacionesTardia > 0 ? `<div class="summary-item"><span class="summary-label">Cancelaciones tardías:</span><span class="summary-value">${cancelacionesTardia} clase(s) (se cobran)</span></div>` : ``}
+          ${clasesACobrar != null ? `<div class="summary-item"><span class="summary-label">Clases a cobrar:</span><span class="summary-value">${clasesACobrar} clase(s)</span></div>` : ``}
+          ${descuentoPorcentaje ? `<div class="summary-item"><span class="summary-label">Descuento (${descuentoPorcentaje}%):</span><span class="summary-value">-$${Number(descuentoMonto || 0).toLocaleString("es-AR")}</span></div>` : ``}
+          <div class="summary-item"><span class="summary-label">Total a abonar:</span><span class="summary-value total-amount">$${Number(montoTotal).toLocaleString("es-AR")}</span></div>
         </div>
         <div class="payment-info">
-          <div class="payment-title">💳 Información de Pago</div>
+          <div class="payment-title">Información de Pago</div>
           <p>El cobro se realizará por adelantado el <strong>${fechaCobro}</strong>.</p>
           <p>Si tienes alguna consulta sobre tu cuota, no dudes en contactarnos.</p>
         </div>
@@ -143,7 +147,7 @@ function buildSubject(mesNombre: string, anio: number) {
   return `Resumen de cobro - ${mesNombre} ${anio}`;
 }
 
-async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, anio: number, mes: number) {
+async function fetchCuotasConEmail(supabase: ReturnType<typeof createServiceClient>, anio: number, mes: number) {
   const { data, error } = await supabase
     .from("cuotas_mensuales")
     .select("usuario_id, anio, mes, clases_a_cobrar, clases_previstas, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, clases_canceladas_anticipacion, clases_canceladas_tardia")
@@ -153,16 +157,21 @@ async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, an
 
   const rows = data || [];
   const enriched = await Promise.all(rows.map(async (row) => {
-    // Nombre desde profiles
     const { data: prof } = await supabase
       .from("profiles")
       .select("first_name, last_name")
       .eq("id", row.usuario_id)
       .single();
-    // Email desde Admin API
     const { data: userAdmin } = await (supabase as any).auth.admin.getUserById(row.usuario_id);
     const email: string | null = userAdmin?.user?.email ?? null;
-    const monto = (row.monto_con_descuento ?? row.monto_total) ?? 0;
+    // monto_con_descuento=0 sin descuento NO debe tapar monto_total
+    const descuentoPct = Number(row.descuento_porcentaje ?? 0);
+    const montoDesc = Number(row.monto_con_descuento);
+    const montoTotal = Number(row.monto_total) || 0;
+    const monto =
+      descuentoPct > 0 && Number.isFinite(montoDesc)
+        ? montoDesc
+        : (Number.isFinite(montoDesc) && montoDesc > 0 ? montoDesc : montoTotal);
     const enrichedRow: CuotaMensual = {
       usuario_id: row.usuario_id,
       anio: row.anio,
@@ -184,8 +193,7 @@ async function fetchCuotasConEmail(supabase: ReturnType<typeof createClient>, an
   return enriched as CuotaMensual[];
 }
 
-// Helper para evitar rate limit de Resend (2 req/seg en plan free)
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: number }) {
   const resendApiKey = Deno.env.get("RESEND_API_KEY");
@@ -203,7 +211,7 @@ async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: n
       continue;
     }
     const nombreCompleto = [row.first_name, row.last_name].filter(Boolean).join(" ") || "Alumno";
-    const montoBase = Number(row.monto_con_descuento ?? row.monto_total ?? 0);
+    const montoBase = Number(row.monto_total) || 0;
     const descuentoMonto = row.descuento_porcentaje
       ? Number(((row.tarifa_unitaria || 0) * (row.clases_a_cobrar || row.clases_previstas || 0)) * (row.descuento_porcentaje / 100))
       : 0;
@@ -232,62 +240,54 @@ async function sendEmails(cuotas: CuotaMensual[], period: { anio: number; mes: n
       });
       if ((result as any)?.error) {
         const errObj: any = (result as any).error;
-        const msg = errObj?.message || errObj?.name || JSON.stringify(errObj);
+        const msg = errObj?.message || errObj?.name || "Error de envío";
         results.push({ usuario_id: row.usuario_id, status: "error", error: msg });
       } else {
         results.push({ usuario_id: row.usuario_id, status: "success" });
       }
     } catch (err) {
-      const msg = (err as any)?.message || JSON.stringify(err);
+      const msg = (err as any)?.message || "Error de envío";
       results.push({ usuario_id: row.usuario_id, status: "error", error: msg });
     }
-    // Delay de 600ms entre envíos para evitar rate limit de Resend (2 req/seg)
     await sleep(600);
   }
   return results;
 }
 
 Deno.serve(async (req: Request) => {
+  const headers = corsHeaders(req);
   try {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    } as const;
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
+    if (req.method === "OPTIONS") return new Response("ok", { headers });
+    if (req.method !== "POST") {
+      return jsonResponse({ success: false, error: "Method Not Allowed" }, 405, headers);
+    }
+
+    const auth = await assertAuthorized(req);
+    if (!auth.ok) {
+      return jsonResponse({ success: false, error: auth.error }, auth.status, headers);
+    }
 
     const { anio, mes } = await req.json().catch(() => ({ anio: undefined, mes: undefined }));
     const period = getTargetPeriod({ anio, mes });
+    const supabase = createServiceClient();
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceKey) throw new Error("Faltan credenciales de Supabase");
-    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
-
-    // Leer cuotas del período y enriquecer con email/nombre
     let cuotas = await fetchCuotasConEmail(supabase, period.anio, period.mes);
-
-    // Filtrar cuotas sin monto ni email
-    cuotas = cuotas.filter(q => (q.monto_con_descuento ?? q.monto_total ?? 0) > 0 && !!q.email);
+    cuotas = cuotas.filter((q) => (Number(q.monto_total) || 0) > 0 && !!q.email);
 
     const resultados = await sendEmails(cuotas, period);
-    const exitosos = resultados.filter(r => r.status === "success").length;
-    const errores = resultados.filter(r => r.status === "error");
+    const exitosos = resultados.filter((r) => r.status === "success").length;
+    const errores = resultados.filter((r) => r.status === "error").map((r) => ({
+      usuario_id: r.usuario_id,
+      error: r.error,
+    }));
 
-    return new Response(
-      JSON.stringify({ success: true, enviados: exitosos, errores }),
-      { headers: { "Content-Type": "application/json", ...corsHeaders } }
+    return jsonResponse(
+      { success: true, enviados: exitosos, errores_count: errores.length, errores },
+      200,
+      headers,
     );
   } catch (err) {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    } as const;
-    return new Response(JSON.stringify({ success: false, error: String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
+    console.error("enviar-cobros-mensuales:", err);
+    return jsonResponse({ success: false, error: "Error interno" }, 500, headers);
   }
 });
-
-

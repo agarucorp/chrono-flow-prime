@@ -3,6 +3,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import { Calendar, Clock, User, CheckCircle } from 'lucide-react';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface TurnoReserva {
   id: string;
@@ -50,12 +51,12 @@ export const ReservaConfirmationModal: React.FC<ReservaConfirmationModalProps> =
             <div className="flex items-center space-x-2">
               <Calendar className="h-4 w-4 text-muted-foreground" />
               <span className="text-sm font-medium">
-                {new Date(turno.fecha).toLocaleDateString('es-ES', {
+                {lowercaseSpanishMonths(new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES', {
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'
-                })}
+                }))}
               </span>
             </div>
             

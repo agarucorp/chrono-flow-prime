@@ -12,6 +12,7 @@ import { CalendarView } from '@/components/CalendarView';
 import { TurnoConfirmationModal } from '@/components/TurnoConfirmationModal';
 import { CancelacionConfirmationModal } from '@/components/CancelacionConfirmationModal';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface Turno {
   id: string;
@@ -375,14 +376,13 @@ export const TurnoReservation = () => {
   };
 
   const formatDate = (date: Date) => {
-    const formattedDate = date.toLocaleDateString('es-ES', {
+    const formattedDate = lowercaseSpanishMonths(date.toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
-    });
-    
-    // Capitalizar solo la primera letra del string completo
+    }));
+    // Capitalizar solo la primera letra (día de la semana); el mes queda en minúscula
     return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
   };
 

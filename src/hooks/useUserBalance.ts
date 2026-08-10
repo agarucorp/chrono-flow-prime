@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { endOfMonthStr, formatLocalDate, getArgentinaYearMonth, startOfMonthStr } from '@/lib/dateLocal';
 
 interface BalanceAdjustment {
   cantidad: number;
@@ -111,14 +112,37 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         }
         setError(null);
 
-        const now = new Date();
-        const currentYear = now.getFullYear();
-        const currentMonthNum = now.getMonth() + 1;
+        const { year: currentYear, month: currentMonthNum } = getArgentinaYearMonth();
         const nextMonthNum = currentMonthNum === 12 ? 1 : currentMonthNum + 1;
         const nextYear = currentMonthNum === 12 ? currentYear + 1 : currentYear;
 
-        const currentStartISO = new Date(currentYear, currentMonthNum - 1, 1).toISOString().split('T')[0];
-        const currentEndISO = new Date(currentYear, currentMonthNum, 0).toISOString().split('T')[0];
+        const currentStartISO = startOfMonthStr(currentYear, currentMonthNum);
+        const currentEndISO = endOfMonthStr(currentYear, currentMonthNum);
+
+        // Primero chequear horarios: si aún no hay setup, no generar cuotas en $0
+        // (eso bloqueaba el snapshot del mes actual para usuarios nuevos).
+        const { data: horariosRecurrentesConFecha } = await supabase
+          .from('horarios_recurrentes_usuario')
+          .select('dia_semana, fecha_inicio, fecha_fin, activo')
+          .eq('usuario_id', user.id)
+          .eq('activo', true);
+
+        const tieneHorariosActivos = (horariosRecurrentesConFecha || []).length > 0;
+        if (!tieneHorariosActivos) {
+          lockedCurrentSnapshotRef.current = null;
+          setHistory([]);
+          setLoading(false);
+          return;
+        }
+
+        // Asegurar filas de cuota (mes actual + siguiente) antes de leer.
+        const { error: ensureError } = await supabase.rpc(
+          'fn_recalcular_cuotas_usuario_actual_y_siguiente',
+          { p_usuario_id: user.id }
+        );
+        if (ensureError) {
+          console.warn('No se pudo asegurar cuotas del usuario:', ensureError.message);
+        }
 
         const { data: cuotasData, error: cuotasError } = await supabase
           .from('cuotas_mensuales')
@@ -199,13 +223,6 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         const { data: horariosUsuarioData } = await supabase
           .from('vista_horarios_usuarios')
           .select('dia_semana, clase_numero, activo')
-          .eq('usuario_id', user.id)
-          .eq('activo', true);
-
-        // Obtener horarios recurrentes con fecha_inicio para calcular primer mes correctamente
-        const { data: horariosRecurrentesConFecha } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .select('dia_semana, fecha_inicio, fecha_fin, activo')
           .eq('usuario_id', user.id)
           .eq('activo', true);
 
@@ -398,7 +415,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
               const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = fecha.toISOString().split('T')[0];
+              const fechaStr = formatLocalDate(fecha);
 
               const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
 
@@ -462,8 +479,16 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             const descuentoPorcentaje = Number(cuota.descuento_porcentaje);
             totalConDescuento = totalBase * (1 - descuentoPorcentaje / 100);
           } else {
-            // Usar el monto con descuento de la cuota si existe, sino usar el total base
-            totalConDescuento = cuota?.monto_con_descuento !== undefined ? Number(cuota.monto_con_descuento) : totalBase;
+            // Si no hay descuento, monto_con_descuento=0 (default viejo de BD) NO debe tapar monto_total
+            const descuentoPct = Number(cuota?.descuento_porcentaje ?? 0);
+            const montoDesc = Number(cuota?.monto_con_descuento);
+            if (descuentoPct > 0 && Number.isFinite(montoDesc)) {
+              totalConDescuento = montoDesc;
+            } else if (Number.isFinite(montoDesc) && montoDesc > 0) {
+              totalConDescuento = montoDesc;
+            } else {
+              totalConDescuento = totalBase;
+            }
           }
           const descuento = totalBase - totalConDescuento;
           const descuentoPorcentaje = cuota?.descuento_porcentaje !== undefined
@@ -541,8 +566,8 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         if (!hasNextEntry) {
           const startNextMonth = new Date(nextYear, nextMonthNum - 1, 1);
           const endNextMonth = new Date(nextYear, nextMonthNum, 0);
-          const startNextMonthStr = startNextMonth.toISOString().split('T')[0];
-          const endNextMonthStr = endNextMonth.toISOString().split('T')[0];
+          const startNextMonthStr = formatLocalDate(startNextMonth);
+          const endNextMonthStr = formatLocalDate(endNextMonth);
           const lastDayNextMonth = endNextMonth.getDate();
 
           const { data: horariosRecurrentes } = await supabase
@@ -586,7 +611,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             for (let dia = 1; dia <= lastDayNextMonth; dia++) {
               const fecha = new Date(nextYear, nextMonthNum - 1, dia);
               const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = fecha.toISOString().split('T')[0];
+              const fechaStr = formatLocalDate(fecha);
 
               const tieneHorario = horariosRecurrentes.some((hr: any) => {
                 if (hr.dia_semana !== diaSemanaDB) return false;
@@ -689,7 +714,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
               const fecha = new Date(currentYear, currentMonthNum - 1, dia);
               const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = fecha.toISOString().split('T')[0];
+              const fechaStr = formatLocalDate(fecha);
 
               const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
 
@@ -742,27 +767,41 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         const currentFromLoad = entries.find((entry) => entry.isCurrent) ?? null;
         let snapshotToUse = lockedCurrentSnapshotRef.current;
         if (currentFromLoad) {
-          const shouldUpdateSnapshot =
-            !snapshotToUse ||
-            snapshotToUse.anio !== currentFromLoad.anio ||
-            snapshotToUse.mesNumero !== currentFromLoad.mesNumero;
+          const sameMonth =
+            snapshotToUse &&
+            snapshotToUse.anio === currentFromLoad.anio &&
+            snapshotToUse.mesNumero === currentFromLoad.mesNumero;
+          // Reemplazar snapshot si cambió el mes, o si el mes actual pasó de $0/sin clases
+          // a datos reales (caso típico: setup inicial de usuario nuevo).
+          const setupCompletado =
+            sameMonth &&
+            (Number(snapshotToUse!.clases) === 0 || Number(snapshotToUse!.total) === 0) &&
+            (Number(currentFromLoad.clases) > 0 || Number(currentFromLoad.total) > 0);
 
-          if (shouldUpdateSnapshot) {
-            // Crear nuevo snapshot con todos los valores del mes actual
+          if (!sameMonth || setupCompletado) {
             snapshotToUse = { ...currentFromLoad };
             lockedCurrentSnapshotRef.current = snapshotToUse;
-          } else if (snapshotToUse && currentFromLoad) {
-            // Si el snapshot existe y es del mismo mes, actualizar valores dinámicos
-            // Mantener bloqueados: clases, precioUnitario (valores base)
-            // Permitir actualizar: descuento, descuentoPorcentaje, monto_con_descuento, totalConDescuento, total, ajustes
+          } else if (snapshotToUse) {
+            // Mismo mes: actualizar montos/ajustes; conservar clases/precio base salvo que el
+            // recalc traiga más clases (recalc post-setup / cambio de plan).
+            const clases =
+              Number(currentFromLoad.clases) > Number(snapshotToUse.clases)
+                ? currentFromLoad.clases
+                : snapshotToUse.clases;
+            const precioUnitario =
+              Number(currentFromLoad.precioUnitario) > 0
+                ? currentFromLoad.precioUnitario
+                : snapshotToUse.precioUnitario;
             snapshotToUse = {
               ...snapshotToUse,
+              clases,
+              precioUnitario,
               descuento: currentFromLoad.descuento,
               descuentoPorcentaje: currentFromLoad.descuentoPorcentaje,
-              total: currentFromLoad.total, // Actualizar total (incluye cancelaciones y vacantes)
+              total: currentFromLoad.total,
               totalConDescuento: currentFromLoad.totalConDescuento,
-              ajustes: currentFromLoad.ajustes, // Actualizar ajustes (cancelaciones y vacantes)
-              estadoPago: currentFromLoad.estadoPago, // También permitir actualizar estado de pago
+              ajustes: currentFromLoad.ajustes,
+              estadoPago: currentFromLoad.estadoPago,
             };
             lockedCurrentSnapshotRef.current = snapshotToUse;
           }
@@ -811,7 +850,10 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
     // Refrescar ante eventos manuales (solo si la página está visible)
     const manualHandler = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      // Tras setup de horarios / cambios de plan: invalidar snapshot $0 y recargar.
+      lockedCurrentSnapshotRef.current = null;
+      balanceCacheRef.current = { userId: null, timestamp: 0 };
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         loadBalance(false);
         balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
       }

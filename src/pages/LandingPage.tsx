@@ -284,10 +284,14 @@ const LandingPage = () => {
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/[0.62] backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex h-20 items-center justify-between lg:h-16">
-            {/* Logo */}
-            <div className="flex items-center">
-              <img src="/tutorial/malda.png" alt="MALDA Logo" className="h-[4.5rem] w-auto lg:h-20" />
+          <div className="flex h-14 items-center justify-between sm:h-16">
+            {/* Logo — cabe dentro de la navbar en mobile/desktop */}
+            <div className="flex min-w-0 items-center py-2">
+              <img
+                src="/assets/malda.svg"
+                alt="MALDA Logo"
+                className="h-8 w-auto max-h-9 object-contain object-left sm:h-9 sm:max-h-10 lg:h-10"
+              />
             </div>
 
             {/* Navegación Desktop - Centrada */}
@@ -1031,7 +1035,11 @@ const LandingPage = () => {
             {/* Columna 1: Logo */}
             <div>
               <div className="mb-4">
-                <img src="/biglogo.png" alt="MALDA Logo" className="h-36 w-auto" />
+                <img
+                  src="/assets/logovertical.svg"
+                  alt="MALDA Logo"
+                  className="h-28 w-auto max-w-[200px] object-contain md:h-36"
+                />
               </div>
             </div>
 

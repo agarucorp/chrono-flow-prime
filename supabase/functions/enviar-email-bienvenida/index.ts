@@ -1,14 +1,20 @@
 // @ts-nocheck
 // Edge Function: enviar-email-bienvenida
-// Env requeridas: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, RESEND_API_KEY, RESEND_FROM
+// Env: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_ANON_KEY, CRON_SECRET,
+//      RESEND_API_KEY, RESEND_FROM, ALLOWED_ORIGINS
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { Resend } from "https://esm.sh/resend@3";
+import {
+  assertSelfOrAdmin,
+  corsHeaders,
+  createServiceClient,
+  jsonResponse,
+} from "../_shared/auth.ts";
 
 function getMonthNameEs(month: number) {
   const nombres = [
-    "enero","febrero","marzo","abril","mayo","junio",
-    "julio","agosto","septiembre","octubre","noviembre","diciembre"
+    "enero", "febrero", "marzo", "abril", "mayo", "junio",
+    "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
   ];
   return nombres[(month - 1) % 12];
 }
@@ -66,7 +72,7 @@ function renderWelcomeEmailHTML(data: {
   <body>
     <div class="container">
       <div class="header">
-        <h1>¡Bienvenido! 🎉</h1>
+        <h1>¡Bienvenido!</h1>
       </div>
       <div class="content">
         <div class="greeting">Hola ${nombreCompleto},</div>
@@ -74,13 +80,13 @@ function renderWelcomeEmailHTML(data: {
         <p>A continuación, te detallamos la cuota correspondiente al mes actual de <strong class="month-name">${mesNombre} ${anio}</strong>.</p>
         <div class="summary-box">
           <div class="summary-title">Detalle de tu primera cuota mensual:</div>
-          ${valorClase ? `<div class=\"summary-item\"><span class=\"summary-label\">Valor por clase:</span><span class=\"summary-value\">$${Number(valorClase).toLocaleString('es-AR')}</span></div>` : ``}
-          ${clasesReservadas != null ? `<div class=\"summary-item\"><span class=\"summary-label\">Clases programadas:</span><span class=\"summary-value\">${clasesReservadas} clase(s)</span></div>` : ``}
-          ${descuentoPorcentaje ? `<div class=\"summary-item\"><span class=\"summary-label\">Descuento (${descuentoPorcentaje}%):</span><span class=\"summary-value\">-$${Number(descuentoMonto || 0).toLocaleString('es-AR')}</span></div>` : ``}
-          <div class="summary-item"><span class="summary-label">Total a abonar:</span><span class="summary-value total-amount">$${Number(montoTotal).toLocaleString('es-AR')}</span></div>
+          ${valorClase ? `<div class="summary-item"><span class="summary-label">Valor por clase:</span><span class="summary-value">$${Number(valorClase).toLocaleString("es-AR")}</span></div>` : ``}
+          ${clasesReservadas != null ? `<div class="summary-item"><span class="summary-label">Clases programadas:</span><span class="summary-value">${clasesReservadas} clase(s)</span></div>` : ``}
+          ${descuentoPorcentaje ? `<div class="summary-item"><span class="summary-label">Descuento (${descuentoPorcentaje}%):</span><span class="summary-value">-$${Number(descuentoMonto || 0).toLocaleString("es-AR")}</span></div>` : ``}
+          <div class="summary-item"><span class="summary-label">Total a abonar:</span><span class="summary-value total-amount">$${Number(montoTotal).toLocaleString("es-AR")}</span></div>
         </div>
         <div class="payment-info">
-          <div class="payment-title">💳 Información Importante</div>
+          <div class="payment-title">Información Importante</div>
           <p>El cobro se realizará el <strong>${fechaCobro}</strong>.</p>
           <p>A partir del día 25 de cada mes, recibirás un email con el detalle de la cuota del mes siguiente.</p>
         </div>
@@ -98,8 +104,7 @@ function buildSubject(mesNombre: string, anio: number) {
   return `Bienvenido - Tu primera cuota: ${mesNombre} ${anio}`;
 }
 
-async function fetchCuotaConEmail(supabase: ReturnType<typeof createClient>, usuarioId: string, anio: number, mes: number) {
-  // Obtener cuota del usuario
+async function fetchCuotaConEmail(supabase: ReturnType<typeof createServiceClient>, usuarioId: string, anio: number, mes: number) {
   const { data: cuota, error: cuotaError } = await supabase
     .from("cuotas_mensuales")
     .select("usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje")
@@ -109,10 +114,9 @@ async function fetchCuotaConEmail(supabase: ReturnType<typeof createClient>, usu
     .single();
 
   if (cuotaError || !cuota) {
-    throw new Error(`No se encontró cuota para el usuario: ${cuotaError?.message || 'Cuota no encontrada'}`);
+    throw new Error("Cuota no encontrada");
   }
 
-  // Obtener datos del usuario
   const { data: profile } = await supabase
     .from("profiles")
     .select("first_name, last_name")
@@ -133,7 +137,7 @@ async function fetchCuotaConEmail(supabase: ReturnType<typeof createClient>, usu
     first_name: profile?.first_name ?? null,
     last_name: profile?.last_name ?? null,
     descuentoMonto,
-    monto
+    monto,
   };
 }
 
@@ -173,55 +177,39 @@ async function sendWelcomeEmail(cuota: any, period: { anio: number; mes: number 
 
   if ((result as any)?.error) {
     const errObj: any = (result as any).error;
-    const msg = errObj?.message || errObj?.name || JSON.stringify(errObj);
-    throw new Error(msg);
+    throw new Error(errObj?.message || "Error de envío");
   }
 
   return { success: true };
 }
 
 Deno.serve(async (req: Request) => {
+  const headers = corsHeaders(req);
   try {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    } as const;
-    if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
-    if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405, headers: corsHeaders });
-
-    const { usuario_id, anio, mes } = await req.json();
-
-    if (!usuario_id || !anio || !mes) {
-      return new Response(JSON.stringify({ success: false, error: "Faltan parámetros requeridos" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json", ...corsHeaders },
-      });
+    if (req.method === "OPTIONS") return new Response("ok", { headers });
+    if (req.method !== "POST") {
+      return jsonResponse({ success: false, error: "Method Not Allowed" }, 405, headers);
     }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseUrl || !serviceKey) throw new Error("Faltan credenciales de Supabase");
-    const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } });
+    const body = await req.json().catch(() => ({}));
+    const { usuario_id, anio, mes } = body;
 
-    // Obtener cuota y datos del usuario
+    if (!usuario_id || !anio || !mes) {
+      return jsonResponse({ success: false, error: "Faltan parámetros requeridos" }, 400, headers);
+    }
+
+    const auth = await assertSelfOrAdmin(req, usuario_id);
+    if (!auth.ok) {
+      return jsonResponse({ success: false, error: auth.error }, auth.status, headers);
+    }
+
+    const supabase = createServiceClient();
     const cuota = await fetchCuotaConEmail(supabase, usuario_id, anio, mes);
-
-    // Enviar email
     await sendWelcomeEmail(cuota, { anio, mes });
 
-    return new Response(
-      JSON.stringify({ success: true, message: "Email de bienvenida enviado" }),
-      { headers: { "Content-Type": "application/json", ...corsHeaders } }
-    );
+    return jsonResponse({ success: true, message: "Email de bienvenida enviado" }, 200, headers);
   } catch (err) {
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-    } as const;
-    return new Response(JSON.stringify({ success: false, error: String(err) }), {
-      status: 500,
-      headers: { "Content-Type": "application/json", ...corsHeaders },
-    });
+    console.error("enviar-email-bienvenida:", err);
+    return jsonResponse({ success: false, error: "Error interno" }, 500, headers);
   }
 });
-

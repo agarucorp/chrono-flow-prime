@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAdmin } from '@/hooks/useAdmin';
+import { ProtectedRoute } from '@/components/ProtectedRoute';
 
 interface ProtectedAdminRouteProps {
   children: ReactNode;
@@ -9,24 +10,27 @@ interface ProtectedAdminRouteProps {
 export const ProtectedAdminRoute = ({ children }: ProtectedAdminRouteProps) => {
   const { isAdmin, isLoading } = useAdmin();
 
-  // Si está cargando, mostrar spinner
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold mb-2">Verificando permisos...</h2>
-          <p className="text-muted-foreground">Comprobando tu rol de administrador.</p>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <div className="text-center space-y-4">
+          <img src="/assets/logovertical.svg" alt="Malda" className="max-w-[140px] mx-auto opacity-90" />
+          <p className="text-sm text-white/70">Verificando permisos...</p>
         </div>
       </div>
     );
   }
 
-  // Si no es admin, redirigir al login
   if (!isAdmin) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/user" replace />;
   }
 
-  // Si es admin, mostrar el contenido
   return <>{children}</>;
 };
+
+/** Combina sesión + rol admin */
+export const ProtectedAdminRouteWithAuth = ({ children }: ProtectedAdminRouteProps) => (
+  <ProtectedRoute>
+    <ProtectedAdminRoute>{children}</ProtectedAdminRoute>
+  </ProtectedRoute>
+);

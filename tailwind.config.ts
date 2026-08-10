@@ -26,9 +26,16 @@ export default {
 		},
 		extend: {
             fontFamily: {
-                heading: ["Open Sans", "ui-sans-serif", "system-ui"],
-                body: ["Poppins", "ui-sans-serif", "system-ui"],
+                sans: ["Poppins", "ui-sans-serif", "system-ui", "sans-serif"],
+                heading: ["Poppins", "ui-sans-serif", "system-ui", "sans-serif"],
+                body: ["Poppins", "ui-sans-serif", "system-ui", "sans-serif"],
             },
+			fontSize: {
+				/* Escala semántica alineada a .text-* del design system */
+				display: ["1.5rem", { lineHeight: "1.2", fontWeight: "600", letterSpacing: "-0.02em" }],
+				title: ["1.125rem", { lineHeight: "1.3", fontWeight: "600", letterSpacing: "-0.01em" }],
+				heading: ["1rem", { lineHeight: "1.35", fontWeight: "600", letterSpacing: "-0.01em" }],
+			},
 			colors: {
 				border: 'hsl(var(--border))',
 				input: 'hsl(var(--input))',

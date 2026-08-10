@@ -23,6 +23,7 @@ import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 import { normalizeTimeToHhMm, formatClockAmPm, formatClockRangeAmPm } from '@/lib/timeFormat';
+import { todayLocal, formatMonthYearEs, lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface HorarioRecurrente {
   id: string;
@@ -49,9 +50,11 @@ interface ClaseDelDia {
 interface RecurringScheduleViewProps {
   initialView?: 'mis-clases' | 'turnos-disponibles' | 'perfil';
   hideSubNav?: boolean;
+  /** Incrementa en cada navegación del App para forzar sync aunque initialView no cambie */
+  viewEpoch?: number;
 }
 
-export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false }: RecurringScheduleViewProps) => {
+export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false, viewEpoch = 0 }: RecurringScheduleViewProps) => {
   const { user, signOut } = useAuthContext();
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
@@ -87,7 +90,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const turnosDisponiblesLoadedRef = useRef<boolean>(false);
   const initialLoadDoneRef = useRef<boolean>(false);
   
-  // Actualizar vista cuando cambie initialView desde fuera
+  // Actualizar vista cuando cambie initialView desde fuera (fuente de verdad: App)
   useEffect(() => {
     setActiveView(initialView);
     // Solo cargar si no se han cargado antes
@@ -96,18 +99,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       cargarHorariosRecurrentes(true);
       misClasesLoadedRef.current = true;
     } else if (initialView === 'mis-clases' && misClasesLoadedRef.current) {
-      // Si ya está cargado, no mostrar loading
       setLoading(false);
-    } else if (initialView === 'turnos-disponibles' && user?.id && !turnosDisponiblesLoadedRef.current) {
+    } else if (initialView === 'turnos-disponibles' && user?.id) {
+      // Al entrar a vacantes desde App, siempre refrescar para evitar datos stale / colores incorrectos
       setLoadingTurnosCancelados(true);
-      cargarTurnosCancelados(true);
+      cargarTurnosCancelados(true, true);
       turnosDisponiblesLoadedRef.current = true;
-    } else if (initialView === 'turnos-disponibles' && turnosDisponiblesLoadedRef.current) {
-      // Si ya está cargado, no mostrar loading
-      setLoadingTurnosCancelados(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialView, user?.id]);
+  }, [initialView, user?.id, viewEpoch]);
   const [clasesDelMes, setClasesDelMes] = useState<any[]>([]);
   const [lastLoadTime, setLastLoadTime] = useState<number>(0);
   const [loadingMonth, setLoadingMonth] = useState(false);
@@ -176,16 +176,22 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     return String(value).substring(0, 10);
   };
 
-  const capitalize = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
   const getDisplayPhone = () => {
     const phoneValue = (profileData?.phone ?? user?.user_metadata?.phone ?? '') as string;
     const trimmed = (phoneValue || '').toString().trim();
     return trimmed.length > 0 ? trimmed : 'No configurado';
   };
 
-  // Función para cambiar la vista activa
+  // Función para cambiar la vista activa (sincroniza con App vía eventos de nav)
   const handleViewChange = (view: 'mis-clases' | 'turnos-disponibles' | 'perfil') => {
     setActiveView(view);
+
+    // Mantener App.activeTab alineado (evita vista "trabada" al re-clickear el mismo tab)
+    if (view === 'mis-clases') {
+      window.dispatchEvent(new Event('nav:clases'));
+    } else if (view === 'turnos-disponibles') {
+      window.dispatchEvent(new Event('nav:vacantes'));
+    }
     
     // Solo cargar si no se han cargado antes
     if (view === 'mis-clases' && !misClasesLoadedRef.current) {
@@ -237,12 +243,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, activeView]);
 
+  // Cuando llega la grilla semanal, regenerar vacantes (también en background).
+  // Antes solo recargaba si ya estabas en la tab Vacantes → calendario todo rojo.
   useEffect(() => {
-    if (user?.id && activeView === 'turnos-disponibles' && horariosSemanales.length > 0) {
-      cargarTurnosCancelados(false, false);
+    if (user?.id && horariosSemanales.length > 0) {
+      cargarTurnosCancelados(false, activeView === 'turnos-disponibles');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [horariosSemanales, user?.id, activeView]);
+  }, [horariosSemanales, user?.id]);
 
   // Escuchar confirmación de cierre de sesión desde menús
   useEffect(() => {
@@ -345,11 +353,23 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       }
 
       setFeriados(
-        (data || []).map((f: any) => ({
-          ...f,
-          // Normalizar por seguridad (si llega timestamp) para comparar por día.
-          fecha: normalizeDateKey(f.fecha)
-        }))
+        (data || []).map((f: any) => {
+          let horarios = f.horarios_personalizados;
+          if (typeof horarios === 'string') {
+            try {
+              horarios = JSON.parse(horarios);
+            } catch {
+              horarios = [];
+            }
+          }
+          if (!Array.isArray(horarios)) horarios = [];
+          return {
+            ...f,
+            fecha: normalizeDateKey(f.fecha),
+            horarios_personalizados: horarios,
+            activo: f.activo !== false,
+          };
+        })
       );
     } catch (error) {
       console.error('Error inesperado cargando feriados:', error);
@@ -505,18 +525,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         return;
       }
 
-      if (!disponiblesRows || disponiblesRows.length === 0) {
-        setTurnosCancelados([]);
-        setLoadingTurnosCancelados(false);
-        return;
-      }
+      // Puede estar vacío tras un reset: el fallback de horarios_semanales
+      // sigue calculando cupos abiertos para pintar verde/rojo.
+      const disponibles = disponiblesRows || [];
 
       // Reservas confirmadas originadas en turnos_disponibles (para descontar cupos reales)
       const { data: reservadosTodos, error: errorReservadosTodos } = await supabase
         .from('turnos_variables')
         .select('turno_fecha, turno_hora_inicio, turno_hora_fin, creado_desde_disponible_id')
         .eq('estado', 'confirmada')
-        .not('creado_desde_disponible_id', 'is', null)
         .gte('turno_fecha', fechaDesde)
         .lte('turno_fecha', fechaHasta);
 
@@ -539,13 +556,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       // Crear un Set de turnos reservados por el usuario para verificación rápida
       const turnosReservadosSet = new Set(
-        (reservadosUsuario || []).map(r => 
-          `${normalizeDateKey(r.turno_fecha)}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
+        (reservadosUsuario || []).map(r =>
+          `${normalizeDateKey(r.turno_fecha)}_${normalizeTimeToHhMm(r.turno_hora_inicio)}_${normalizeTimeToHhMm(r.turno_hora_fin)}`
         )
       );
 
       // Obtener información de cancelaciones si existen
-      const idsCancelaciones = (disponiblesRows || [])
+      const idsCancelaciones = disponibles
         .filter(c => c.creado_desde_cancelacion_id)
         .map(c => c.creado_desde_cancelacion_id);
       
@@ -571,7 +588,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       // Capacidades personalizadas por feriado (si aplica)
       const feriadoIds = Array.from(new Set(
-        (disponiblesRows || [])
+        disponibles
           .map((r: any) => r.creado_desde_feriado_id)
           .filter(Boolean)
       ));
@@ -596,15 +613,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           const disponibleId = String(r.creado_desde_disponible_id);
           reservasPorDisponibleId.set(disponibleId, (reservasPorDisponibleId.get(disponibleId) || 0) + 1);
         }
-        const k = `${normalizeDateKey(r.turno_fecha)}_${r.turno_hora_inicio}_${r.turno_hora_fin}`;
+        const k = `${normalizeDateKey(r.turno_fecha)}_${normalizeTimeToHhMm(r.turno_hora_inicio)}_${normalizeTimeToHhMm(r.turno_hora_fin)}`;
         reservasPorSlot.set(k, (reservasPorSlot.get(k) || 0) + 1);
       });
 
       // Agrupar disponibles por horario para calcular cupos reales
       const gruposPorSlot = new Map<string, any[]>();
-      (disponiblesRows || []).forEach((r: any) => {
+      disponibles.forEach((r: any) => {
         const fechaKey = normalizeDateKey(r.turno_fecha);
-        const k = `${fechaKey}_${r.turno_hora_inicio}_${r.turno_hora_fin}`;
+        const k = `${fechaKey}_${normalizeTimeToHhMm(r.turno_hora_inicio)}_${normalizeTimeToHhMm(r.turno_hora_fin)}`;
         if (!gruposPorSlot.has(k)) gruposPorSlot.set(k, []);
         gruposPorSlot.get(k)!.push({ ...r, turno_fecha: fechaKey });
       });
@@ -621,8 +638,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
         const feriadoId = clase.creado_desde_feriado_id as string | null;
         const fecha = clase.turno_fecha;
-        const hIni = (clase.turno_hora_inicio || '').substring(0, 5);
-        const hFin = (clase.turno_hora_fin || '').substring(0, 5);
+        const hIni = normalizeTimeToHhMm(clase.turno_hora_inicio);
+        const hFin = normalizeTimeToHhMm(clase.turno_hora_fin);
 
         // Regla de capacidad:
         // - Vacantes desde feriado/fin de semana: usar capacidad personalizada de ese horario.
@@ -632,8 +649,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           const f = feriadosMap.get(feriadoId);
           const horarios = Array.isArray(f?.horarios_personalizados) ? f.horarios_personalizados : [];
           const match = horarios.find((hp: any) =>
-            (hp?.hora_inicio || '').substring(0, 5) === hIni &&
-            (hp?.hora_fin || '').substring(0, 5) === hFin
+            normalizeTimeToHhMm(hp?.hora_inicio) === hIni &&
+            normalizeTimeToHhMm(hp?.hora_fin) === hFin
           );
           const capacidadFeriado = Number(match?.capacidad || 0);
           if (capacidadFeriado > 0) capacidadTotal = capacidadFeriado;
@@ -677,11 +694,31 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         }
       });
 
+      // Ocupación real (SECURITY DEFINER): RLS solo deja ver horarios propios,
+      // y sin esto el calendario de vacantes pinta todo rojo o todo verde mal.
+      const ocupacionPorSlot = new Map<string, number>();
+      const { data: ocupacionRows, error: ocupacionError } = await supabase.rpc(
+        'fn_ocupacion_slots_recurrentes',
+        { p_desde: fechaDesde, p_hasta: fechaHasta }
+      );
+      if (ocupacionError) {
+        console.error('Error cargando ocupación de vacantes:', ocupacionError);
+      } else {
+        (ocupacionRows || []).forEach((row: any) => {
+          const k = `${normalizeDateKey(row.fecha)}_${normalizeTimeToHhMm(row.hora_inicio)}_${normalizeTimeToHhMm(row.hora_fin)}`;
+          ocupacionPorSlot.set(k, Number(row.alumnos) || 0);
+        });
+      }
+
+      const countRecurrentesEnSlot = (fechaStr: string, _diaSemanaDB: number, hIni: string, hFin: string) => {
+        return ocupacionPorSlot.get(`${fechaStr}_${hIni}_${hFin}`) || 0;
+      };
+
       // Fallback: generar vacantes desde horarios_semanales cuando no exista
       // slot explícito en turnos_disponibles para fecha+franja.
       if (horariosSemanales.length > 0) {
         const slotsYaAgregados = new Set<string>(
-          turnosExpandidos.map((t: any) => `${normalizeDateKey(t.turno_fecha)}_${t.turno_hora_inicio}_${t.turno_hora_fin}`)
+          turnosExpandidos.map((t: any) => `${normalizeDateKey(t.turno_fecha)}_${normalizeTimeToHhMm(t.turno_hora_inicio)}_${normalizeTimeToHhMm(t.turno_hora_fin)}`)
         );
         const diasRango = eachDayOfInterval({
           start: new Date(`${fechaDesde}T00:00:00`),
@@ -712,10 +749,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               if (slotsYaAgregados.has(slotKey)) continue;
               if (turnosReservadosSet.has(slotKey)) continue;
 
-              const capacidadTotal = Math.max(1, Number(hp?.capacidad) || 1);
+              const capacidadTotal = Math.max(1, Number((hp as any)?.capacidad) || 1);
               const alumnosReservados = reservasPorSlot.get(slotKey) || 0;
               const cuposDisponibles = Math.max(0, capacidadTotal - alumnosReservados);
-              if (cuposDisponibles <= 0) continue;
+              if (cuposDisponibles <= 0) {
+                // Día habilitado pero sin cupo: igual marcamos presencia para el calendario
+                // (el estado feriado-habilitado + puntito rojo viene de getEstadoDia/diaTieneCupos)
+                continue;
+              }
 
               for (let i = 0; i < cuposDisponibles; i++) {
                 turnosExpandidos.push({
@@ -744,26 +785,31 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             continue;
           }
 
-          // Día normal (no feriado): usar horarios_semanales.
+          // Día normal (no feriado): usar horarios_semanales (cupo abierto = verde).
           for (const h of horariosSemanales) {
             if (!h || h.dia_semana !== diaSemanaDB) continue;
 
-            const slotKey = `${fechaStr}_${h.hora_inicio}_${h.hora_fin}`;
+            const hIni = normalizeTimeToHhMm(h.hora_inicio);
+            const hFin = normalizeTimeToHhMm(h.hora_fin);
+            const slotKey = `${fechaStr}_${hIni}_${hFin}`;
             if (slotsDefinidosEnDisponibles.has(slotKey)) continue;
             if (slotsYaAgregados.has(slotKey)) continue;
             if (turnosReservadosSet.has(slotKey)) continue;
 
             const capacidadTotal = Math.max(1, Number(h.capacidad) || 1);
-            const alumnosReservados = reservasPorSlot.get(slotKey) || 0;
+            const alumnosReservados =
+              countRecurrentesEnSlot(fechaStr, diaSemanaDB, hIni, hFin) +
+              (reservasPorSlot.get(slotKey) || 0);
             const cuposDisponibles = Math.max(0, capacidadTotal - alumnosReservados);
-            if (cuposDisponibles <= 0) continue;
 
-            for (let i = 0; i < cuposDisponibles; i++) {
+            // Incluso sin cupo: marcar el día para el calendario (rojo = lleno).
+            const slotsToAdd = Math.max(cuposDisponibles, 1);
+            for (let i = 0; i < slotsToAdd; i++) {
               turnosExpandidos.push({
-                id: `fallback_${fechaStr}_${h.hora_inicio}_${h.hora_fin}_${i}`,
+                id: `fallback_${fechaStr}_${hIni}_${hFin}_${i}`,
                 turno_fecha: fechaStr,
-                turno_hora_inicio: h.hora_inicio,
-                turno_hora_fin: h.hora_fin,
+                turno_hora_inicio: hIni,
+                turno_hora_fin: hFin,
                 capacidad_total: capacidadTotal,
                 alumnos_reservados: alumnosReservados,
                 cupos_disponibles: cuposDisponibles,
@@ -774,7 +820,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 creado_desde_feriado_id: null,
                 cliente_que_cancelo: null,
                 tipo_cancelacion: null,
-                reservado: false,
+                // Sin cupo: no listar como reservable, solo para estado del día
+                reservado: cuposDisponibles <= 0,
                 canceladoPorUsuario: false,
                 es_virtual: true
               });
@@ -843,69 +890,61 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     }
   }, [turnosCancelados]);
 
-  // Determinar estado de cada día (verde = tiene cupos, rojo = completo, feriado = anaranjado, feriado-habilitado = verde)
+  // Determinar estado de cada día
+  // - verde/rojo: días normales con clases
+  // - feriado: día hábil cerrado (ámbar) — sin clases
+  // - feriado-habilitado: feriado o fin de semana con horarios abiertos (borde verde)
   const getEstadoDia = useCallback((fecha: Date): 'verde' | 'rojo' | 'sin-clases' | 'feriado' | 'feriado-habilitado' => {
     try {
       const fechaStr = format(fecha, 'yyyy-MM-dd');
       const diaInfo = turnosPorFecha[fechaStr];
       
-      // Verificar si es feriado
-      const feriadoInfo = feriados.find(f => f.fecha === fechaStr && f.activo);
+      const feriadoInfo = feriados.find(f => normalizeDateKey(f.fecha) === fechaStr && f.activo !== false);
       if (feriadoInfo) {
-        if (feriadoInfo.tipo === 'dia_habil_feriado') {
-          // Si tiene horarios personalizados, verificar cupos
-          if (feriadoInfo.horarios_personalizados && feriadoInfo.horarios_personalizados.length > 0) {
-            // Feriado habilitado - verificar si tiene cupos en los turnos
-            if (diaInfo?.tieneCupos) {
-              return 'feriado-habilitado'; // Verde con borde especial
-            }
-            // Si no hay cupos pero hay clases, mostrar como completo (no permitir reservar)
-            if (diaInfo?.tieneClases) {
-              return 'feriado'; // Mostrar como feriado ocupado
-            }
-            return 'feriado-habilitado';
-          }
-          // Si no tiene horarios personalizados, es feriado normal (sin clases)
+        const horarios = Array.isArray(feriadoInfo.horarios_personalizados)
+          ? feriadoInfo.horarios_personalizados
+          : [];
+
+        // Día hábil marcado como feriado SIN horarios → cerrado
+        if (feriadoInfo.tipo === 'dia_habil_feriado' && horarios.length === 0) {
           return 'feriado';
-        } else if (feriadoInfo.tipo === 'fin_semana_habilitado') {
-          // Fin de semana habilitado - verificar cupos
-          if (diaInfo?.tieneCupos) {
-            return 'feriado-habilitado';
-          }
-          if (diaInfo?.tieneClases) {
-            return 'feriado'; // Completo
-          }
+        }
+
+        // Feriado con horarios personalizados O fin de semana habilitado → siempre "habilitado"
+        // (aunque esté completo: no confundir con feriado cerrado ámbar)
+        if (
+          (feriadoInfo.tipo === 'dia_habil_feriado' && horarios.length > 0) ||
+          feriadoInfo.tipo === 'fin_semana_habilitado'
+        ) {
           return 'feriado-habilitado';
         }
+
+        return 'feriado';
       }
       
-      // Si hay datos de turnos para este día
+      // Si hay datos de vacantes para este día
       if (diaInfo) {
         if (diaInfo.tieneCupos) {
           return 'verde';
         }
         if (diaInfo.tieneClases) {
-          return 'rojo'; // Tiene clases pero no cupos
+          return 'rojo';
         }
       }
       
-      // Verificar si hay clases programadas para este día consultando horarios_semanales
-      const diaSemana = fecha.getDay() === 0 ? 7 : fecha.getDay(); // Ajustar domingo (1-7)
-      const clasesProgramadas = horariosSemanales.filter(h => 
-        h.dia_semana === diaSemana
-      );
-      
-      if (clasesProgramadas.length > 0) {
-        // Hay clases programadas pero no hay datos de cupos = asumir completo (rojo)
-        return 'rojo';
-      }
-      
+      // Sin datos de cupo cargados: no pintar rojo por defecto (evita “todo rojo” en race).
       return 'sin-clases';
     } catch (error) {
       console.error('Error en getEstadoDia:', error);
       return 'sin-clases';
     }
-  }, [turnosPorFecha, horariosSemanales, feriados]);
+  }, [turnosPorFecha, feriados]);
+
+  /** Cupos en un día (para puntito verde/rojo dentro de feriado habilitado) */
+  const diaTieneCupos = useCallback((fecha: Date): boolean => {
+    const fechaStr = format(fecha, 'yyyy-MM-dd');
+    return Boolean(turnosPorFecha[fechaStr]?.tieneCupos);
+  }, [turnosPorFecha]);
 
   // Suscripción en tiempo real a turnos_disponibles (siempre activa para actualizar contador)
   useEffect(() => {
@@ -1089,6 +1128,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   useEffect(() => {
     const handler = async () => {
       await cargarFeriados();
+      // Refrescar vacantes (colores + slots de feriado/fin de semana)
+      await cargarTurnosCancelados(true, false);
       // Aplicar feriados a las clases actuales si hay caché
       const monthKey = format(currentMonth, 'yyyy-MM');
       const cached = clasesDelMesCacheRef.current.get(monthKey);
@@ -1627,8 +1668,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
         const esCancelacionTardia = diferenciaHoras < 24;
 
-        // 4. Crear registro en turnos_cancelados (el trigger automáticamente creará turnos_disponibles)
-        const { error: errorCancelacion } = await supabase
+        // 4. Registrar cancelación para billing (tardia/anticipada).
+        //    NO dejar la vacante duplicada: al borrar el turnos_variables se libera
+        //    el cupo del turnos_disponibles original. El trigger crearía otra fila.
+        const { data: cancelacionNueva, error: errorCancelacion } = await supabase
           .from('turnos_cancelados')
           .insert({
             cliente_id: user.id,
@@ -1637,7 +1680,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             turno_hora_fin: clase.horario.hora_fin,
             tipo_cancelacion: 'usuario',
             cancelacion_tardia: esCancelacionTardia
-          });
+          })
+          .select('id')
+          .single();
 
         if (errorCancelacion) {
           console.error('Error al crear cancelación:', errorCancelacion);
@@ -1647,6 +1692,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             variant: "destructive",
           });
           return;
+        }
+
+        // Evitar sobrecupo: borrar vacante auto-creada por el trigger de esta cancelación
+        if (cancelacionNueva?.id) {
+          await supabase
+            .from('turnos_disponibles')
+            .delete()
+            .eq('creado_desde_cancelacion_id', cancelacionNueva.id);
         }
 
       } else {
@@ -1782,7 +1835,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       console.error('Error verificando estado del usuario:', errorPerfil);
     }
 
-    const hoy = new Date().toISOString().split('T')[0];
+    const hoy = todayLocal();
     const estaInactivo = perfilUsuario?.is_active === false || 
       (perfilUsuario?.fecha_desactivacion && perfilUsuario.fecha_desactivacion <= hoy);
 
@@ -1877,23 +1930,26 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         }
       }
 
-      // Insertar en turnos_variables
-      const { error } = await supabase
-        .from('turnos_variables')
-        .insert({
-          cliente_id: user.id,
-          turno_fecha: turnoToReserve.turno_fecha,
-          turno_hora_inicio: turnoToReserve.turno_hora_inicio,
-          turno_hora_fin: turnoToReserve.turno_hora_fin,
-          estado: 'confirmada',
-          creado_desde_disponible_id: turnoDisponibleId
-        });
+      // Insertar vía RPC atómica (valida cupo + master switch + evita race)
+      const { error } = await supabase.rpc('reservar_vacante', {
+        p_turno_disponible_id: turnoDisponibleId,
+        p_turno_fecha: turnoToReserve.turno_fecha,
+        p_turno_hora_inicio: turnoToReserve.turno_hora_inicio,
+        p_turno_hora_fin: turnoToReserve.turno_hora_fin,
+      });
 
       if (error) {
         console.error('Error al reservar turno:', error);
+        const msg = error.message || '';
+        const friendly =
+          msg.includes('Cupo completo') ? 'Ese horario ya no tiene cupo disponible.'
+          : msg.includes('Ya tenés') ? 'Ya tenés una reserva en ese horario.'
+          : msg.includes('desactivado') ? 'Las reservas están temporalmente desactivadas.'
+          : msg.includes('inactivo') ? 'Tu cuenta está inactiva.'
+          : 'No se pudo reservar el turno. Intentá de nuevo.';
         toast({
-          title: "Error",
-          description: `Error al reservar el turno: ${error.message}`,
+          title: "No se pudo reservar",
+          description: friendly,
           variant: "destructive",
         });
         return;
@@ -1902,11 +1958,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       // NO eliminar de turnos_disponibles para mantener historial
       // El filtro en el frontend ocultará los turnos ya reservados
 
-      // Disparar evento para actualizar balance del admin
+      // Disparar eventos para actualizar balance alumno + admin + agenda
       window.dispatchEvent(new Event('turnosVariables:updated'));
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
 
       toast({
-        title: "✅ Turno reservado",
+        title: "Turno reservado",
         description: "El turno se reservó exitosamente",
       });
       setShowReservaModal(false);
@@ -1975,12 +2032,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
           {/* Desktop navbar (centered pills) */}
           <div className="hidden sm:flex justify-center">
-          <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
+          <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
             <button
               onClick={() => handleViewChange('mis-clases')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeView === 'mis-clases'
-                  ? 'bg-background text-foreground shadow-sm'
+                  ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -1988,9 +2045,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             </button>
             <button
               onClick={() => handleViewChange('turnos-disponibles')}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-2 ${
                 activeView === 'turnos-disponibles'
-                  ? 'bg-background text-foreground shadow-sm'
+                  ? 'bg-secondary text-foreground'
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
@@ -1998,9 +2055,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             </button>
             <button
               onClick={() => window.dispatchEvent(new CustomEvent('nav:balance'))}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-colors text-muted-foreground hover:text-foreground`}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
             >
               Balance
+            </button>
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('nav:records'))}
+              className="px-4 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
+            >
+              Records
             </button>
           </div>
           </div>
@@ -2020,7 +2083,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           ) : (
             <>
           {/* Navegación del mes */}
-          <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0 animate-view-swap">
+          <div className="flex items-center justify-center space-x-4 -mt-2 sm:mt-0">
             <Button
               variant="outline"
               size="sm"
@@ -2030,8 +2093,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-lg font-semibold min-w-[200px] text-center">
-              {capitalize(format(currentMonth, 'MMMM yyyy', { locale: es }))}
+            <h3 className="text-heading min-w-[200px] text-center">
+              {formatMonthYearEs(currentMonth, true)}
             </h3>
             <Button
               variant="outline"
@@ -2045,7 +2108,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           </div>
 
           {/* Calendario de Mis Clases */}
-          <div className="w-full md:w-[55%] mx-auto animate-view-swap">
+          <div className="w-full md:w-[55%] mx-auto">
           <Card>
             <CardContent className="p-0">
               {horariosRecurrentes.length === 0 ? (
@@ -2077,6 +2140,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                       ) : diasDelMes.map((dia, index) => {
                         // Mostrar todos los días, incluyendo los pasados
                         // if (isFechaPasada(dia)) return null;
+                        const esHoy = isSameDay(dia, new Date());
                         const clasesDelDia = clasesDelMes.filter(clase => 
                           isSameDay(clase.dia, dia)
                         );
@@ -2090,15 +2154,17 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                   ? 'bg-yellow-50 dark:bg-yellow-950/20 opacity-70 cursor-default'
                                   : clase.horario.esVariable
                                     ? 'bg-green-50 dark:bg-green-950/20'
-                                    : isFechaPasada(clase.dia)
+                                    : esHoy
+                                      ? 'bg-primary/10 ring-1 ring-inset ring-primary/25 cursor-pointer'
+                                      : isFechaPasada(clase.dia)
                                       ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50 cursor-default'
                                       : 'hover:bg-muted/30 cursor-pointer'
                             }`}
                             onClick={() => clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia) ? null : handleClaseClick(clase)}
                           >
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
-                              <div className="text-xs sm:text-sm font-medium">
-                                {format(dia, "dd 'de' MMMM", { locale: es })}
+                              <div className={`text-xs sm:text-sm font-medium ${esHoy ? 'text-foreground' : ''}`}>
+                                {lowercaseSpanishMonths(format(dia, "dd 'de' MMMM", { locale: es }))}
                               </div>
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
@@ -2171,10 +2237,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       {/* Vista de Perfil */}
       {activeView === 'perfil' && (
-        <div className="w-full md:w-[55%] mx-auto animate-view-swap pb-24 sm:pb-0">
+        <div className="w-full md:w-[55%] mx-auto pb-24 sm:pb-0">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg sm:text-2xl">Mi Perfil</CardTitle>
+              <CardTitle>Mi Perfil</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Información del perfil */}
@@ -2204,7 +2270,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
                 {/* Botón Editar Perfil */}
                 <Button
-                  className="w-full text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                  className="w-full"
                   onClick={() => setShowProfileSettings(true)}
                 >
                   <UserIcon className="h-4 w-4 mr-2" />
@@ -2212,7 +2278,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 </Button>
 
               <Button
-                className="w-full text-xs sm:text-sm bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                className="w-full"
                 onClick={() => window.dispatchEvent(new CustomEvent('info:guide-open'))}
               >
                 <Info className="h-4 w-4 mr-2" />
@@ -2292,8 +2358,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 >
                   <ChevronLeft className="h-4 w-4" />
                 </Button>
-                <h3 className="text-lg font-semibold">
-                  {format(vacantesCalendarMonth, "MMMM yyyy", { locale: es })}
+                <h3 className="text-heading">
+                  {formatMonthYearEs(vacantesCalendarMonth, true)}
                 </h3>
                 <Button
                   variant="outline"
@@ -2326,17 +2392,25 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                     <button
                       key={index}
                       onClick={() => {
-                        if (isCurrentMonth && !isPast && estadoDia !== 'sin-clases') {
+                        // Feriado cerrado: no hay vacantes que mostrar
+                        if (isCurrentMonth && !isPast && estadoDia !== 'sin-clases' && estadoDia !== 'feriado') {
                           setSelectedVacantesDate(date);
                           setShowVacantesDayModal(true);
                         }
                       }}
-                      disabled={!isCurrentMonth || isPast || estadoDia === 'sin-clases'}
+                      disabled={!isCurrentMonth || isPast || estadoDia === 'sin-clases' || estadoDia === 'feriado'}
+                      title={
+                        estadoDia === 'feriado'
+                          ? 'Feriado — sin clases'
+                          : estadoDia === 'feriado-habilitado'
+                            ? (diaTieneCupos(date) ? 'Feriado/fin de semana habilitado — con cupos' : 'Feriado/fin de semana habilitado — sin cupos')
+                            : undefined
+                      }
                       className={`
                         relative min-h-[48px] p-2 rounded-lg text-sm
                         transition-colors
                         ${!isCurrentMonth ? 'opacity-0 cursor-default' : ''}
-                        ${isPast ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/50'}
+                        ${isPast || estadoDia === 'feriado' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/50'}
                         ${isToday ? 'ring-2 ring-primary' : ''}
                         ${estadoDia === 'sin-clases' ? 'cursor-default' : ''}
                         ${estadoDia === 'feriado' ? 'bg-amber-500/20 border-2 border-amber-500/50' : ''}
@@ -2344,7 +2418,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                       `}
                     >
                       <span className={isCurrentMonth ? '' : 'invisible'}>{getDate(date)}</span>
-                      {isCurrentMonth && !isPast && estadoDia !== 'feriado' && estadoDia !== 'feriado-habilitado' && (
+                      {isCurrentMonth && !isPast && (estadoDia === 'verde' || estadoDia === 'rojo') && (
                         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                           {estadoDia === 'verde' && (
                             <div className="w-2 h-2 bg-green-500 rounded-full" />
@@ -2367,11 +2441,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-red-500 rounded-full" />
-                  <span>Completo</span>
+                  <span>Sin cupos / completo</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-amber-500/20 border-2 border-amber-500/50 rounded-lg" />
-                  <span>Feriado</span>
+                  <span>Feriado (cerrado)</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-8 h-8 bg-green-500/20 border-2 border-green-500/50 rounded-lg" />
@@ -2383,10 +2457,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         };
 
         return (
-          <div className="w-full animate-view-swap pb-24 sm:pb-0">
+          <div className="w-full pb-24 sm:pb-0">
             <div className="mb-6">
-              <h2 className="text-lg sm:text-2xl font-semibold">Vacantes disponibles</h2>
-              <p className="text-sm text-muted-foreground mt-1">Seleccioná un día para ver las clases disponibles</p>
+              <h2 className="text-title">Vacantes disponibles</h2>
+              <p className="text-body-muted mt-1">Seleccioná un día para ver las clases disponibles</p>
             </div>
             {loadingTurnosCancelados ? (
               <div className="p-8 text-center">
@@ -2409,7 +2483,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         <DialogContent className="sm:max-w-lg max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              {selectedVacantesDate && format(selectedVacantesDate, "dd 'de' MMMM 'de' yyyy", { locale: es })}
+              {selectedVacantesDate && lowercaseSpanishMonths(format(selectedVacantesDate, "dd 'de' MMMM 'de' yyyy", { locale: es }))}
             </DialogTitle>
             <DialogDescription>
               Clases disponibles para este día
@@ -2509,7 +2583,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         {clase.tieneCupos && (
                           <Button
                             size="sm"
-                            className="ml-2 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                            className="ml-2"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (clase.turnos.length > 0 && clase.turnos[0]) {
@@ -2553,7 +2627,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Fecha</label>
-                  <p className="text-sm">{format(selectedClase.dia, "dd 'de' MMMM", { locale: es })}</p>
+                  <p className="text-sm">{lowercaseSpanishMonths(format(selectedClase.dia, "dd 'de' MMMM", { locale: es }))}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-muted-foreground">Día</label>
@@ -2704,7 +2778,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 <Button
                   onClick={handleConfirmarReserva}
                   disabled={confirmingReserva}
-                  className="flex-1 bg-white text-gray-900 hover:bg-gray-100 border border-gray-300"
+                  className="flex-1"
                 >
                   {confirmingReserva ? 'Reservando...' : 'Confirmar Reserva'}
                 </Button>

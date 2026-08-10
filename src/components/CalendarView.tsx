@@ -16,6 +16,7 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { format } from 'date-fns';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { formatMonthEs, formatMonthYearEs, lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface Turno {
   id: string;
@@ -514,8 +515,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           hora_inicio,
           hora_fin,
           activo,
+          fecha_inicio,
+          fecha_fin,
           usuario_id,
-          profiles(full_name, first_name, last_name, email, phone, role)
+          profiles(full_name, first_name, last_name, email, phone, role, is_active, fecha_desactivacion)
         `)
         .eq('dia_semana', diaSemana)
         .eq('activo', true);
@@ -608,34 +611,40 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         });
       }
 
-      // Agregar horarios recurrentes (excluyendo admins y los que están cancelados)
-      // NO agregar los que están cancelados porque ya se agregaron desde turnos_cancelados
+      // Agregar horarios recurrentes (excluyendo admins, inactivos, fuera de vigencia y cancelados)
       if (horariosRecurrentes && horariosRecurrentes.length > 0) {
         horariosRecurrentes.forEach(horario => {
           const profile = Array.isArray(horario.profiles) ? horario.profiles[0] : horario.profiles;
-          // Filtrar admins: solo agregar si el perfil existe y NO es admin
-          if (profile && profile.role !== 'admin') {
-            // Crear clave única normalizada para verificar si está cancelado
-            const horaInicioNorm = normalizeHora(horario.hora_inicio || '');
-            const horaFinNorm = normalizeHora(horario.hora_fin || '');
-            const claveRecurrente = `${horario.usuario_id}-${horaInicioNorm}-${horaFinNorm}`;
+          if (!profile || profile.role === 'admin') return;
 
-            // Solo agregar si NO está cancelado (los cancelados ya están en la lista desde turnos_cancelados)
-            if (!turnosCanceladosHoy.has(claveRecurrente)) {
-              todosAlumnos.push({
-                id: horario.id,
-                nombre: getProfileFullName(profile),
-                email: profile.email || '',
-                telefono: profile.phone,
-                tipo: 'recurrente',
-                hora_inicio: horaInicioNorm,
-                hora_fin: horaFinNorm,
-                fecha: fechaActual,
-                activo: horario.activo,
-                usuario_id: horario.usuario_id
-              });
-            }
-            // NO agregar los cancelados aquí porque ya están en turnos_cancelados
+          const inactivo =
+            profile.is_active === false ||
+            (profile.fecha_desactivacion && profile.fecha_desactivacion <= fechaActual);
+          if (inactivo) return;
+
+          const inicio = horario.fecha_inicio ? String(horario.fecha_inicio).slice(0, 10) : null;
+          const fin = horario.fecha_fin ? String(horario.fecha_fin).slice(0, 10) : null;
+          if (inicio && inicio > fechaActual) return;
+          if (fin && fin < fechaActual) return;
+
+          const horaInicioNorm = normalizeHora(horario.hora_inicio || '');
+          const horaFinNorm = normalizeHora(horario.hora_fin || '');
+          const claveRecurrente = `${horario.usuario_id}-${horaInicioNorm}-${horaFinNorm}`;
+
+          // Solo agregar si NO está cancelado (los cancelados ya están en la lista desde turnos_cancelados)
+          if (!turnosCanceladosHoy.has(claveRecurrente)) {
+            todosAlumnos.push({
+              id: horario.id,
+              nombre: getProfileFullName(profile),
+              email: profile.email || '',
+              telefono: profile.phone,
+              tipo: 'recurrente',
+              hora_inicio: horaInicioNorm,
+              hora_fin: horaFinNorm,
+              fecha: fechaActual,
+              activo: horario.activo,
+              usuario_id: horario.usuario_id
+            });
           }
         });
       }
@@ -1074,13 +1083,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     setCurrentDate(newDate);
   };
 
-  const formatDate = (date: Date) => {
-    const formattedDate = date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'long'
-    });
-    return formattedDate.charAt(0).toUpperCase() + formattedDate.slice(1);
-  };
+  const formatDate = (date: Date) => formatMonthYearEs(date, true);
 
   const getTurnosForDate = (date: Date) => {
     const dateStr = formatLocalDate(date);
@@ -1348,30 +1351,33 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       }
 
       return (
-        <div className="space-y-3">
+        <div className="space-y-3 w-full">
           {timeSlots.map((slot, index) => {
             const horarioKey = `slot-${slot.horaInicio}`;
             const isExpanded = horariosExpandidos.has(horarioKey);
+            const puedeAgregar =
+              isAdminView &&
+              slot.cupoDisponible > 0 &&
+              esClaseFutura(formatLocalDate(currentDate), slot.horaInicio);
 
             return (
-              <Card key={`slot-${index}`} className="">
-                <CardContent className="p-4">
-                  <div
-                    className="flex items-center justify-between cursor-pointer hover:bg-muted/50 rounded-lg p-2 -m-2 transition-colors"
-                    onClick={() => toggleHorario(horarioKey)}
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="font-light text-foreground text-[12px] sm:text-base">
+              <Card key={`slot-${index}`} className="w-full overflow-hidden">
+                <CardContent className="p-0">
+                  <div className="flex w-full min-h-[52px] items-center gap-2 px-3 py-2.5 sm:min-h-[56px] sm:gap-3 sm:px-5 sm:py-3">
+                    <button
+                      type="button"
+                      className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 text-left transition-colors hover:bg-muted/30"
+                      onClick={() => toggleHorario(horarioKey)}
+                    >
+                      <span className="min-w-0 flex-1 truncate font-medium text-foreground text-xs sm:text-base">
                         {formatClockRangeAmPm(slot.horaInicio, slot.horaFin)}
                       </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge 
-                        variant="secondary" 
-                        className={`font-light text-[10px] ${
-                          slot.tieneExceso 
-                            ? 'bg-red-100 text-red-800 border-red-300' 
-                            : 'bg-blue-100 text-blue-800'
+                      <Badge
+                        variant="secondary"
+                        className={`inline-flex h-6 shrink-0 items-center px-2 font-medium text-[10px] leading-none sm:text-xs ${
+                          slot.tieneExceso
+                            ? 'border border-red-400/40 bg-red-500/15 text-red-300'
+                            : 'border border-sky-400/30 bg-sky-500/15 text-sky-200'
                         }`}
                       >
                         <span className="hidden sm:inline">
@@ -1383,71 +1389,76 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                           {slot.tieneExceso && ` (+${slot.exceso})`}
                         </span>
                       </Badge>
-                      {/* Botón + para agregar usuario - visible en desktop, deshabilitado para clases pasadas */}
-                      {isAdminView && slot.cupoDisponible > 0 && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="hidden sm:flex h-6 w-6 p-0 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                          disabled={!esClaseFutura(formatLocalDate(currentDate), slot.horaInicio)}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleAddUserToSlot(slot);
-                          }}
-                        >
-                          +
-                        </Button>
-                      )}
+                    </button>
+                    {isAdminView && slot.cupoDisponible > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="hidden h-7 w-7 shrink-0 rounded-full p-0 sm:inline-flex"
+                        disabled={!puedeAgregar}
+                        aria-label="Agregar alumno"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (!puedeAgregar) return;
+                          handleAddUserToSlot(slot);
+                        }}
+                      >
+                        +
+                      </Button>
+                    )}
+                    <button
+                      type="button"
+                      className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                      aria-label={isExpanded ? 'Contraer horario' : 'Expandir horario'}
+                      onClick={() => toggleHorario(horarioKey)}
+                    >
                       {isExpanded ? (
-                        <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                        <ChevronUp className="h-4 w-4" />
                       ) : (
-                        <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        <ChevronDown className="h-4 w-4" />
                       )}
-                    </div>
+                    </button>
                   </div>
 
                   {isExpanded && (
-                    <div className="mt-4">
-                      {/* Advertencia de exceso */}
+                    <div className="border-t border-border px-4 py-4 sm:px-5">
                       {slot.tieneExceso && (
-                        <div className="mb-3 p-3 bg-red-50 border border-red-200 rounded-lg">
-                          <div className="flex items-center gap-2 text-red-800 text-xs font-medium">
-                            <AlertTriangle className="h-4 w-4" />
-                            <span>⚠️ Exceso de capacidad: {slot.exceso} usuario(s) por encima del límite ({slot.capacidad})</span>
+                        <div className="mb-3 rounded-lg border border-red-400/40 bg-red-500/10 p-3">
+                          <div className="flex items-center gap-2 text-xs font-medium text-red-300">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span>Exceso de capacidad: {slot.exceso} usuario(s) por encima del límite ({slot.capacidad})</span>
                           </div>
-                          <p className="text-red-600 text-[10px] mt-1">
-                            Este horario tiene {slot.alumnosActivos.length} usuarios activos registrados, pero el límite es {slot.capacidad}. 
-                            Considera cancelar los turnos más recientes para respetar el límite.
+                          <p className="mt-1 text-[10px] text-red-300/80">
+                            Este horario tiene {slot.alumnosActivos.length} usuarios activos registrados, pero el límite es {slot.capacidad}.
+                            Considerá cancelar los turnos más recientes para respetar el límite.
                           </p>
                         </div>
                       )}
                       {slot.alumnos.length > 0 ? (
                         <div className="flex flex-wrap gap-2">
                           {slot.alumnos.map((alumno, alumnoIndex) => {
-                            // Separar nombre y apellido
                             const nombreCompleto = alumno.nombre || '';
                             const partesNombre = nombreCompleto.split(' ');
                             const nombre = partesNombre[0] || '';
                             const apellido = partesNombre.slice(1).join(' ') || '';
-
-                            // Verificar si este horario está bloqueado por ausencia del admin
                             const estaBloqueado = estaHorarioBloqueado(formatLocalDate(currentDate), slot.horaInicio);
-
-                            // Verificar si la clase es futura para permitir cancelación
-                            const esClaseFuturaParaAlumno = esClaseFutura(formatLocalDate(currentDate), slot.horaInicio);
 
                             return (
                               <div
                                 key={alumnoIndex}
                                 onClick={() => !estaBloqueado && isAdminView && handleAlumnoClick(alumno)}
-                                className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all ${estaBloqueado
-                                    ? 'border-yellow-400 bg-yellow-900/30 opacity-60 text-yellow-200'
-                                    : alumno.tipo === 'cancelado' ? 'border-red-500 text-red-700 bg-red-50' :
-                                      alumno.tipo === 'recurrente' ? 'border-green-500 text-green-700 bg-green-50' :
-                                        'border-blue-500 text-blue-700 bg-blue-50'
-                                  } ${!estaBloqueado && isAdminView ? 'cursor-pointer hover:shadow-md hover:scale-105' : 'cursor-not-allowed'}`}
+                                className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-all ${
+                                  estaBloqueado
+                                    ? 'border-yellow-400/50 bg-yellow-900/30 text-yellow-200 opacity-60'
+                                    : alumno.tipo === 'cancelado'
+                                      ? 'border-red-500/50 bg-red-500/10 text-red-300'
+                                      : alumno.tipo === 'recurrente'
+                                        ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
+                                        : 'border-sky-500/50 bg-sky-500/10 text-sky-200'
+                                } ${!estaBloqueado && isAdminView ? 'cursor-pointer hover:bg-accent/40' : 'cursor-not-allowed'}`}
                               >
-                                <div className="font-light text-[10px] sm:text-[12px]">
+                                <div className="text-[10px] font-medium sm:text-xs">
                                   {nombre} {apellido}
                                   {estaBloqueado && <span className="ml-2 text-[8px] text-yellow-400">(BLOQUEADA)</span>}
                                 </div>
@@ -1456,21 +1467,21 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                           })}
                         </div>
                       ) : (
-                        <div className="text-center py-4 text-muted-foreground text-sm">
+                        <div className="py-4 text-center text-sm text-muted-foreground">
                           Sin alumnos en este horario
                         </div>
                       )}
 
-                      {/* Botón + para agregar usuario - visible en mobile dentro del dropdown, deshabilitado para clases pasadas */}
                       {isAdminView && slot.cupoDisponible > 0 && (
                         <div className="mt-3 flex justify-center sm:hidden">
                           <Button
                             size="sm"
                             variant="outline"
-                            className="h-8 w-8 p-0 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-600 hover:text-gray-700 border-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                            disabled={!esClaseFutura(formatLocalDate(currentDate), slot.horaInicio)}
+                            className="h-8 w-8 rounded-full p-0"
+                            disabled={!puedeAgregar}
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (!puedeAgregar) return;
                               handleAddUserToSlot(slot);
                             }}
                           >
@@ -1651,9 +1662,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                   </Button>
 
                   <h3 className="text-lg font-bold text-muted-foreground truncate px-2">
-                    {currentDate.toLocaleDateString('es-ES', {
-                      month: 'long'
-                    }).replace(/^\w/, c => c.toUpperCase())}
+                    {formatMonthEs(currentDate, true)}
                   </h3>
 
                   <Button
@@ -1686,11 +1695,14 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
             <div className="space-y-4 w-full max-w-full">
               <div className="text-center w-full max-w-full">
                 <h3 className="text-sm sm:text-base font-semibold mb-2 truncate">
-                  {!isAdminView && 'Horarios Disponibles para'} {currentDate.toLocaleDateString('es-ES', {
-                    weekday: 'long',
-                    day: 'numeric',
-                    month: 'long'
-                  })}
+                  {!isAdminView && 'Horarios disponibles para '}
+                  {lowercaseSpanishMonths(
+                    currentDate.toLocaleDateString('es-ES', {
+                      weekday: 'long',
+                      day: 'numeric',
+                      month: 'long',
+                    })
+                  )}
                 </h3>
               </div>
 

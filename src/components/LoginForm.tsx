@@ -322,7 +322,7 @@ export const LoginForm = ({ onLogin }: LoginFormProps) => {
         {/* Login/Register Card */}
         <Card className="shadow-elegant animate-slide-up">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
+            <CardTitle className="text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
                          <CardDescription className="text-center">

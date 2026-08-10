@@ -742,7 +742,7 @@ export const TurnoManagement = () => {
               {/* CTA 1: Capacidad, tarifa y horarios */}
               <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
+                  <div className="h-12 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Capacidad, tarifa y horarios
                   </div>
                 </DialogTrigger>
@@ -949,7 +949,7 @@ export const TurnoManagement = () => {
                     <div className="w-full">
                       <div
                         onClick={handleAgregarHorario}
-                        className="h-10 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center gap-2 cursor-pointer"
+                        className="h-10 w-full rounded-xl border-2 border-white/50 text-foreground hover:bg-accent hover:border-white/70 transition-colors font-heading flex items-center justify-center gap-2 cursor-pointer"
                         style={{ padding: '8px 16px', fontSize: '12px' }}
                       >
                         <Plus className="h-4 w-4" />
@@ -989,7 +989,7 @@ export const TurnoManagement = () => {
                 }
               }}>
                 <DialogTrigger asChild>
-                  <div className="h-12 w-full rounded-xl border-2 border-border text-muted-foreground hover:bg-accent hover:text-accent-foreground transition-colors shadow-sm hover:shadow-md font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
+                  <div className="h-12 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Editar ausencias
                   </div>
                 </DialogTrigger>

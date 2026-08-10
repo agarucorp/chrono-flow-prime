@@ -10,13 +10,22 @@ import { supabase } from "@/lib/supabase";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useNotifications } from "@/hooks/useNotifications";
 import { RecoverPasswordForm } from "./RecoverPasswordForm";
+import {
+  cleanAuthParamsFromUrl,
+  isEmailConfirmCallback,
+  parseAuthUrlParams,
+  waitForAuthSession,
+} from "@/lib/authCallbacks";
+import { AUTH_STORAGE_KEY, getRememberSession, setRememberSession } from "@/lib/authStorage";
 
 interface LoginFormProps {
   onLogin: () => void;
 }
 
+const EMAIL_CONFIRMED_FLAG = 'email_just_confirmed';
+
 export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
-  const { signIn, signUp } = useAuthContext();
+  const { signIn, signUp, signOut, user, loading: authLoading } = useAuthContext();
   const { showSuccess, showError } = useNotifications();
   const navigate = useNavigate();
   
@@ -49,29 +58,87 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [showSplash, setShowSplash] = useState(true);
+  const [showSplash, setShowSplash] = useState(false);
+  const [awaitingEmailConfirmUi, setAwaitingEmailConfirmUi] = useState(
+    () => isEmailConfirmCallback() || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1'
+  );
+  const [rememberSession, setRememberSessionState] = useState(() => getRememberSession());
 
-  // Handler para nombre y apellido: solo letras y espacios
+  // Tras click en "Confirmar email": esperar PKCE, cerrar sesión y quedarse en login
+  useEffect(() => {
+    const { error, errorDescription } = parseAuthUrlParams();
+    if (error) {
+      showError(
+        'No se pudo confirmar el email',
+        errorDescription?.replace(/\+/g, ' ') || 'El enlace no es válido o expiró.'
+      );
+      cleanAuthParamsFromUrl('/login');
+      return;
+    }
+
+    if (!isEmailConfirmCallback() && sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) !== '1') {
+      return;
+    }
+
+    sessionStorage.setItem(EMAIL_CONFIRMED_FLAG, '1');
+    setAwaitingEmailConfirmUi(true);
+    setIsRegisterMode(false);
+
+    let cancelled = false;
+    (async () => {
+      // Esperar a que detectSessionInUrl/exchange termine (PKCE puede tardar)
+      await waitForAuthSession(() => supabase.auth.getSession(), { timeoutMs: 8000 });
+      if (cancelled) return;
+      await signOut();
+      sessionStorage.removeItem(EMAIL_CONFIRMED_FLAG);
+      cleanAuthParamsFromUrl('/login');
+      showSuccess('Email confirmado', 'Ya podés iniciar sesión con tu cuenta.');
+      setAwaitingEmailConfirmUi(false);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [signOut, showSuccess, showError]);
+
+  // Si ya hay sesión confirmada, ir al panel (nunca con email pendiente ni post-confirmación)
+  useEffect(() => {
+    if (authLoading || !user || !user.email_confirmed_at) return;
+    if (awaitingEmailConfirmUi || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1') return;
+    let cancelled = false;
+    (async () => {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      if (profile?.role === 'admin') navigate('/admin', { replace: true });
+      else navigate('/user', { replace: true });
+    })();
+    return () => { cancelled = true; };
+  }, [user, authLoading, navigate, awaitingEmailConfirmUi]);
+
+  // Splash breve solo en mobile (max 800ms)
+  useEffect(() => {
+    const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches;
+    if (!isMobile) return;
+    setShowSplash(true);
+    const timer = setTimeout(() => setShowSplash(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
+
   const handleNameChange = (field: 'firstName' | 'lastName', value: string) => {
     const sanitized = value.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑüÜ\s]/g, '');
     setRegisterData(prev => ({ ...prev, [field]: sanitized }));
     setFieldErrors(prev => ({ ...prev, [field]: "" }));
   };
 
-  // Handler para teléfono: solo números
   const handlePhoneChange = (value: string) => {
     const sanitized = value.replace(/[^0-9]/g, '');
     setRegisterData(prev => ({ ...prev, phone: sanitized }));
     setFieldErrors(prev => ({ ...prev, phone: "" }));
   };
-
-  // Mostrar splash screen en mobile durante 2.5 segundos
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Verificar requisitos de contraseña
   const checkPasswordRequirements = (password: string) => {
@@ -166,6 +233,13 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       // Login real con Supabase
       try {
         setIsLoading(true);
+        setRememberSession(rememberSession);
+        // Evitar que una sesión previa en localStorage “reviva” si no quiere persistir
+        if (!rememberSession) {
+          localStorage.removeItem(AUTH_STORAGE_KEY);
+        } else {
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        }
         const result = await signIn(credentials.email, credentials.password);
 
         if (!result.success || !result.user) {
@@ -269,8 +343,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           // Mostrar mensaje más claro para rate limit
           if (errorMsg.toLowerCase().includes('rate limit') || errorMsg.toLowerCase().includes('límite') || errorMsg.toLowerCase().includes('429')) {
             showError(
-              'Límite de registros alcanzado', 
-              'Supabase limita a 3-4 registros por hora desde la misma IP. Por favor, espera 15-20 minutos antes de intentar nuevamente, o intenta desde otra red.'
+              'Demasiados intentos',
+              'Esperá unos minutos e intentá de nuevo. Si sigue fallando, probá desde otra red.'
             );
           } else if (
             errorMsg.toLowerCase().includes('confirmation email') ||
@@ -278,16 +352,21 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             (errorMsg.toLowerCase().includes('email') && errorMsg.toLowerCase().includes('send'))
           ) {
             showError(
-              'Error al enviar email de confirmación',
-              'No se pudo enviar el email (p. ej. límite de Resend/SMTP). Revisa SMTP en Supabase o desactívalo temporalmente para usar el envío por defecto.'
+              'No pudimos enviar el email',
+              'Tu cuenta puede haberse creado. Revisá tu correo (y spam) o pedí ayuda al entrenador.'
+            );
+          } else if (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('existe')) {
+            showError(
+              'Este email ya está registrado',
+              'Probá iniciar sesión o recuperá tu contraseña.'
             );
           } else if (errorMsg.toLowerCase().includes('500') || errorMsg.toLowerCase().includes('servidor')) {
             showError(
-              'Error del servidor',
-              'Error al crear la cuenta. Puede ser por triggers o por el envío de emails. Contacta al administrador.'
+              'Algo salió mal',
+              'No pudimos crear la cuenta ahora. Intentá de nuevo en unos minutos.'
             );
           } else {
-            showError('Error al crear cuenta', errorMsg);
+            showError('No se pudo crear la cuenta', 'Revisá los datos e intentá nuevamente.');
           }
           
           setError(errorMsg);
@@ -376,7 +455,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   if (showSplash) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black md:hidden">
-        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+        <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[180px] w-full px-8" />
       </div>
     );
   }
@@ -386,18 +465,18 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       {/* Contenido principal centrado */}
       <div className="flex-1 flex flex-col items-center w-full pt-0 pb-0 md:pt-0">
         <div className="hidden md:flex justify-center mb-0">
-          <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+          <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[220px] w-full" />
         </div>
         {/* Grupo modal + footer para mobile */}
         <div className="w-full max-w-md flex flex-col md:space-y-8 mt-0 md:mt-0 md:mb-8 flex-1 md:flex-none md:justify-center justify-start md:justify-center pb-0 md:pb-0">
           <div className="space-y-4 md:space-y-8 mb-6 md:mb-0">
           {/* Login/Register Card */}
-          <Card className="shadow-elegant animate-slide-up border-2 border-white/70">
+          <Card className="animate-slide-up border-border shadow-elegant">
           <CardHeader className="space-y-1 p-3 md:p-6">
-            <CardTitle className="text-lg md:text-xl text-center">
+            <CardTitle className="text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
             </CardTitle>
-            <CardDescription className="text-xs md:text-sm text-center">
+            <CardDescription className="text-center">
               {isRegisterMode 
                 ? currentStep === 2 
                   ? "Configure su acceso al sistema"
@@ -408,8 +487,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             {isRegisterMode && (
               <div className="flex justify-center mt-4">
                 <div className="flex space-x-2">
-                  <div className={`w-8 h-2 rounded-full ${currentStep >= 1 ? 'bg-white' : 'bg-muted'}`}></div>
-                  <div className={`w-8 h-2 rounded-full ${currentStep >= 2 ? 'bg-white' : 'bg-muted'}`}></div>
+                  <div className={`w-8 h-2 rounded-full ${currentStep >= 1 ? 'bg-primary' : 'bg-muted'}`}></div>
+                  <div className={`w-8 h-2 rounded-full ${currentStep >= 2 ? 'bg-primary' : 'bg-muted'}`}></div>
                 </div>
               </div>
             )}
@@ -467,6 +546,18 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                       </button>
                     </div>
                   </div>
+
+                  <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
+                    <input
+                      type="checkbox"
+                      checked={rememberSession}
+                      onChange={(e) => setRememberSessionState(e.target.checked)}
+                      className="h-3.5 w-3.5 rounded border-border bg-background accent-primary"
+                    />
+                    <span className="text-[11px] text-muted-foreground md:text-xs">
+                      Mantener la sesión iniciada
+                    </span>
+                  </label>
                 </>
               ) : currentStep === 1 ? (
                 // Step 1: Personal Information
@@ -641,7 +732,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
 
               <Button
                 type="submit"
-                className="w-full bg-white hover:bg-gray-100 text-gray-900 border border-gray-300 transition-all duration-300 h-11 text-[12px]"
+                className="w-full h-11 text-sm"
                 disabled={isLoading}
               >
                 {isLoading ? (
@@ -680,7 +771,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-gray-300 hover:underline font-medium text-[10px]"
+                      className="text-muted-foreground hover:underline font-medium text-caption"
                     >
                       Iniciar sesión
                     </button>
@@ -694,7 +785,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         setCurrentStep(1);
                         setError(null);
                       }}
-                      className="text-white hover:text-gray-200 hover:underline font-medium text-[10px]"
+                      className="text-foreground hover:text-muted-foreground hover:underline font-medium text-caption"
                     >
                       Crear cuenta
                     </button>
@@ -707,7 +798,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   ¿Olvidaste tu contraseña?{" "}
                   <button 
                     onClick={handleRecoverMode}
-                    className="text-white hover:text-gray-200 hover:underline font-medium text-[10px]"
+                    className="text-foreground hover:text-muted-foreground hover:underline font-medium text-caption"
                   >
                     Recuperar acceso
                   </button>

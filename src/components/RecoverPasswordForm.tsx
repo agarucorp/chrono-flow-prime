@@ -52,6 +52,8 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
       // Intento con un reintento si hay rate limit
       const attemptReset = async (triesLeft: number, delayMs: number): Promise<void> => {
         // Enviar email de recuperación de contraseña
+        // Marca el flujo para que un callback PKCE sin `type` no caiga en /login
+        sessionStorage.setItem('auth_recovery_pending', '1');
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/reset-password`
         });
@@ -100,7 +102,7 @@ export const RecoverPasswordForm = ({ onBack }: RecoverPasswordFormProps) => {
               <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-              <CardTitle className="text-2xl text-green-600">
+              <CardTitle className="text-center text-emerald-400">
                 ¡Email Enviado!
               </CardTitle>
               <CardDescription>

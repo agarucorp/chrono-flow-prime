@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { formatLocalDate, getArgentinaYearMonth, todayLocal } from '@/lib/dateLocal';
 
 export interface AdminUser {
   id: string;
@@ -13,6 +14,8 @@ export interface AdminUser {
   created_at: string;
   is_active?: boolean;
   fecha_desactivacion?: string | null;
+  tarifa_personalizada?: number | string | null;
+  combo_asignado?: number | null;
   horarios_recurrentes?: {
     turno_nombre: string;
     dias_semana: string[];
@@ -43,9 +46,11 @@ export const useAdmin = () => {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [allUsers, setAllUsers] = useState<AdminUser[]>([]);
-  // Estado de periodo (mes/año) compartido para Usuarios
-  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
-  const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1); // 1..12
+  /** Precio por clase según combo (1..5) desde configuracion_admin */
+  const [comboTarifas, setComboTarifas] = useState<Record<number, number>>({});
+  // Estado de periodo (mes/año) compartido — timezone AR (igual que RPCs de cuotas)
+  const [selectedYear, setSelectedYear] = useState<number>(() => getArgentinaYearMonth().year);
+  const [selectedMonth, setSelectedMonth] = useState<number>(() => getArgentinaYearMonth().month);
 
   // Caché para verificación de admin (evitar recargas innecesarias)
   const adminCheckCacheRef = useRef<{ userId: string | null; isAdmin: boolean | null; timestamp: number }>({ 
@@ -95,27 +100,20 @@ export const useAdmin = () => {
 
       try {
         const { data: session, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError || !session || !session?.user) {
-          console.warn('⚠️ Problema con sesión, usando fallback por email');
-          const isAdminByEmail = checkAdminByEmail(user.email || '');
-          setIsAdmin(isAdminByEmail);
-          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
+
+        if (sessionError || !session?.session?.user) {
+          setIsAdmin(false);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: false, timestamp: Date.now() };
           setIsLoading(false);
           return;
         }
-        
-        console.log('✅ Sesión activa:', session.user.email);
 
-        // Intentar consulta por ID
         const { data, error } = await supabase
           .from('profiles')
           .select('id, email, role, created_at')
           .eq('id', user.id)
           .single();
 
-
-        // Si falla por ID, intentar por email
         if (error && user.email) {
           const { data: emailData, error: emailError } = await supabase
             .from('profiles')
@@ -123,40 +121,28 @@ export const useAdmin = () => {
             .eq('email', user.email)
             .single();
 
-
           if (!emailError && emailData) {
             const isUserAdmin = emailData.role === 'admin';
-            console.log('✅ Rol obtenido por email:', emailData.role, '-> isAdmin:', isUserAdmin);
             setIsAdmin(isUserAdmin);
             adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
           } else {
-            console.error('❌ Error en ambas consultas:', { error, emailError });
-            // Fallback: verificar admin por email (SIEMPRE usar fallback si las consultas fallan)
-            const isAdminByEmail = checkAdminByEmail(user.email || '');
-            console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
-            setIsAdmin(isAdminByEmail);
-            adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
+            console.error('Error verificando rol de admin:', { error, emailError });
+            setIsAdmin(false);
+            adminCheckCacheRef.current = { userId: user.id, isAdmin: false, timestamp: Date.now() };
           }
         } else if (!error && data) {
           const isUserAdmin = data.role === 'admin';
-          console.log('✅ Rol obtenido por ID:', data.role, '-> isAdmin:', isUserAdmin);
           setIsAdmin(isUserAdmin);
           adminCheckCacheRef.current = { userId: user.id, isAdmin: isUserAdmin, timestamp: Date.now() };
         } else {
-          console.error('❌ Error verificando rol de admin:', error);
-          // Fallback: verificar admin por email (SIEMPRE usar fallback si hay error)
-          const isAdminByEmail = checkAdminByEmail(user.email || '');
-          console.log('⚠️ Usando fallback checkAdminByEmail:', user.email, '-> isAdmin:', isAdminByEmail);
-          setIsAdmin(isAdminByEmail);
-          adminCheckCacheRef.current = { userId: user.id, isAdmin: isAdminByEmail, timestamp: Date.now() };
+          console.error('Error verificando rol de admin:', error);
+          setIsAdmin(false);
+          adminCheckCacheRef.current = { userId: user.id, isAdmin: false, timestamp: Date.now() };
         }
       } catch (err) {
-        console.error('❌ Error inesperado verificando admin:', err);
-        // Fallback final: verificar admin por email (SIEMPRE usar fallback en caso de error)
-        const isAdminByEmail = checkAdminByEmail(user?.email || '');
-        console.log('⚠️ Fallback final checkAdminByEmail:', user?.email, '-> isAdmin:', isAdminByEmail);
-        setIsAdmin(isAdminByEmail);
-        adminCheckCacheRef.current = { userId: user?.id || null, isAdmin: isAdminByEmail, timestamp: Date.now() };
+        console.error('Error inesperado verificando admin:', err);
+        setIsAdmin(false);
+        adminCheckCacheRef.current = { userId: user?.id || null, isAdmin: false, timestamp: Date.now() };
       } finally {
         setIsLoading(false);
       }
@@ -167,7 +153,8 @@ export const useAdmin = () => {
 
   const fetchHorariosRecurrentes = useCallback(async (): Promise<Record<string, Set<string>>> => {
     try {
-      const hoyISO = new Date().toISOString().split('T')[0];
+      const { todayLocal } = await import('@/lib/dateLocal');
+      const hoyISO = todayLocal();
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
         .select('usuario_id, dia_semana, activo, fecha_fin')
@@ -198,7 +185,8 @@ export const useAdmin = () => {
   // Nueva función para obtener horarios con horas de inicio
   const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string }>>> => {
     try {
-      const hoyISO = new Date().toISOString().split('T')[0];
+      const { todayLocal } = await import('@/lib/dateLocal');
+      const hoyISO = todayLocal();
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
         .select('usuario_id, dia_semana, hora_inicio, activo, fecha_fin')
@@ -248,13 +236,28 @@ export const useAdmin = () => {
 
     try {
       console.log('📡 Consultando profiles...');
-      const [{ data, error }, horariosMap] = await Promise.all([
+      const [{ data, error }, horariosMap, configRes] = await Promise.all([
         supabase
         .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name, phone, is_active, fecha_desactivacion')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone, is_active, fecha_desactivacion, tarifa_personalizada, combo_asignado')
         .order('created_at', { ascending: false }),
-        fetchHorariosRecurrentes()
+        fetchHorariosRecurrentes(),
+        supabase
+          .from('configuracion_admin')
+          .select('combo_1_tarifa, combo_2_tarifa, combo_3_tarifa, combo_4_tarifa, combo_5_tarifa')
+          .limit(1)
+          .maybeSingle(),
       ]);
+
+      if (configRes.data) {
+        const map: Record<number, number> = {};
+        for (let i = 1; i <= 5; i++) {
+          const key = `combo_${i}_tarifa` as keyof typeof configRes.data;
+          const val = Number(configRes.data[key]);
+          if (val > 0) map[i] = val;
+        }
+        setComboTarifas(map);
+      }
 
 
       if (error) {
@@ -297,7 +300,7 @@ export const useAdmin = () => {
 
       // Filtrar usuarios: mostrar todos (activos e inactivos) pero marcar los inactivos
       // Los usuarios inactivos son aquellos con is_active = false O con fecha_desactivacion <= hoy
-      const hoy = new Date().toISOString().split('T')[0];
+      const hoy = todayLocal();
       const usuariosMarcados = usersWithHorarios.map(user => {
         const estaInactivo = user.is_active === false || 
           (user.fecha_desactivacion && user.fecha_desactivacion <= hoy);
@@ -332,6 +335,22 @@ export const useAdmin = () => {
       return [] as any[];
     }
   }, []);
+
+  /** Genera/actualiza cuotas del mes vía RPC (SECURITY DEFINER) y vuelve a leer. */
+  const ensureCuotasMensuales = useCallback(async (anio: number, mes: number) => {
+    try {
+      const { error: genError } = await supabase.rpc('fn_generar_cuotas_mes', {
+        p_anio: anio,
+        p_mes: mes,
+      });
+      if (genError) {
+        console.error('Error generando cuotas del mes:', genError);
+      }
+    } catch (err) {
+      console.error('Error inesperado generando cuotas del mes:', err);
+    }
+    return fetchCuotasMensuales(anio, mes);
+  }, [fetchCuotasMensuales]);
 
   // Actualizar estado_pago por usuario (persistir en BD)
   // Actualiza directamente el mes seleccionado, sin redirecciones
@@ -529,7 +548,7 @@ export const useAdmin = () => {
       // Calcular el primer día del mes siguiente
       const ahora = new Date();
       const primerDiaMesSiguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
-      const fechaDesactivacion = primerDiaMesSiguiente.toISOString().split('T')[0]; // Formato YYYY-MM-DD
+      const fechaDesactivacion = formatLocalDate(primerDiaMesSiguiente);
 
       // Actualizar el perfil: establecer fecha de desactivación (el usuario seguirá activo hasta esa fecha)
       const { error } = await supabase
@@ -563,15 +582,6 @@ export const useAdmin = () => {
       'lucasmaldacena@gmail.com' // ✅ Admin recientemente creado
     ];
     return adminEmails.includes(email.toLowerCase());
-  };
-
-  // Función de emergencia para verificar admin por email
-  const checkAdminByEmail = (email: string): boolean => {
-    const adminEmails = [
-      'agaru.corp@gmail.com',
-      'lucasmaldacena@gmail.com'
-    ];
-    return adminEmails.includes(email?.toLowerCase() || '');
   };
 
   // ==================== FUNCIONES DE AUSENCIAS ====================
@@ -702,6 +712,7 @@ export const useAdmin = () => {
     isLoading,
     adminUsers,
     allUsers,
+    comboTarifas,
     selectedYear,
     selectedMonth,
     setSelectedYear,
@@ -711,6 +722,7 @@ export const useAdmin = () => {
     changeUserRole,
     deleteUser,
     fetchCuotasMensuales,
+    ensureCuotasMensuales,
     updateCuotaEstadoPago,
     updateCuotaDescuento,
     canBeAdmin,

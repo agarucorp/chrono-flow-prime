@@ -13,8 +13,8 @@ const UserDashboard = () => {
       <Navigation />
       <main className="container mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-2xl font-semibold tracking-tight">Panel</h1>
-          <div className="text-sm text-muted-foreground">
+          <h1 className="text-title">Panel</h1>
+          <div className="text-caption">
             {user?.email}
           </div>
         </div>

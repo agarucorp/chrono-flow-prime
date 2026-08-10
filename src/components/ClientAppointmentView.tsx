@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { format, addDays, startOfWeek, startOfMonth, endOfMonth, isSameDay, isToday, isBefore, startOfDay, addMonths, getDate } from "date-fns";
 import { es } from "date-fns/locale";
 import { formatClockAmPm } from "@/lib/timeFormat";
+import { lowercaseSpanishMonths } from "@/lib/dateLocal";
 
 interface Professional {
   name: string;
@@ -177,7 +178,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                 <div>
                   <h1 className="text-xl font-bold text-foreground">Reservar Turno</h1>
                   <p className="text-sm text-muted-foreground">
-                    {format(selectedDate, "EEEE, d 'de' MMMM", { locale: es })} - {selectedTime ? formatClockAmPm(selectedTime) : ''}
+                    {lowercaseSpanishMonths(format(selectedDate, "EEEE, d 'de' MMMM", { locale: es }))} - {selectedTime ? formatClockAmPm(selectedTime) : ''}
                   </p>
                 </div>
               </div>
@@ -239,7 +240,7 @@ export const ClientAppointmentView = ({ professional }: ClientAppointmentViewPro
                   <div className="text-sm text-muted-foreground space-y-1">
                     <p><strong>Profesional:</strong> {professional.name}</p>
                     <p><strong>Especialidad:</strong> {professional.specialty}</p>
-                    <p><strong>Fecha:</strong> {format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es })}</p>
+                    <p><strong>Fecha:</strong> {lowercaseSpanishMonths(format(selectedDate, "EEEE, d 'de' MMMM 'de' yyyy", { locale: es }))}</p>
                     <p><strong>Horario:</strong> {selectedTime ? formatClockAmPm(selectedTime) : ''}</p>
                   </div>
                 </div>

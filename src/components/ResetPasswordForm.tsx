@@ -7,6 +7,12 @@ import { Label } from "@/components/ui/label";
 import { useNotifications } from "@/hooks/useNotifications";
 import { supabase } from "@/lib/supabase";
 import { useNavigate } from "react-router-dom";
+import {
+  cleanAuthParamsFromUrl,
+  isRecoveryCallback,
+  parseAuthUrlParams,
+  waitForAuthSession,
+} from "@/lib/authCallbacks";
 
 export const ResetPasswordForm = () => {
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
@@ -19,44 +25,60 @@ export const ResetPasswordForm = () => {
   const [passwordReset, setPasswordReset] = useState(false);
   const [isValidSession, setIsValidSession] = useState<boolean | null>(null);
 
-  // Verificar si el usuario está en modo reset password
+  // Verificar sesión de recovery (soporta PKCE ?code= y hash legacy)
   useEffect(() => {
     const checkSession = async () => {
       try {
-        // Verificar si hay un hash en la URL con el token de recuperación
+        const { error, errorDescription } = parseAuthUrlParams();
+        if (error) {
+          showError(
+            "Enlace inválido",
+            errorDescription?.replace(/\+/g, ' ') || "Este enlace de recuperación no es válido o ha expirado"
+          );
+          setIsValidSession(false);
+          setTimeout(() => navigate('/login'), 3000);
+          return;
+        }
+
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
         const type = hashParams.get('type');
-        
-        // Si hay un token de acceso y es tipo recovery, establecer la sesión
+
         if (accessToken && type === 'recovery') {
-          const { error } = await supabase.auth.setSession({
+          const { error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: hashParams.get('refresh_token') || ''
           });
-          
-          if (error) {
-            console.error('Error setting session:', error);
+
+          if (sessionError) {
+            console.error('Error setting session:', sessionError);
             showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
             setTimeout(() => navigate('/login'), 3000);
             setIsValidSession(false);
             return;
           }
-          
+
+          cleanAuthParamsFromUrl('/reset-password');
           setIsValidSession(true);
-        } else {
-          // Verificar si ya hay una sesión válida
-          const { data: { session } } = await supabase.auth.getSession();
-          
-          if (!session) {
-            showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
-            setTimeout(() => navigate('/login'), 3000);
-            setIsValidSession(false);
-            return;
-          }
-          
-          setIsValidSession(true);
+          return;
         }
+
+        // PKCE: esperar a que detectSessionInUrl intercambie ?code=
+        const fromRecoveryLink = isRecoveryCallback();
+        const session = await waitForAuthSession(
+          () => supabase.auth.getSession(),
+          { timeoutMs: fromRecoveryLink ? 10000 : 1500 }
+        );
+
+        if (!session) {
+          showError("Enlace inválido", "Este enlace de recuperación no es válido o ha expirado");
+          setTimeout(() => navigate('/login'), 3000);
+          setIsValidSession(false);
+          return;
+        }
+
+        cleanAuthParamsFromUrl('/reset-password');
+        setIsValidSession(true);
       } catch (err) {
         console.error('Error checking session:', err);
         showError("Error", "Hubo un problema al verificar su sesión");
@@ -158,7 +180,7 @@ export const ResetPasswordForm = () => {
               <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
                 <CheckCircle className="w-8 h-8 text-green-600" />
               </div>
-              <CardTitle className="text-2xl text-green-600">
+              <CardTitle className="text-center text-emerald-400">
                 ¡Contraseña Actualizada!
               </CardTitle>
               <CardDescription>
@@ -215,7 +237,7 @@ export const ResetPasswordForm = () => {
         {/* Reset Password Card */}
         <Card className="shadow-elegant animate-slide-up">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
+            <CardTitle className="text-center">
               Establecer nueva contraseña
             </CardTitle>
             <CardDescription className="text-center">

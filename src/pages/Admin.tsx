@@ -20,6 +20,7 @@ import {
   Download
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { monthNameEs } from '@/lib/dateLocal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -35,6 +36,7 @@ import { useAdmin, AdminUser } from '@/hooks/useAdmin';
 import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
+import { RecordsAdminPanel } from '@/components/RecordsAdminPanel';
 import { FeriadosConfigModal } from '@/components/FeriadosConfigModal';
 import { FinSemanaConfigModal } from '@/components/FinSemanaConfigModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -61,14 +63,15 @@ export default function Admin() {
     isAdmin, 
     isLoading, 
     adminUsers, 
-    allUsers, 
+    allUsers,
+    comboTarifas,
     fetchAllUsers, 
     fetchAdminUsers,
     changeUserRole,
     deleteUser,
     canBeAdmin,
     selectedYear, selectedMonth, setSelectedYear, setSelectedMonth,
-    fetchCuotasMensuales, updateCuotaEstadoPago, updateCuotaDescuento,
+    fetchCuotasMensuales, ensureCuotasMensuales, updateCuotaEstadoPago, updateCuotaDescuento,
     fetchHorariosConHoras
   } = useAdmin();
   
@@ -176,11 +179,7 @@ export default function Admin() {
     }
 
     // Nombres de meses en español
-    const nombresMeses = [
-      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    const mesNombre = nombresMeses[selectedMonth - 1];
+    const mesNombre = monthNameEs(selectedMonth - 1);
 
     // Calcular totales
     const montoTotalRecibir = balanceRows.reduce((sum, r) => sum + r.monto, 0);
@@ -369,6 +368,23 @@ export default function Admin() {
       return [];
     }
   };
+
+  /** Precio por clase del plan del alumno (ej. Plan 5 → $7500) */
+  const getPlanPrecioClase = (user: AdminUser): number | null => {
+    const personalizada = Number(user.tarifa_personalizada);
+    if (Number.isFinite(personalizada) && personalizada > 0) return personalizada;
+
+    const combo = Number(user.combo_asignado);
+    if (combo >= 1 && combo <= 5 && comboTarifas[combo] > 0) return comboTarifas[combo];
+
+    const dias = getHorariosUsuario(user.id).length;
+    if (dias >= 1 && dias <= 5 && comboTarifas[dias] > 0) return comboTarifas[dias];
+
+    return null;
+  };
+
+  const formatPlanPrecio = (precio: number) =>
+    `$${precio.toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
 
   // Función para calcular deuda del usuario (desde base de datos)
   const getEstadoCuenta = (userId: string) => {
@@ -618,6 +634,20 @@ export default function Admin() {
     return selectedYear === now.getFullYear() && selectedMonth === now.getMonth() + 1;
   };
 
+  const resolveMontoCuota = (cuota: any) => {
+    const montoOriginal = Number(cuota?.monto_total) || 0;
+    const descuentoPorcentaje = Number(cuota?.descuento_porcentaje) || 0;
+    // Si hay descuento, respetar monto_con_descuento (puede ser 0). Si no, usar monto_total.
+    // Evita el bug de monto_con_descuento=0 sin descuento (default DB) que tapaba el total.
+    const montoConDescuento =
+      descuentoPorcentaje > 0
+        ? Number(cuota?.monto_con_descuento ?? 0)
+        : (Number(cuota?.monto_con_descuento) > 0
+            ? Number(cuota.monto_con_descuento)
+            : montoOriginal);
+    return { montoOriginal, descuentoPorcentaje, montoConDescuento };
+  };
+
   // Cargar cuotas del periodo seleccionado y mapear por usuario
   useEffect(() => {
     (async () => {
@@ -626,18 +656,24 @@ export default function Admin() {
       if (isUpdatingPayment || skipNextReload.current) {
         return;
       }
+
+      // Esperar a tener usuarios cargados para no pintar totales en 0 de forma engañosa
+      if (!isAdmin || isLoading) {
+        return;
+      }
       
       // Solo cargar ausencias del admin si es necesario
       if (ausenciasAdmin.length === 0) {
         await cargarAusenciasAdmin();
       }
-      
-      // Cargar cuotas desde la base de datos
-      const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-      
+
       const clientes = allUsers.filter(
         (u) => u.role === 'client' && !((u.email || '').toLowerCase().includes('test'))
       );
+
+      // Siempre regenerar/asegurar el mes seleccionado al abrir Balance.
+      // El cálculo es idempotente; evita meses vacíos si no hubo cron ni cambios de agenda.
+      const cuotas = await ensureCuotasMensuales(selectedYear, selectedMonth);
 
       // Construir filas para Balance mostrando SIEMPRE todos los clientes
       const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
@@ -656,9 +692,7 @@ export default function Admin() {
           : (usuario.full_name || usuario.email);
         const email = usuario.email || '';
 
-        const montoOriginal = Number(cuota?.monto_total) || 0;
-        const descuentoPorcentaje = Number(cuota?.descuento_porcentaje) || 0;
-        const montoConDescuento = Number(cuota?.monto_con_descuento) || montoOriginal;
+        const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(cuota);
         const estado = ((cuota?.estado_pago as any) || 'pendiente') as 'pendiente'|'abonada'|'vencida';
         const tipoPago = tipoPagoMap[usuario.id] || 'transferencia';
 
@@ -689,7 +723,7 @@ export default function Admin() {
       setBalanceRows(rows);
       setBalanceTotals({ totalAbonado, totalPendiente });
     })();
-  }, [selectedYear, selectedMonth, allUsers, tipoPagoMap, fetchCuotasMensuales]);
+  }, [selectedYear, selectedMonth, allUsers, tipoPagoMap, fetchCuotasMensuales, ensureCuotasMensuales, isAdmin, isLoading]);
 
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
@@ -731,10 +765,9 @@ export default function Admin() {
         return;
       }
 
-      const mesesNombres = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
       const history = (data || []).map(d => ({
         anio: d.anio,
-        mes: mesesNombres[d.mes - 1] || d.mes.toString(),
+        mes: monthNameEs(d.mes - 1) || d.mes.toString(),
         monto: Number(d.monto_total) || 0,
         estado: d.estado_pago === 'abonada' ? 'Abonado' : d.estado_pago === 'vencida' ? 'Vencido' : 'Pendiente'
       }));
@@ -758,8 +791,8 @@ export default function Admin() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-primary mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold mb-2">Verificando permisos...</h2>
-          <p className="text-muted-foreground">Comprobando tu rol de administrador.</p>
+          <h2 className="text-title mb-2">Verificando permisos...</h2>
+          <p className="text-body-muted">Comprobando tu rol de administrador.</p>
         </div>
       </div>
     );
@@ -792,40 +825,41 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-background overflow-x-hidden w-full max-w-full">
       {/* Header */}
-      <header className="bg-card border-b shadow-card w-full">
+      <header className="border-b border-border bg-background/95 backdrop-blur-sm w-full">
         <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-12 md:h-16 w-full">
+          <div className="flex justify-between items-center h-12 md:h-14 w-full">
+            <div className="hidden md:block flex-1" aria-hidden />
             {/* Navbar opciones (desktop) centrada */}
-            <div className="hidden md:flex flex-1 justify-center items-center gap-8">
-              <button onClick={() => handleTabChange('usuarios')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='usuarios' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+            <div className="hidden md:flex flex-1 justify-center items-center gap-6">
+              <button onClick={() => handleTabChange('usuarios')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='usuarios' ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Usuarios
-                {activeTab==='usuarios' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
+                {activeTab==='usuarios' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-px w-8 bg-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('balance')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='balance' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('balance')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='balance' ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Balance
-                {activeTab==='balance' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
+                {activeTab==='balance' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-px w-8 bg-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('turnos')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='turnos' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('turnos')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='turnos' ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Configuración
-                {activeTab==='turnos' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
+                {activeTab==='turnos' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-px w-8 bg-foreground rounded-full"></span>}
               </button>
-              <button onClick={() => handleTabChange('calendario')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='calendario' ? 'text-accent-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
+              <button onClick={() => handleTabChange('calendario')} className={`relative px-3 py-2 text-sm transition-colors ${activeTab==='calendario' ? 'text-foreground font-medium' : 'text-muted-foreground hover:text-foreground'}`}>
                 Agenda
-                {activeTab==='calendario' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-1 h-0.5 w-8 bg-accent-foreground rounded-full"></span>}
+                {activeTab==='calendario' && <span className="absolute left-1/2 -translate-x-1/2 -bottom-0.5 h-px w-8 bg-foreground rounded-full"></span>}
               </button>
             </div>
             
             {/* Espacio vacío en mobile para empujar el botón a la derecha */}
-            <div className="md:hidden flex-1"></div>
+            <div className="md:hidden flex-1" />
             
             {/* Botón de cerrar sesión - visible en desktop y mobile */}
-            <div className="flex items-center flex-shrink-0">
+            <div className="flex flex-1 items-center justify-end flex-shrink-0">
               <Button
                 variant="ghost"
-                className="relative h-10 w-10 p-0 hover:bg-muted transition-colors flex-shrink-0"
+                className="relative h-9 w-9 p-0 flex-shrink-0"
                 onClick={() => setShowLogoutConfirm(true)}
               >
-                <LogOut className="h-6 w-6 text-accent-foreground" />
+                <LogOut className="h-5 w-5 text-foreground/80" />
               </Button>
             </div>
           </div>
@@ -891,10 +925,11 @@ export default function Admin() {
               <CardContent className="p-0 w-full max-w-full">
                 {/* Vista de escritorio - Tabla completa */}
                 <div className="hidden md:block overflow-x-auto w-full max-w-full">
-                  <table className="w-full min-w-[700px]">
+                  <table className="w-full min-w-[780px]">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium min-w-[180px]">Usuario</th>
+                        <th className="text-left p-3 font-medium min-w-[100px]">Plan</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Asistencia</th>
                         <th className="text-left p-3 font-medium min-w-[200px]">Horarios</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
@@ -905,6 +940,7 @@ export default function Admin() {
                         .filter(u => !(u.email || '').toLowerCase().includes('test'))
                         .map((user) => {
                         const diasAsistencia = getDiasAsistencia(user.id);
+                        const planPrecio = getPlanPrecioClase(user);
                         
                         return (
                           <tr key={user.id} className="border-b hover:bg-muted/50">
@@ -926,6 +962,11 @@ export default function Admin() {
                                   )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-3">
+                              <p className="text-sm tabular-nums text-foreground">
+                                {planPrecio != null ? formatPlanPrecio(planPrecio) : '—'}
+                              </p>
                             </td>
                             <td className="p-3">
                               <p className="text-sm text-muted-foreground">{diasAsistencia}</p>
@@ -991,17 +1032,20 @@ export default function Admin() {
 
                 {/* Vista móvil - Lista con scroll horizontal */}
                 <div className="md:hidden overflow-x-auto w-full">
-                  <div className="min-w-[600px]">
+                  <div className="min-w-[680px]">
                     {/* Encabezados de columna */}
                     <div className="flex items-center px-4 py-2 border-b bg-muted/30 gap-4">
-                      <div className="flex-1 min-w-[180px]">
-                        <p className="text-xs font-medium text-muted-foreground uppercase">Nombre</p>
+                      <div className="flex-1 min-w-[160px]">
+                        <p className="text-xs font-medium text-foreground/80 uppercase">Nombre</p>
+                      </div>
+                      <div className="w-[80px] text-center shrink-0">
+                        <p className="text-xs font-medium text-foreground/80 uppercase">Plan</p>
                       </div>
                       <div className="flex-1 text-center min-w-[120px]">
-                        <p className="text-xs font-medium text-muted-foreground uppercase">Asistencia</p>
+                        <p className="text-xs font-medium text-foreground/80 uppercase">Asistencia</p>
                       </div>
                       <div className="flex-1 text-center min-w-[150px]">
-                        <p className="text-xs font-medium text-muted-foreground uppercase">Horarios</p>
+                        <p className="text-xs font-medium text-foreground/80 uppercase">Horarios</p>
                       </div>
                     </div>
                     
@@ -1012,6 +1056,7 @@ export default function Admin() {
                         .map((user) => {
                         const diasAsistencia = getDiasAsistencia(user.id);
                         const horarios = getHorariosUsuario(user.id);
+                        const planPrecio = getPlanPrecioClase(user);
                         
                         return (
                           <div 
@@ -1022,8 +1067,13 @@ export default function Admin() {
                               setShowUserDetails(true);
                             }}
                           >
-                            <div className="min-w-0 flex-1 min-w-[180px]">
+                            <div className="min-w-0 flex-1 min-w-[160px]">
                               <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
+                            </div>
+                            <div className="w-[80px] text-center shrink-0">
+                              <p className="text-[10px] tabular-nums text-foreground">
+                                {planPrecio != null ? formatPlanPrecio(planPrecio) : '—'}
+                              </p>
                             </div>
                             <div className="flex-1 text-center min-w-[120px]">
                               <p className="text-[10px] text-muted-foreground">{diasAsistencia}</p>
@@ -1102,15 +1152,15 @@ export default function Admin() {
             <div className="sm:hidden mb-6">
               <Card className="p-3">
                 <div className="flex items-center justify-between pb-3 border-b">
-                  <div className="text-xs text-muted-foreground">Total a recibir</div>
+                  <div className="text-xs text-foreground/80">Total a recibir</div>
                   <div className="text-sm font-semibold">${(balanceTotals.totalAbonado + balanceTotals.totalPendiente).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                 </div>
                 <div className="flex items-center justify-between py-3 border-b">
-                  <div className="text-xs text-muted-foreground">Recibido</div>
+                  <div className="text-xs text-foreground/80">Recibido</div>
                   <div className="text-sm font-semibold">${balanceTotals.totalAbonado.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                 </div>
                 <div className="flex items-center justify-between pt-3">
-                  <div className="text-xs text-muted-foreground">Pendiente</div>
+                  <div className="text-xs text-foreground/80">Pendiente</div>
                   <div className="text-sm font-semibold">${balanceTotals.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}</div>
                 </div>
               </Card>
@@ -1120,26 +1170,26 @@ export default function Admin() {
             <div className="hidden sm:grid sm:grid-cols-1 md:grid-cols-3 gap-4 mb-6">
             <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">Monto total a recibir</CardTitle>
+                  <CardTitle className="text-sm text-foreground/90">Monto total a recibir</CardTitle>
               </CardHeader>
               <CardContent>
-                  <div className="text-2xl font-semibold">${(balanceTotals.totalAbonado + balanceTotals.totalPendiente).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-title">${(balanceTotals.totalAbonado + balanceTotals.totalPendiente).toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">Monto recibido</CardTitle>
+                  <CardTitle className="text-sm text-foreground/90">Monto recibido</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-semibold">${balanceTotals.totalAbonado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-title">${balanceTotals.totalAbonado.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </CardContent>
               </Card>
               <Card>
                 <CardHeader className="pb-2">
-                  <CardTitle className="text-sm text-muted-foreground">Pendiente de cobro</CardTitle>
+                  <CardTitle className="text-sm text-foreground/90">Pendiente de cobro</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-semibold">${balanceTotals.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                  <div className="text-title">${balanceTotals.totalPendiente.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
                 </CardContent>
               </Card>
             </div>
@@ -1160,7 +1210,13 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {balanceRows.map(row => (
+                      {balanceRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-sm text-muted-foreground">
+                            No hay cuotas para el período seleccionado.
+                          </td>
+                        </tr>
+                      ) : balanceRows.map(row => (
                         <tr key={row.usuario_id} className="border-b hover:bg-muted/50">
                           <td className="p-3">
                             <p className="font-light md:font-medium truncate text-xs md:text-base">{row.nombre}</p>
@@ -1182,12 +1238,12 @@ export default function Admin() {
                           <td className="p-3">
                             {/* Dropdown Debe / No debe (persistiendo en BD) */}
                             <Select
-                              value={row.estado === 'abonada' ? 'pagado' : 'pendiente'}
+                              value={row.estado === 'abonada' ? 'abonada' : row.estado === 'vencida' ? 'vencida' : 'pendiente'}
                               onValueChange={async (v) => {
                                 setIsUpdatingPayment(true);
                                 skipNextReload.current = true; // Evitar que el useEffect se ejecute
                                 
-                                const nuevoEstadoDb = (v === 'pagado') ? 'abonada' : 'pendiente';
+                                const nuevoEstadoDb = (v === 'abonada' || v === 'vencida' || v === 'pendiente') ? v : 'pendiente';
                                 
                                 try {
                                   const res = await updateCuotaEstadoPago(row.usuario_id, selectedYear, selectedMonth, nuevoEstadoDb as any);
@@ -1222,7 +1278,7 @@ export default function Admin() {
                                     };
                                   });
                                   
-                                  showSuccess(`Estado de pago actualizado a ${v === 'pagado' ? 'pagado' : 'pendiente'}`);
+                                  showSuccess(`Estado de pago actualizado a ${nuevoEstadoDb === 'abonada' ? 'abonada' : nuevoEstadoDb === 'vencida' ? 'vencida' : 'pendiente'}`);
                                   
                                   // Resetear los flags después de un delay para asegurar que la BD se sincronizó
                                   // y evitar que el useEffect recargue antes de tiempo
@@ -1238,12 +1294,13 @@ export default function Admin() {
                                 }
                               }}
                             >
-                              <SelectTrigger className={`w-[130px] h-8 ${row.estado==='abonada' ? 'text-green-600' : 'text-red-600'}`}>
+                              <SelectTrigger className={`w-[130px] h-8 ${row.estado==='abonada' ? 'text-green-600' : row.estado==='vencida' ? 'text-amber-600' : 'text-red-600'}`}>
                                 <SelectValue placeholder="Estado" />
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="pendiente"><span className="text-red-600">Pendiente</span></SelectItem>
-                                <SelectItem value="pagado"><span className="text-green-600">Pagado</span></SelectItem>
+                                <SelectItem value="abonada"><span className="text-green-600">Abonada</span></SelectItem>
+                                <SelectItem value="vencida"><span className="text-amber-600">Vencida</span></SelectItem>
                               </SelectContent>
                             </Select>
                           </td>
@@ -1299,9 +1356,7 @@ export default function Admin() {
                                         const u = allUsers.find(u => u.id === c.usuario_id);
                                         const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
                                         const email = u?.email || '';
-                                        const montoOriginal = Number(c.monto_total) || 0;
-                                        const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
-                                        const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
+                                        const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(c);
                                         const estado = (c.estado_pago as any) || 'pendiente';
                                         const tipoPago = tipoPagoMap[c.usuario_id] || 'transferencia';
                                         rows.push({ 
@@ -1355,9 +1410,7 @@ export default function Admin() {
                                       const u = allUsers.find(u => u.id === c.usuario_id);
                                       const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
                                       const email = u?.email || '';
-                                      const montoOriginal = Number(c.monto_total) || 0;
-                                      const descuentoPorcentaje = Number(c.descuento_porcentaje) || 0;
-                                      const montoConDescuento = Number(c.monto_con_descuento) || montoOriginal;
+                                      const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(c);
                                       const estado = (c.estado_pago as any) || 'pendiente';
                                       const tipoPago = tipoPagoMap[c.usuario_id] || 'transferencia';
                                       rows.push({ 
@@ -1451,6 +1504,7 @@ export default function Admin() {
 
           {/* Tab de Gestión de Turnos */}
           <TabsContent value="turnos" className="mt-6 w-full max-w-full pb-20 md:pb-8">
+            <RecordsAdminPanel />
             <TurnoManagement />
           </TabsContent>
 
@@ -1462,7 +1516,6 @@ export default function Admin() {
                   setFechaSeleccionadaFeriado(null);
                   setShowFeriadosModal(true);
                 }}
-                className="bg-white text-gray-900 hover:bg-gray-100 border border-white"
               >
                 <Calendar className="h-4 w-4 mr-2" />
                 Gestionar feriados
@@ -1628,7 +1681,9 @@ export default function Admin() {
                   {userHistory.map((item, idx) => (
                     <div key={idx} className="flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors">
                       <div className="flex-1">
-                        <p className="font-medium">{item.mes} {item.anio}</p>
+                        <p className="font-medium">
+                          {item.mes ? item.mes.charAt(0).toUpperCase() + item.mes.slice(1) : item.mes} {item.anio}
+                        </p>
                         <p className="text-sm text-muted-foreground">
                           ${item.monto.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </p>
@@ -1652,46 +1707,46 @@ export default function Admin() {
       )}
 
       {/* Navbar Mobile - fija en bottom, solo visible en móvil */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
-        <div className="grid grid-cols-4 h-16">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-sm">
+        <div className="grid grid-cols-4 h-14">
           <button
             onClick={() => handleTabChange('usuarios')}
-            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'usuarios' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              activeTab === 'usuarios' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Users className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Usuarios</span>
+            <span className="text-caption font-medium">Usuarios</span>
           </button>
           
           <button
             onClick={() => handleTabChange('balance')}
-            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'balance' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              activeTab === 'balance' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Wallet className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Balance</span>
+            <span className="text-caption font-medium">Balance</span>
           </button>
           
           <button
             onClick={() => handleTabChange('turnos')}
-            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'turnos' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              activeTab === 'turnos' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Settings className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Config</span>
+            <span className="text-caption font-medium">Config</span>
           </button>
           
           <button
             onClick={() => handleTabChange('calendario')}
-            className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
-              activeTab === 'calendario' ? 'text-accent-foreground' : 'text-muted-foreground hover:text-foreground'
+            className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+              activeTab === 'calendario' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
             <Calendar className="h-5 w-5" />
-            <span className="text-[10px] font-medium">Agenda</span>
+            <span className="text-caption font-medium">Agenda</span>
           </button>
         </div>
       </nav>

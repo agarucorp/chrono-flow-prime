@@ -25,8 +25,15 @@ export const useAuth = () => {
         if (error) throw error
         
         if (mounted) {
+          // Sin email confirmado no hay acceso a la app
+          const confirmedUser =
+            session?.user?.email_confirmed_at ? session.user : null
+          if (session?.user && !confirmedUser) {
+            // Evitar deadlock: no await signOut dentro del bootstrap/auth listener
+            void supabase.auth.signOut()
+          }
           setAuthState({
-            user: session?.user || null,
+            user: confirmedUser,
             loading: false,
             error: null
           })
@@ -64,8 +71,11 @@ export const useAuth = () => {
         async (event, session) => {
           if (!mounted) return;
 
+          const confirmedUser =
+            session?.user?.email_confirmed_at ? session.user : null
+
           if (event === 'TOKEN_REFRESHED') {
-            setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+            setAuthState(prev => ({ ...prev, user: confirmedUser, loading: false }))
             return
           }
           if (event === 'SIGNED_OUT') {
@@ -73,15 +83,23 @@ export const useAuth = () => {
             return
           }
           if (event === 'USER_UPDATED') {
-            setAuthState(prev => ({ ...prev, user: session?.user || null, loading: false }))
+            setAuthState(prev => ({ ...prev, user: confirmedUser, loading: false }))
             return
           }
           if (event === 'SIGNED_IN') {
-            setAuthState({ user: session?.user || null, loading: false, error: null })
+            // Registro con confirmación pendiente: a veces Supabase emite sesión igual
+            if (session?.user && !session.user.email_confirmed_at) {
+              setAuthState({ user: null, loading: false, error: null })
+              setTimeout(() => {
+                void supabase.auth.signOut()
+              }, 0)
+              return
+            }
+            setAuthState({ user: confirmedUser, loading: false, error: null })
             return
           }
           // Fallback para otros eventos
-          setAuthState({ user: session?.user || null, loading: false, error: null })
+          setAuthState({ user: confirmedUser, loading: false, error: null })
         }
       )
       subscription = sub;
@@ -108,16 +126,26 @@ export const useAuth = () => {
       })
       
       if (error) {
-        // Si el error es "Email not confirmed", permitir el login pero mostrar mensaje
+        // Email sin confirmar: no entrar a la app
         if (error.message.includes('Email not confirmed')) {
-          setAuthState({
-            user: data.user,
-            loading: false,
-            error: null
-          })
-          return { success: true, user: data.user, needsConfirmation: true }
+          setAuthState({ user: null, loading: false, error: null })
+          return {
+            success: false,
+            error: 'Debés confirmar tu email antes de iniciar sesión. Revisá tu correo.',
+            needsConfirmation: true,
+          }
         }
         throw error
+      }
+
+      if (data.user && !data.user.email_confirmed_at) {
+        await supabase.auth.signOut()
+        setAuthState({ user: null, loading: false, error: null })
+        return {
+          success: false,
+          error: 'Debés confirmar tu email antes de iniciar sesión. Revisá tu correo.',
+          needsConfirmation: true,
+        }
       }
       
       setAuthState({
@@ -194,7 +222,7 @@ export const useAuth = () => {
           options: {
             data: metadata,
             // Permitir que el usuario se cree aunque falle el envío del email
-            emailRedirectTo: `${window.location.origin}/user`
+            emailRedirectTo: `${window.location.origin}/login`
           }
         };
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
@@ -208,22 +236,19 @@ export const useAuth = () => {
           
           if (is500Error && userWasCreated) {
             // El usuario se creó pero falló el envío del email
-            // Esto puede pasar si hay un problema con el trigger o el servicio de emails
             console.warn('Usuario creado pero falló el envío del email:', error);
-            
-            // Limpiar el timestamp de último intento
             localStorage.removeItem('lastSignUpAttempt');
+
+            // No iniciar sesión hasta confirmar email
+            if (data.session) {
+              await supabase.auth.signOut();
+            }
+            setAuthState({ user: null, loading: false, error: null });
             
-            setAuthState({
-              user: data.user,
-              loading: false,
-              error: null
-            });
-            
-            // Retornar éxito pero con advertencia sobre el email
             return { 
               success: true, 
               user: data.user,
+              needsEmailConfirmation: true,
               warning: 'Tu cuenta se creó correctamente, pero no pudimos enviar el email de confirmación. Por favor, contacta al administrador para confirmar tu cuenta manualmente.'
             };
           }
@@ -234,6 +259,21 @@ export const useAuth = () => {
 
         // Limpiar el timestamp de último intento al tener éxito
         localStorage.removeItem('lastSignUpAttempt');
+
+        // Con "Confirm email" activo, Supabase puede devolver user (y a veces session)
+        // sin email_confirmed_at. No debemos entrar a la app ni al tutorial.
+        const emailConfirmed = Boolean(data.user?.email_confirmed_at);
+        if (!data.session || !emailConfirmed) {
+          if (data.session) {
+            await supabase.auth.signOut();
+          }
+          setAuthState({ user: null, loading: false, error: null });
+          return {
+            success: true,
+            user: data.user ?? undefined,
+            needsEmailConfirmation: true,
+          };
+        }
         
         setAuthState({
           user: data.user,

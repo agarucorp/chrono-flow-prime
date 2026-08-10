@@ -44,7 +44,7 @@ export const AuthForm: React.FC = () => {
   return (
     <div className="flex flex-col items-center min-h-screen bg-gray-50 py-8 md:justify-center">
       <div className="hidden md:flex justify-center mb-8">
-        <img src="/biglogo.png" alt="Logo" className="max-w-xs" />
+        <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[220px]" />
       </div>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">

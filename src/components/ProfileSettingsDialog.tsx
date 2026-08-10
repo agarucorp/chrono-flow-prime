@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Lock, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { ChangePasswordDialog } from './ChangePasswordDialog';
+import { toast } from 'sonner';
 
 interface ProfileSettingsDialogProps {
   open: boolean;
@@ -84,13 +85,17 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
         }, { onConflict: 'id' });
 
       if (error && (error.code === 'PGRST116' || (error.message || '').includes('relation'))) {
-        // Tabla no existe: ignorar
+        // Tabla no existe: metadata ya actualizada
+      } else if (error) {
+        toast.error('No se pudo guardar el perfil');
+        return;
       }
 
+      toast.success('Perfil actualizado');
       onClose();
     } catch (e) {
-      // Podríamos mostrar un toast si hay sistema de notificaciones
       console.error('Error guardando perfil:', e);
+      toast.error('No se pudo guardar el perfil');
     } finally {
       setSaving(false);
     }

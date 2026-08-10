@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
+import { lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface Turno {
   id: string;
@@ -35,12 +36,12 @@ export const TurnoConfirmationModal = ({
   if (!turno) return null;
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    return lowercaseSpanishMonths(new Date(dateString.includes('T') ? dateString : dateString + 'T00:00:00').toLocaleDateString('es-ES', {
       weekday: 'long',
       year: 'numeric',
       month: 'long',
       day: 'numeric'
-    });
+    }));
   };
 
   const getStatusColor = (estado: string) => {

@@ -11,7 +11,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -20,20 +20,25 @@ import { Badge } from "@/components/ui/badge";
 import { ProfileSettingsDialog } from "./components/ProfileSettingsDialog";
 import { SupportModal } from "./components/SupportModal";
 import { ChangeScheduleModal } from "./components/ChangeScheduleModal";
+import { RecordsView } from "./components/RecordsView";
 import Admin from "./pages/Admin";
 import { useAdmin } from "./hooks/useAdmin";
 import { ProtectedRoute } from "./components/ProtectedRoute";
+import { ProtectedAdminRouteWithAuth } from "./components/ProtectedAdminRoute";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { useUserBalance } from "./hooks/useUserBalance";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { supabase } from "./lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from "@/components/ui/dialog";
+import { toast } from "sonner";
+import { formatLocalDate, todayLocal } from "./lib/dateLocal";
+import { useIsMobile } from "./hooks/use-mobile";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
   const { user, signOut } = useAuthContext();
-  const { isFirstTime, loading: firstTimeLoading } = useFirstTimeUser();
+  const { loading: firstTimeLoading } = useFirstTimeUser();
   const [showRecurringModal, setShowRecurringModal] = useState(false);
   const [hasCompletedSetup, setHasCompletedSetup] = useState(false);
   const [hasHorarios, setHasHorarios] = useState<boolean | null>(null);
@@ -42,6 +47,8 @@ const Dashboard = () => {
   const [tutorialProcessed, setTutorialProcessed] = useState(false);
   const [tutorialDismissed, setTutorialDismissed] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
+  const isMobile = useIsMobile();
   const [profileOpen, setProfileOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [infoGuideOpen, setInfoGuideOpen] = useState(false);
@@ -49,7 +56,6 @@ const Dashboard = () => {
   const [changeScheduleOpen, setChangeScheduleOpen] = useState(false);
   const [currentSchedules, setCurrentSchedules] = useState<any[]>([]);
   const [currentPlan, setCurrentPlan] = useState<number | null>(null);
-  const location = useLocation();
   const { isAdmin, isLoading: adminLoading } = useAdmin();
   
   // Función para obtener las iniciales del usuario
@@ -87,9 +93,11 @@ const Dashboard = () => {
   const handleSignOut = async () => {
     try {
       await signOut();
+      toast.success('Sesión cerrada');
       navigate('/login');
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
+      toast.error('No se pudo cerrar sesión. Intentá de nuevo.');
     }
   };
 
@@ -120,7 +128,8 @@ const Dashboard = () => {
     }
   };
 
-  const dismissTutorial = useCallback(async () => {
+  /** Solo marcar tutorial como visto cuando ya hay horarios (onboarding completo). */
+  const persistTutorialDone = useCallback(async () => {
     if (!user) return;
     try {
       await supabase.auth.updateUser({ data: { onboarding_tutorial_dismissed: true } });
@@ -142,29 +151,43 @@ const Dashboard = () => {
       setTutorialDismissed(false);
       return;
     }
+    // Sin horarios: no respetar dismiss previo — debe completar onboarding
+    if (hasHorarios === false) {
+      setTutorialDismissed(false);
+      return;
+    }
+    if (hasHorarios !== true) return;
     const dismissedMeta = Boolean((user.user_metadata as any)?.onboarding_tutorial_dismissed);
     const dismissedLocal =
       typeof window !== 'undefined'
         ? localStorage.getItem(`onboarding-tutorial-${user.id}`) === 'true'
         : false;
     setTutorialDismissed(dismissedMeta || dismissedLocal);
-  }, [user]);
+  }, [user, hasHorarios]);
 
   const handleRecurringSetupComplete = async () => {
     setShowRecurringModal(false);
     setHasCompletedSetup(true);
     setHasHorarios(true);
-    await dismissTutorial();
+    hasHorariosCheckRef.current = { userId: user?.id ?? null, hasHorarios: true, timestamp: Date.now() };
+    await persistTutorialDone();
   };
 
+  /** Fin del tutorial → obligatorio elegir horarios (sin marcar tutorial como “hecho”). */
   const handleTutorialClose = async () => {
-    await dismissTutorial();
     setShowTutorial(false);
     setTutorialProcessed(true);
-    if (isFirstTime && !hasCompletedSetup) {
-      setShowRecurringModal(true);
-    }
+    setShowRecurringModal(true);
   };
+
+  /** Abandonar alta sin horarios: no puede quedar sesión en el sitio. */
+  const abandonOnboarding = useCallback(async () => {
+    setShowTutorial(false);
+    setShowRecurringModal(false);
+    setTutorialProcessed(false);
+    await signOut();
+    navigate('/login', { replace: true });
+  }, [signOut, navigate]);
 
   // Verificar si el usuario tiene horarios recurrentes configurados (con caché)
   const hasHorariosCheckRef = useRef<{ userId: string | null; hasHorarios: boolean | null; timestamp: number }>({ 
@@ -248,38 +271,35 @@ const Dashboard = () => {
     checkHasHorarios();
   }, [user]);
 
+  // Sin horarios: tutorial → modal de plan. No hay acceso al panel hasta completar.
   useEffect(() => {
-    if (!user || firstTimeLoading || isFirstTime === null || loadingHorarios || hasHorarios === null) return;
+    if (!user || adminLoading || isAdmin || loadingHorarios || hasHorarios === null) return;
 
-    // Si es primera vez y no tiene horarios, mostrar tutorial primero
-    if (isFirstTime && !hasHorarios && !tutorialDismissed) {
-      setShowRecurringModal(false);
-      setShowTutorial(true);
-      setTutorialProcessed(false);
-    } else {
-      setTutorialProcessed(true);
-    }
-  }, [user, firstTimeLoading, isFirstTime, hasHorarios, loadingHorarios, tutorialDismissed]);
-
-  // Mostrar modal de configuración SOLO si no tiene horarios Y no se ha completado el setup antes
-  useEffect(() => {
-    if (loadingHorarios || hasHorarios === null) return;
-    
-    // Si tiene horarios, cerrar modal inmediatamente
     if (hasHorarios) {
+      setShowTutorial(false);
       setShowRecurringModal(false);
+      setTutorialProcessed(true);
       return;
     }
-    
-    // Si no tiene horarios, mostrar modal SOLO si no está en tutorial y el tutorial ya se procesó
-    // Y solo si no se ha completado el setup antes (evitar mostrar después de navegar entre tabs)
-    if (!hasHorarios && !showTutorial && tutorialProcessed && !hasCompletedSetup) {
-      setShowRecurringModal(true);
-    } else if (hasCompletedSetup) {
-      // Si ya se completó el setup antes, NO mostrar el modal aunque temporalmente no tenga horarios
+
+    if (!tutorialProcessed && !showTutorial) {
       setShowRecurringModal(false);
+      setShowTutorial(true);
+      return;
     }
-  }, [hasHorarios, loadingHorarios, showTutorial, tutorialProcessed, hasCompletedSetup]);
+
+    if (tutorialProcessed && !showTutorial) {
+      setShowRecurringModal(true);
+    }
+  }, [
+    user,
+    adminLoading,
+    isAdmin,
+    hasHorarios,
+    loadingHorarios,
+    tutorialProcessed,
+    showTutorial,
+  ]);
 
   // Escuchar evento de actualización de horarios recurrentes
   useEffect(() => {
@@ -426,13 +446,15 @@ const Dashboard = () => {
   const nextMonthNum = currentMonthNum === 12 ? 1 : currentMonthNum + 1;
   const nextYear = currentMonthNum === 12 ? currentYear + 1 : currentYear;
   const mesActualNombre = getMonthNameEs(now);
-  const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes'>('clases');
+  const [activeTab, setActiveTab] = useState<'clases' | 'balance' | 'vacantes' | 'records'>('clases');
+  const [viewEpoch, setViewEpoch] = useState(0);
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
   const [vacantesCount, setVacantesCount] = useState(0);
   const {
     history: balanceHistory,
     loading: balanceLoading,
+    error: balanceError,
   } = useUserBalance();
   const sortByDateDesc = useMemo(
     () => (a: { anio: number; mesNumero: number }, b: { anio: number; mesNumero: number }) => {
@@ -479,15 +501,15 @@ const Dashboard = () => {
       description: 'En esta plataforma vas a poder setear tus clases en MaldaGym de forma recurrente, visualizar tus horarios, cancelarlos y reservar clases canceladas por otros alumnos.',
       images: [
         {
-          src: '/tutorial/bannermalda.png',
+          src: '/assets/logovertical.svg',
           alt: 'Malda — entrenamientos personalizados',
           variant: 'logo' as const
         }
       ]
     },
     {
-      title: 'Selección de horarios',
-      description: 'Una vez que selecciones tus horarios, no podrán ser modificados (etapa en desarrollo). Por favor elegirlos cuidadosamente.',
+      title: 'Selección de plan y horarios',
+      description: 'A continuación vas a poder elegir el plan de acuerdo a la cantidad de días de asistencia semanal y los horarios de tus clases.',
       images: [
         {
           src: '/tutorial/horariomobile.jpeg',
@@ -551,30 +573,41 @@ const Dashboard = () => {
     }
   ];
 
-  // Sincronizar pestaña con query param ?tab=
+  // Sincronizar pestaña con query param ?tab= (lectura)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const tab = params.get('tab');
-    if (tab === 'clases' || tab === 'balance' || tab === 'vacantes') {
+    if (tab === 'clases' || tab === 'balance' || tab === 'vacantes' || tab === 'records') {
       setActiveTab(tab);
     }
   }, [location.search]);
 
+  const goToTab = useCallback((tab: 'clases' | 'balance' | 'vacantes' | 'records') => {
+    setActiveTab(tab);
+    if (tab === 'balance') setBalanceSubView('balance');
+    setViewEpoch((n) => n + 1);
+    const params = new URLSearchParams(location.search);
+    params.set('tab', tab);
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  }, [location.pathname, location.search, navigate]);
 
   // Permitir cambiar pestaña vía eventos globales (para integrar navbar inferior existente)
   useEffect(() => {
-    const toClases = () => setActiveTab('clases');
-    const toBalance = () => setActiveTab('balance');
-    const toVacantes = () => setActiveTab('vacantes');
+    const toClases = () => goToTab('clases');
+    const toBalance = () => goToTab('balance');
+    const toVacantes = () => goToTab('vacantes');
+    const toRecords = () => goToTab('records');
     window.addEventListener('nav:clases', toClases);
     window.addEventListener('nav:balance', toBalance);
     window.addEventListener('nav:vacantes', toVacantes);
+    window.addEventListener('nav:records', toRecords);
     return () => {
       window.removeEventListener('nav:clases', toClases);
       window.removeEventListener('nav:balance', toBalance);
       window.removeEventListener('nav:vacantes', toVacantes);
+      window.removeEventListener('nav:records', toRecords);
     };
-  }, []);
+  }, [goToTab]);
 
   // Cargar contador de vacantes disponibles (con caché, solo cuando sea necesario)
   const vacantesCountCacheRef = useRef<{ userId: string | null; count: number; timestamp: number }>({ 
@@ -594,13 +627,12 @@ const Dashboard = () => {
     const cargarVacantesCount = async () => {
       try {
         const fechaHoy = new Date();
-        const fechaManana = new Date();
-        fechaManana.setDate(fechaManana.getDate() + 1);
-        const fechaMananaStr = fechaManana.toISOString().split('T')[0];
+        const fechaManana = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth(), fechaHoy.getDate() + 1);
+        const fechaMananaStr = formatLocalDate(fechaManana);
         
         // Calcular el último día del mes actual
         const ultimoDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 1, 0);
-        const fechaHastaStr = ultimoDiaMes.toISOString().split('T')[0];
+        const fechaHastaStr = formatLocalDate(ultimoDiaMes);
         
         // Obtener todas las clases disponibles del mes actual usando la función SQL
         const { data: clasesDisponibles, error: errorClases } = await supabase
@@ -711,39 +743,70 @@ const Dashboard = () => {
     };
   }, [user?.id]);
 
+  // Onboarding incompleto: no mostrar el panel (solo tutorial + alta de horarios)
+  const onboardingIncomplete =
+    Boolean(user) && !isAdmin && !adminLoading && hasHorarios === false && !loadingHorarios;
+
+  if (!isAdmin && (loadingHorarios || hasHorarios === null || adminLoading)) {
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
+        <img src="/assets/logovertical.svg" alt="Malda" className="max-w-[160px] opacity-90" />
+      </div>
+    );
+  }
+
+  if (onboardingIncomplete) {
+    return (
+      <div className="fixed inset-0 z-40 bg-black">
+        <OnboardingTutorial
+          open={showTutorial}
+          slides={tutorialSlides}
+          onClose={handleTutorialClose}
+        />
+        <RecurringScheduleModal
+          isOpen={showRecurringModal}
+          onClose={() => undefined}
+          onComplete={handleRecurringSetupComplete}
+          onAbandon={abandonOnboarding}
+        />
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-background sm:bg-[url('/gymdesktop-background.png')] sm:bg-cover sm:bg-center sm:bg-no-repeat relative">
-      {/* Overlay solo con imagen de fondo (desktop) */}
-      <div className="hidden sm:block absolute inset-0 bg-black/60 pointer-events-none" aria-hidden />
+    <div className="min-h-screen bg-black sm:bg-[url('/gymdesktop-background.png')] sm:bg-cover sm:bg-center sm:bg-no-repeat relative">
+      {/* Overlay oscuro sobre la imagen (desktop) */}
+      <div className="hidden sm:block absolute inset-0 bg-black/70 pointer-events-none" aria-hidden />
       {/* Header restaurado */}
-      <header className="relative z-10 bg-black shadow-card">
+      <header className="relative z-10 border-b border-border bg-black/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex-1 flex items-center">
+          <div className="flex justify-between items-center h-14 sm:h-16">
+            <div className="flex-1 flex items-center min-w-0 py-2">
               {!isAdmin && (
-                <>
-                  <img src="/favicon.png" alt="Logo Malda" className="h-8 w-auto sm:hidden" />
-                  <img src="/tutorial/malda.png" alt="Logo Malda" className="h-[60px] w-auto hidden sm:block" />
-                </>
+                <img
+                  src="/assets/malda.svg"
+                  alt="Logo Malda"
+                  className="h-8 w-auto max-h-9 object-contain object-left sm:h-9 sm:max-h-10"
+                />
               )}
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <button
                 type="button"
                 aria-label="Soporte"
-                className="hidden sm:inline-flex items-center justify-center h-10 w-10 transition-all duration-200 hover:scale-105 group"
+                className="hidden sm:inline-flex items-center justify-center h-9 w-9 rounded-lg text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                 onClick={() => window.dispatchEvent(new CustomEvent('soporte:open'))}
               >
-                <HelpCircle className="h-5 w-5 text-gray-300 group-hover:text-white transition-colors" />
+                <HelpCircle className="h-5 w-5" />
               </button>
               <div className="hidden sm:block">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
-                      className="h-9 w-9 p-0 hover:bg-muted"
+                      className="h-9 w-9 p-0"
                     >
-                      <User className="h-6 w-6 text-accent-foreground" />
+                      <User className="h-5 w-5 text-muted-foreground" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-56">
@@ -787,7 +850,7 @@ const Dashboard = () => {
                       className="h-14 w-14 p-0 active:scale-95 transition-all duration-200"
                       aria-label="Abrir menú de perfil"
                     >
-                      <User className="h-7 w-7 text-gray-300" />
+                      <User className="h-6 w-6 text-muted-foreground" />
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-52">
@@ -855,17 +918,17 @@ const Dashboard = () => {
             {/* Calcular la vista inicial basada en la pestaña activa */}
             {(() => {
               let initialView: 'mis-clases' | 'turnos-disponibles' | 'perfil' = 'mis-clases';
-              let hideSubNav = false;
+              // En mobile la bottom nav es la fuente de verdad; ocultar pills internas evita desync
+              let hideSubNav = isMobile;
               
               if (activeTab === 'clases') {
                 initialView = 'mis-clases';
-                hideSubNav = false;
               } else if (activeTab === 'vacantes') {
                 initialView = 'turnos-disponibles';
-                hideSubNav = false;
+              } else if (activeTab === 'records') {
+                hideSubNav = true;
               } else if (activeTab === 'balance') {
-                // Cuando estamos en balance, siempre ocultar la navbar de RecurringScheduleView
-                // porque usamos la subnavbar de balance
+                // En balance siempre ocultar la navbar de RecurringScheduleView
                 hideSubNav = true;
                 if (balanceSubView === 'mis-clases') {
                   initialView = 'mis-clases';
@@ -876,39 +939,44 @@ const Dashboard = () => {
               
               return (
                 <>
-                  {/* Subnavbar para balance (solo cuando activeTab === 'balance') */}
-                  {activeTab === 'balance' && (
+                  {/* Subnavbar desktop cuando no está la de RecurringScheduleView */}
+                  {(activeTab === 'records' || (activeTab === 'balance' && balanceSubView === 'balance')) && (
                     <div className="hidden sm:flex justify-center mb-4">
-                      <div className="flex space-x-1 bg-muted p-1 rounded-full w-fit">
+                      <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
                         <button
-                          onClick={() => setBalanceSubView('mis-clases')}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                            balanceSubView === 'mis-clases'
-                              ? 'bg-background text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
+                          onClick={() => goToTab('clases')}
+                          className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
                           Mis clases
                         </button>
                         <button
-                          onClick={() => setBalanceSubView('vacantes')}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors flex items-center gap-2 ${
-                            balanceSubView === 'vacantes'
-                              ? 'bg-background text-foreground shadow-sm'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
+                          onClick={() => goToTab('vacantes')}
+                          className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
                         >
                           Vacantes
                         </button>
                         <button
-                          onClick={() => setBalanceSubView('balance')}
-                          className={`px-4 py-2 rounded-full text-sm font-medium transition-colors ${
-                            balanceSubView === 'balance'
-                              ? 'bg-background text-foreground shadow-sm'
+                          onClick={() => {
+                            setBalanceSubView('balance');
+                            goToTab('balance');
+                          }}
+                          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === 'balance'
+                              ? 'bg-secondary text-foreground'
                               : 'text-muted-foreground hover:text-foreground'
                           }`}
                         >
                           Balance y pagos
+                        </button>
+                        <button
+                          onClick={() => goToTab('records')}
+                          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                            activeTab === 'records'
+                              ? 'bg-secondary text-foreground'
+                              : 'text-muted-foreground hover:text-foreground'
+                          }`}
+                        >
+                          Records
                         </button>
                       </div>
                     </div>
@@ -924,6 +992,12 @@ const Dashboard = () => {
                             <p className="text-muted-foreground">Cargando balance...</p>
                           </div>
                         </div>
+                      ) : balanceError ? (
+                        <Card>
+                          <CardContent className="py-8 text-center text-sm text-destructive">
+                            No se pudo cargar el balance. {balanceError}
+                          </CardContent>
+                        </Card>
                       ) : balanceHistory.length === 0 ? (
                         <Card>
                           <CardContent className="py-8 text-center text-sm text-muted-foreground">
@@ -934,7 +1008,7 @@ const Dashboard = () => {
                         visibleBalanceEntries.map((entry) => (
                           <Card key={`${entry.anio}-${entry.mesNumero}`}>
                             <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                              <CardTitle className="text-lg font-semibold capitalize">
+                              <CardTitle className="text-heading">
                                 Cuota {entry.mesNombre} {entry.anio}
                               </CardTitle>
                                      {entry.isEstimate && (
@@ -1035,14 +1109,14 @@ const Dashboard = () => {
                                   )}
                                 </div>
                               </div>
-                              {entry.estadoPago && !entry.isCurrent && (
+                              {entry.estadoPago && (
                                 <div className="text-xs text-muted-foreground">
                                   Estado:{' '}
-                                  {entry.estadoPago === 'pagado'
-                                    ? '✅ Pagado'
-                                    : entry.estadoPago === 'abonada'
-                                    ? '💰 Abonada'
-                                    : '⏳ Pendiente'}
+                                  {entry.estadoPago === 'abonada' || entry.estadoPago === 'pagado'
+                                    ? 'Abonada'
+                                    : entry.estadoPago === 'vencida'
+                                    ? 'Vencida'
+                                    : 'Pendiente'}
                                 </div>
                               )}
                               {entry.isEstimate && (
@@ -1069,49 +1143,73 @@ const Dashboard = () => {
                     </div>
                   )}
 
+                  {activeTab === 'records' && (
+                    <div className="mt-2">
+                      <RecordsView />
+                    </div>
+                  )}
+
                   {/* Componente RecurringScheduleView siempre montado para mantener caché */}
-                  <div className={activeTab === 'balance' && balanceSubView === 'balance' ? 'hidden' : 'mt-4'}>
-                    <RecurringScheduleView initialView={initialView} hideSubNav={hideSubNav} />
+                  <div className={
+                    (activeTab === 'balance' && balanceSubView === 'balance') || activeTab === 'records'
+                      ? 'hidden'
+                      : 'mt-4'
+                  }>
+                    <RecurringScheduleView initialView={initialView} hideSubNav={hideSubNav} viewEpoch={viewEpoch} />
                   </div>
                 </>
               );
             })()}
 
             {/* Navbar móvil (fija en bottom, solo visible en mobile) */}
-            <nav className="block sm:hidden fixed bottom-0 left-0 right-0 bg-background border-t shadow-lg z-50">
-              <div className="grid grid-cols-3 h-16">
-                {/* Mis Clases */}
+            <nav className="block sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-black/95 backdrop-blur-sm">
+              <div className="grid grid-cols-4 h-14">
                 <button
-                  onClick={() => setActiveTab('clases')}
-                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                  onClick={() => goToTab('clases')}
+                  className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
                     activeTab === 'clases' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-current={activeTab === 'clases'}
                 >
                   <Dumbbell className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Mis clases</span>
+                  <span className="text-caption font-medium">Clases</span>
                 </button>
-                {/* Vacantes */}
                 <button
-                  onClick={() => setActiveTab('vacantes')}
-                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                  onClick={() => goToTab('vacantes')}
+                  className={`relative flex flex-col items-center justify-center gap-0.5 transition-colors ${
                     activeTab === 'vacantes' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-current={activeTab === 'vacantes'}
                 >
-                  <Zap className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Vacantes</span>
+                  <span className="relative">
+                    <Zap className="h-5 w-5" />
+                    {vacantesCount > 0 && (
+                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-md bg-primary text-[9px] font-semibold text-primary-foreground flex items-center justify-center">
+                        {vacantesCount > 9 ? '9+' : vacantesCount}
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-caption font-medium">Vacantes</span>
                 </button>
-                {/* Balance */}
                 <button
-                  onClick={() => setActiveTab('balance')}
-                  className={`flex flex-col items-center justify-center space-y-1 transition-colors ${
+                  onClick={() => goToTab('balance')}
+                  className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
                     activeTab === 'balance' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
                   }`}
                   aria-current={activeTab === 'balance'}
                 >
                   <Wallet className="h-5 w-5" />
-                  <span className="text-[10px] font-medium">Balance</span>
+                  <span className="text-caption font-medium">Balance</span>
+                </button>
+                <button
+                  onClick={() => goToTab('records')}
+                  className={`flex flex-col items-center justify-center gap-0.5 transition-colors ${
+                    activeTab === 'records' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                  aria-current={activeTab === 'records'}
+                >
+                  <Trophy className="h-5 w-5" />
+                  <span className="text-caption font-medium">Records</span>
                 </button>
               </div>
             </nav>
@@ -1140,7 +1238,7 @@ const Dashboard = () => {
         currentPlan={currentPlan}
       />
 
-      {/* Modal de configuración de horarios recurrentes para primera vez */}
+      {/* Modal de cambio/alta de horarios (usuarios que ya completaron onboarding) */}
       <RecurringScheduleModal
         isOpen={showRecurringModal}
         onClose={() => setShowRecurringModal(false)}
@@ -1151,12 +1249,6 @@ const Dashboard = () => {
       <SupportModal
         isOpen={supportOpen}
         onClose={() => setSupportOpen(false)}
-      />
-
-      <OnboardingTutorial
-        open={showTutorial}
-        slides={tutorialSlides}
-        onClose={handleTutorialClose}
       />
 
       <Dialog open={infoGuideOpen} onOpenChange={setInfoGuideOpen}>
@@ -1196,11 +1288,11 @@ const Dashboard = () => {
             {/* Desktop: títulos centrados sobre sus respectivas cards */}
             <div className="hidden gap-6 md:grid md:grid-cols-2">
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Mis clases</h3>
+                <h3 className="text-heading text-center">Mis clases</h3>
                 {misClasesGuide}
               </div>
               <div className="space-y-4">
-                <h3 className="text-lg font-semibold text-center">Balance y pagos</h3>
+                <h3 className="text-heading text-center">Balance y pagos</h3>
                 {balanceGuide}
               </div>
             </div>
@@ -1217,7 +1309,7 @@ const Dashboard = () => {
             {fullHistoryEntries.map((entry) => (
               <Card key={`history-${entry.anio}-${entry.mesNumero}`}>
                 <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                  <CardTitle className="text-[12px] font-semibold capitalize sm:text-base">
+                  <CardTitle className="text-[12px] font-semibold sm:text-base">
                     Cuota {entry.mesNombre} {entry.anio}
                   </CardTitle>
                          {entry.isEstimate && (
@@ -1307,8 +1399,8 @@ const App = () => {
       disableTransitionOnChange
     >
       <TooltipProvider>
-        <Toaster />
         <SonnerToaster />
+        <Toaster />
         <BrowserRouter>
           <AppContent loading={loading} />
         </BrowserRouter>
@@ -1317,10 +1409,42 @@ const App = () => {
 );
 };
 
+const getAuthCallbackType = (search: string, hash: string) => {
+  const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  const queryParams = new URLSearchParams(search);
+  return hashParams.get('type') || queryParams.get('type');
+};
+
+const isAuthCallback = (search: string, hash: string) => {
+  const hashParams = new URLSearchParams(hash.startsWith('#') ? hash.slice(1) : hash);
+  const queryParams = new URLSearchParams(search);
+  const type = getAuthCallbackType(search, hash);
+  return (
+    hashParams.has('access_token') ||
+    queryParams.has('code') ||
+    Boolean(type)
+  );
+};
+
 const AppContent = ({ loading }: { loading: boolean }) => {
   const location = useLocation();
+  const navigate = useNavigate();
   const publicRoutes = ['/', '/login', '/reset-password'];
   const isPublicRoute = publicRoutes.includes(location.pathname);
+
+  // Callbacks de Auth no deben caer en la landing
+  useEffect(() => {
+    if (location.pathname !== '/') return;
+    if (!isAuthCallback(location.search, location.hash)) return;
+    const type = getAuthCallbackType(location.search, location.hash);
+    const recoveryPending = sessionStorage.getItem('auth_recovery_pending') === '1';
+    const target =
+      type === 'recovery' || recoveryPending ? '/reset-password' : '/login';
+    if (recoveryPending && target === '/reset-password') {
+      sessionStorage.removeItem('auth_recovery_pending');
+    }
+    navigate(`${target}${location.search}${location.hash}`, { replace: true });
+  }, [location.pathname, location.search, location.hash, navigate]);
 
   return (
     <>
@@ -1340,9 +1464,9 @@ const AppContent = ({ loading }: { loading: boolean }) => {
         <Route 
           path="/admin" 
           element={
-            <ProtectedRoute>
+            <ProtectedAdminRouteWithAuth>
               <Admin />
-            </ProtectedRoute>
+            </ProtectedAdminRouteWithAuth>
           } 
         />
         {/* Ruta 404 - debe estar al final */}
@@ -1352,7 +1476,7 @@ const AppContent = ({ loading }: { loading: boolean }) => {
       {/* Overlay de carga global: solo para rutas protegidas */}
       {loading && !isPublicRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-          <img src="/biglogo.png" alt="Logo" className="max-w-xs md:max-w-md" />
+          <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[180px] md:max-w-xs" />
         </div>
       )}
     </>

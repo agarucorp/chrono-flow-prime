@@ -1,8 +1,13 @@
-import { useState, useEffect } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useState } from 'react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Mail, MessageCircle, Copy, Check } from 'lucide-react';
+import { Mail, Copy, Check, ExternalLink } from 'lucide-react';
 import { useNotifications } from '@/hooks/useNotifications';
 
 interface SupportModalProps {
@@ -15,14 +20,14 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
   const { showSuccess } = useNotifications();
 
   const contactEmail = 'agaru.corp@gmail.com';
-  const whatsappNumber = '5491130509316'; // Número de WhatsApp de soporte
+  const whatsappNumber = '5491130509316';
   const whatsappMessage = encodeURIComponent('Hola! Necesito ayuda con la aplicación.');
 
   const handleCopyEmail = async () => {
     try {
       await navigator.clipboard.writeText(contactEmail);
       setCopied(true);
-      showSuccess('Email copiado', 'El email ha sido copiado al portapapeles');
+      showSuccess('Email copiado', 'Listo para pegar donde necesites');
       setTimeout(() => setCopied(false), 2000);
     } catch (error) {
       console.error('Error al copiar email:', error);
@@ -30,86 +35,79 @@ export const SupportModal = ({ isOpen, onClose }: SupportModalProps) => {
   };
 
   const handleWhatsAppClick = () => {
-    const whatsappUrl = `https://wa.me/${whatsappNumber}?text=${whatsappMessage}`;
-    window.open(whatsappUrl, '_blank');
+    window.open(`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`, '_blank', 'noopener,noreferrer');
     onClose();
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[95vw] max-w-[95vw] sm:w-auto sm:max-w-md p-4 sm:p-6">
-        <DialogHeader className="space-y-1.5">
-          <DialogTitle className="text-center text-base sm:text-xl font-semibold">
-            Soporte y Contacto
-          </DialogTitle>
-        </DialogHeader>
-        
-        <div className="space-y-3 py-2 sm:py-4">
-          {/* Email de contacto */}
-          <Card className="border-primary/20">
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-start sm:items-center space-x-2 sm:space-x-3 min-w-0 flex-1">
-                  <div className="p-1.5 sm:p-2 bg-primary/10 rounded-full flex-shrink-0">
-                    <Mail className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs sm:text-sm font-medium text-muted-foreground">Email</p>
-                    <p className="text-xs sm:text-sm truncate" style={{ fontFamily: 'Poppins, sans-serif' }}>{contactEmail}</p>
-                  </div>
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleCopyEmail}
-                  className="flex items-center justify-center space-x-1 h-8 px-3 text-xs w-full sm:w-auto flex-shrink-0"
-                >
-                  {copied ? (
-                    <Check className="h-3.5 w-3.5 text-green-600" />
-                  ) : (
-                    <Copy className="h-3.5 w-3.5" />
-                  )}
-                  <span className="text-xs">
-                    {copied ? 'Copiado' : 'Copiar'}
-                  </span>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* WhatsApp */}
-          <Card className="border-green-200 hover:border-green-300 transition-colors cursor-pointer"
-                onClick={handleWhatsAppClick}>
-            <CardContent className="p-3 sm:p-4">
-              <div className="flex items-center space-x-2 sm:space-x-3">
-                <div className="p-1.5 sm:p-2 bg-green-100 rounded-full flex-shrink-0">
-                  <img 
-                    src="/WhatsApp.png" 
-                    alt="WhatsApp" 
-                    className="h-4 w-4 sm:h-5 sm:w-5"
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-xs sm:text-sm font-medium text-green-700">WhatsApp</p>
-                  <p className="text-[10px] sm:text-xs text-green-600">Chatea con nosotros</p>
-                </div>
-                <MessageCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Información adicional */}
-          <div className="text-center pt-1 sm:pt-2 px-2">
-            <p className="text-[10px] sm:text-xs text-muted-foreground">
-              Envianos tus comentarios para seguir mejorando la plataforma
-            </p>
-          </div>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="w-[min(92vw,420px)] gap-0 overflow-hidden border-border bg-popover p-0 shadow-elegant">
+        <div className="border-b border-border px-5 pb-4 pt-5 sm:px-6 sm:pt-6">
+          <DialogHeader className="space-y-1.5 text-left">
+            <DialogTitle className="text-title">
+              Soporte
+            </DialogTitle>
+            <DialogDescription>
+              Escribinos por el canal que te resulte más cómodo.
+            </DialogDescription>
+          </DialogHeader>
         </div>
 
-        <div className="flex justify-end pt-2">
-          <Button variant="outline" onClick={onClose} className="w-full sm:w-auto">
-            Cerrar
-          </Button>
+        <div className="space-y-3 px-5 py-5 sm:px-6">
+          <div className="surface-inset p-3.5 sm:p-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-secondary">
+                <Mail className="h-5 w-5 text-foreground" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-label">Email</p>
+                <p className="truncate text-body">{contactEmail}</p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                onClick={handleCopyEmail}
+                className="h-9 shrink-0 gap-1.5"
+              >
+                {copied ? (
+                  <>
+                    <Check className="h-3.5 w-3.5 text-emerald-400" />
+                    Copiado
+                  </>
+                ) : (
+                  <>
+                    <Copy className="h-3.5 w-3.5" />
+                    Copiar
+                  </>
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleWhatsAppClick}
+            className="group flex w-full items-center gap-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-left transition-colors hover:border-emerald-400/50 hover:bg-emerald-500/15 sm:p-4"
+          >
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#25D366]">
+              <img src="/WhatsApp.png" alt="" className="h-5 w-5" />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-emerald-100">WhatsApp</p>
+              <p className="text-caption text-emerald-200/70">Abrir chat de soporte</p>
+            </div>
+            <ExternalLink className="h-4 w-4 shrink-0 text-emerald-300/80 transition-transform group-hover:translate-x-0.5" />
+          </button>
+
+          <p className="pt-1 text-center text-caption">
+            Tus comentarios nos ayudan a mejorar la plataforma.
+          </p>
         </div>
       </DialogContent>
     </Dialog>

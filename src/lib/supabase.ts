@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
+import { AUTH_STORAGE_KEY, authStorage } from '@/lib/authStorage'
 
 // Configuración de Supabase - Proyecto real
 const supabaseUrl = 'https://bihqdptdkgdfztufrmlm.supabase.co'
@@ -11,7 +12,8 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    storageKey: 'maldagym_supabase_auth',
+    storageKey: AUTH_STORAGE_KEY,
+    storage: authStorage,
   },
   global: {
     headers: {
