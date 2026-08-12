@@ -32,8 +32,11 @@ import {
 import { useRecords } from '@/hooks/useRecords';
 import { supabase } from '@/lib/supabase';
 import {
+  RECORD_MEDAL_STYLES,
   formatRecordValor,
+  getRecordMedal,
   isValidRecordValor,
+  sortRecordsByRanking,
   type RecordDisciplina,
   type RecordEntry,
   type RecordUnidad,
@@ -258,14 +261,17 @@ export function RecordsAdminPanel() {
           <p className="text-body-muted">No hay disciplinas. Creá la primera para empezar.</p>
         ) : (
           disciplinas.map((disc) => {
-            const rows = entries.filter((e) => e.disciplina_id === disc.id);
+            const rows = sortRecordsByRanking(
+              entries.filter((e) => e.disciplina_id === disc.id),
+              disc.unidad
+            );
             return (
               <div key={disc.id} className="surface-inset p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <p className="text-heading">{disc.nombre}</p>
                     <p className="text-label mt-0.5">
-                      {disc.unidad === 'kg' ? 'Unidad: kg' : 'Unidad: tiempo'}
+                      {disc.unidad === 'kg' ? 'Unidad: kg · mayor primero' : 'Unidad: tiempo · menor primero'}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -291,31 +297,50 @@ export function RecordsAdminPanel() {
                   <p className="text-caption">Sin records.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {rows.map((row) => (
-                      <div
-                        key={row.id}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{row.alumno_nombre}</p>
-                          <p className="text-caption">{formatRecordValor(row.valor, disc.unidad)}</p>
+                    {rows.map((row, index) => {
+                      const medal = getRecordMedal(index);
+                      const medalStyle = medal ? RECORD_MEDAL_STYLES[medal] : null;
+                      return (
+                        <div
+                          key={row.id}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-border/60 bg-background/40 px-3 py-2"
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            {medalStyle ? (
+                              <span
+                                className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-2 ${medalStyle.className} ${medalStyle.ring}`}
+                                title={medal === 'oro' ? 'Oro' : medal === 'plata' ? 'Plata' : 'Bronce'}
+                                aria-label={`Puesto ${index + 1}, ${medal}`}
+                              >
+                                {medalStyle.label}
+                              </span>
+                            ) : (
+                              <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-caption text-muted-foreground">
+                                {index + 1}
+                              </span>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">{row.alumno_nombre}</p>
+                              <p className="text-caption">{formatRecordValor(row.valor, disc.unidad)}</p>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 gap-1">
+                            <Button type="button" variant="ghost" size="icon" onClick={() => openEditEntry(row)}>
+                              <Pencil className="h-3.5 w-3.5" />
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setDeleteEntry(row)}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                         </div>
-                        <div className="flex shrink-0 gap-1">
-                          <Button type="button" variant="ghost" size="icon" onClick={() => openEditEntry(row)}>
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => setDeleteEntry(row)}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

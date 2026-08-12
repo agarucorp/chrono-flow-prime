@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { startOfMonth } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { endOfMonthStr, formatLocalDate, getArgentinaYearMonth, startOfMonthStr } from '@/lib/dateLocal';
+import { endOfMonthStr, getArgentinaYearMonth, startOfMonthStr } from '@/lib/dateLocal';
 
 interface BalanceAdjustment {
   cantidad: number;
@@ -38,18 +38,8 @@ interface UseUserBalanceReturn {
 }
 
 const monthNames = [
-  'enero',
-  'febrero',
-  'marzo',
-  'abril',
-  'mayo',
-  'junio',
-  'julio',
-  'agosto',
-  'septiembre',
-  'octubre',
-  'noviembre',
-  'diciembre',
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
 ];
 
 const getDateOnly = (value: string | Date) => {
@@ -60,18 +50,21 @@ const getDateOnly = (value: string | Date) => {
 
 const normalizeDateKey = (value: string | Date) => String(value).substring(0, 10);
 
-// DB: 1..7 (lunes..domingo) | JS: 0..6 (domingo..sábado)
 const toDbWeekday = (date: Date) => {
   const day = date.getDay();
   return day === 0 ? 7 : day;
 };
 
+/**
+ * Balance con pago adelantado:
+ * - Mes actual: congelado (solo lectura de cuotas_mensuales).
+ * - Cambios del mes corriente impactan el mes siguiente (SQL bake + UI informativa).
+ */
 export const useUserBalance = (): UseUserBalanceReturn => {
   const { user } = useAuthContext();
   const [history, setHistory] = useState<BalanceEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const lockedCurrentSnapshotRef = useRef<BalanceEntry | null>(null);
   const userStartDate = (() => {
     if (!user?.created_at) return null;
     const created = new Date(user.created_at);
@@ -81,13 +74,12 @@ export const useUserBalance = (): UseUserBalanceReturn => {
   })();
   const userStartMonth = userStartDate ? startOfMonth(userStartDate) : null;
 
-  // Caché para datos de balance (evitar recargas innecesarias)
-  const balanceCacheRef = useRef<{ userId: string | null; timestamp: number }>({ 
-    userId: null, 
-    timestamp: 0 
+  const balanceCacheRef = useRef<{ userId: string | null; timestamp: number }>({
+    userId: null,
+    timestamp: 0,
   });
-  const BALANCE_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
-  
+  const BALANCE_CACHE_DURATION_MS = 5 * 60 * 1000;
+
   useEffect(() => {
     if (!user?.id) {
       setHistory([]);
@@ -98,44 +90,40 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
     const nowBalance = Date.now();
     const cachedBalance = balanceCacheRef.current;
-    
-    // Si ya tenemos datos en caché para este usuario y no han expirado, no recargar
-    if (cachedBalance.userId === user.id && (nowBalance - cachedBalance.timestamp) < BALANCE_CACHE_DURATION_MS && history.length > 0) {
+
+    if (
+      cachedBalance.userId === user.id &&
+      nowBalance - cachedBalance.timestamp < BALANCE_CACHE_DURATION_MS &&
+      history.length > 0
+    ) {
       setLoading(false);
       return;
     }
 
     const loadBalance = async (showSpinner: boolean = false) => {
       try {
-        if (showSpinner) {
-          setLoading(true);
-        }
+        if (showSpinner) setLoading(true);
         setError(null);
 
         const { year: currentYear, month: currentMonthNum } = getArgentinaYearMonth();
         const nextMonthNum = currentMonthNum === 12 ? 1 : currentMonthNum + 1;
         const nextYear = currentMonthNum === 12 ? currentYear + 1 : currentYear;
-
         const currentStartISO = startOfMonthStr(currentYear, currentMonthNum);
         const currentEndISO = endOfMonthStr(currentYear, currentMonthNum);
 
-        // Primero chequear horarios: si aún no hay setup, no generar cuotas en $0
-        // (eso bloqueaba el snapshot del mes actual para usuarios nuevos).
         const { data: horariosRecurrentesConFecha } = await supabase
           .from('horarios_recurrentes_usuario')
           .select('dia_semana, fecha_inicio, fecha_fin, activo')
           .eq('usuario_id', user.id)
           .eq('activo', true);
 
-        const tieneHorariosActivos = (horariosRecurrentesConFecha || []).length > 0;
-        if (!tieneHorariosActivos) {
-          lockedCurrentSnapshotRef.current = null;
+        if (!(horariosRecurrentesConFecha || []).length) {
           setHistory([]);
           setLoading(false);
           return;
         }
 
-        // Asegurar filas de cuota (mes actual + siguiente) antes de leer.
+        // Ensure: crea mes actual si falta (freeze si ya existe) + recalc mes siguiente.
         const { error: ensureError } = await supabase.rpc(
           'fn_recalcular_cuotas_usuario_actual_y_siguiente',
           { p_usuario_id: user.id }
@@ -177,28 +165,19 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           if (profile?.combo_asignado && config) {
             const comboKey = `combo_${profile.combo_asignado}_tarifa` as keyof typeof config;
             const value = config[comboKey];
-            if (value && Number(value) > 0) {
-              return Number(value);
-            }
-          }
-          if (cuota?.monto_total && (cuota?.clases_a_cobrar || cuota?.clases_previstas)) {
-            const clases = Number(cuota.clases_a_cobrar ?? cuota.clases_previstas ?? 0);
-            if (clases > 0) {
-              return Number(cuota.monto_total) / clases;
-            }
+            if (value && Number(value) > 0) return Number(value);
           }
           return 0;
         };
 
-        const baseUnitPrice = resolveUnitPrice();
-
         const filteredCuotas = (cuotasData ?? []).filter((cuota) => {
           if (!cuota?.anio || !cuota?.mes) return false;
           const diff = (Number(cuota.anio) - currentYear) * 12 + (Number(cuota.mes) - currentMonthNum);
-          if (diff > 1) return false;
-          return true;
+          return diff <= 1;
         });
 
+        // Eventos del mes CORRIENTE → solo informativos para el mes siguiente
+        // (el monto de M+1 ya los incorpora el SQL).
         const { data: cancelacionesData } = await supabase
           .from('turnos_cancelados')
           .select('id, cancelacion_tardia, tipo_cancelacion, turno_fecha')
@@ -226,7 +205,6 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           .eq('usuario_id', user.id)
           .eq('activo', true);
 
-        // Obtener feriados del mes actual (días sin clases)
         const { data: feriadosData } = await supabase
           .from('feriados')
           .select('fecha, tipo, activo')
@@ -234,27 +212,20 @@ export const useUserBalance = (): UseUserBalanceReturn => {
           .gte('fecha', currentStartISO)
           .lte('fecha', currentEndISO);
 
-        // Crear Set de fechas de feriados (días sin clases)
         const feriadosSinClases = new Set(
           (feriadosData || [])
-            .filter(f => f.tipo === 'dia_habil_feriado')
-            .map(f => normalizeDateKey(f.fecha))
+            .filter((f) => f.tipo === 'dia_habil_feriado')
+            .map((f) => normalizeDateKey(f.fecha))
         );
 
-        // Considerar todas las cancelaciones del usuario (anticipadas y tardías)
-        // para el ajuste del mes siguiente, excluyendo las generadas por sistema/admin.
-        const cancelacionesUsuarioCount = (cancelacionesData || []).filter(
-          (c: any) => {
-            const tipo = (c?.tipo_cancelacion || '').toString().toLowerCase();
-            return tipo !== 'sistema' && tipo !== 'admin';
-          }
-        ).length;
+        const cancelacionesUsuarioCount = (cancelacionesData || []).filter((c: any) => {
+          const tipo = (c?.tipo_cancelacion || '').toString().toLowerCase();
+          return tipo !== 'sistema' && tipo !== 'admin' && !c?.cancelacion_tardia;
+        }).length;
         const vacantesCount = vacantesData?.length ?? 0;
 
         const ausenciasCount = (() => {
-          if (!ausenciasAdminData || ausenciasAdminData.length === 0) return 0;
-          if (!horariosUsuarioData || horariosUsuarioData.length === 0) return 0;
-
+          if (!ausenciasAdminData?.length || !horariosUsuarioData?.length) return 0;
           const schedule = horariosUsuarioData.map((item) => ({
             diaSemana: Number(item.dia_semana),
             claseNumero:
@@ -262,244 +233,114 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 ? Number(item.clase_numero)
                 : null,
           }));
-
           const countForDate = (date: Date, clasesCanceladas?: number[] | null) => {
             const weekday = toDbWeekday(date);
             const matches = schedule.filter((hr) => hr.diaSemana === weekday);
-            if (matches.length === 0) return 0;
-            if (clasesCanceladas && clasesCanceladas.length > 0) {
+            if (!matches.length) return 0;
+            if (clasesCanceladas?.length) {
               const set = new Set(clasesCanceladas.map(Number));
               return matches.filter((hr) => hr.claseNumero !== null && set.has(hr.claseNumero)).length;
             }
             return matches.length;
           };
-
           const monthStartDate = getDateOnly(currentStartISO);
           const monthEndDate = getDateOnly(currentEndISO);
-
           let total = 0;
-
           for (const ausencia of ausenciasAdminData) {
             const inicioOriginal = getDateOnly(ausencia.fecha_inicio);
             const finOriginal = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicioOriginal;
-
             if (ausencia.tipo_ausencia === 'unica') {
               if (inicioOriginal >= monthStartDate && inicioOriginal <= monthEndDate) {
                 total += countForDate(inicioOriginal, ausencia.clases_canceladas ?? undefined);
               }
               continue;
             }
-
             const periodoInicio = inicioOriginal < monthStartDate ? monthStartDate : inicioOriginal;
             const periodoFin = finOriginal > monthEndDate ? monthEndDate : finOriginal;
-
             for (let d = new Date(periodoInicio); d <= periodoFin; d.setDate(d.getDate() + 1)) {
               total += countForDate(d, ausencia.clases_canceladas ?? undefined);
             }
           }
-
           return total;
         })();
 
-        const totalCancelacionesCount = cancelacionesUsuarioCount + ausenciasCount;
+        const feriadosCreditoCount = (() => {
+          if (!horariosUsuarioData?.length || feriadosSinClases.size === 0) return 0;
+          const scheduleDays = new Set(horariosUsuarioData.map((h) => Number(h.dia_semana)));
+          let total = 0;
+          feriadosSinClases.forEach((fechaStr) => {
+            const d = getDateOnly(fechaStr);
+            if (scheduleDays.has(toDbWeekday(d))) total += 1;
+          });
+          return total;
+        })();
 
+        const totalCancelacionesCount = cancelacionesUsuarioCount + ausenciasCount + feriadosCreditoCount;
         const nextCuotaRecord = filteredCuotas.find(
           (cuota) => cuota.anio === nextYear && cuota.mes === nextMonthNum
         );
-        const nextUnitPrice = resolveUnitPrice(nextCuotaRecord) || baseUnitPrice;
+        const nextUnitPrice = resolveUnitPrice(nextCuotaRecord) || resolveUnitPrice();
         const cancelacionesMonto = totalCancelacionesCount * nextUnitPrice;
         const vacantesMonto = vacantesCount * nextUnitPrice;
 
-        const buildEntry = (cuota: any | null, options?: { forceNext?: boolean }) => {
+        const buildEntry = (cuota: any | null, options?: { forceNext?: boolean; isEstimate?: boolean }) => {
           const isCurrent = cuota?.anio === currentYear && cuota?.mes === currentMonthNum;
           const isNext = options?.forceNext
             ? true
             : cuota?.anio === nextYear && cuota?.mes === nextMonthNum;
 
-          // Para el mes actual, usar siempre la tarifa del perfil actual (no la de la cuota)
-          // porque el plan puede haber cambiado después de generar la cuota
+          // Mes actual: SIEMPRE valores congelados de la fila.
+          // Mes siguiente: tarifa de cuota / plan pendiente; montos de DB (ya con ajustes M).
           let unitPrice: number;
           if (isCurrent) {
-            // Priorizar tarifa_personalizada del perfil
-            if (profile?.tarifa_personalizada && Number(profile.tarifa_personalizada) > 0) {
-              unitPrice = Number(profile.tarifa_personalizada);
-            } else if (profile?.combo_asignado && config) {
-              const comboKey = `combo_${profile.combo_asignado}_tarifa` as keyof typeof config;
-              const value = config[comboKey];
-              if (value && Number(value) > 0) {
-                unitPrice = Number(value);
-              } else {
-                unitPrice = baseUnitPrice;
-              }
-            } else {
-              unitPrice = baseUnitPrice;
-            }
+            unitPrice = resolveUnitPrice(cuota);
           } else if (isNext && profile?.combo_pendiente && profile?.fecha_cambio_plan) {
-            // Para el mes siguiente, verificar si hay un cambio de plan pendiente
             const fechaCambio = new Date(profile.fecha_cambio_plan);
             const inicioProximoMes = new Date(nextYear, nextMonthNum - 1, 1);
-            
-            // Si la fecha de cambio es igual o anterior al inicio del próximo mes, aplicar tarifa pendiente
             if (fechaCambio <= inicioProximoMes) {
               if (profile.tarifa_pendiente && Number(profile.tarifa_pendiente) > 0) {
                 unitPrice = Number(profile.tarifa_pendiente);
               } else if (profile.combo_pendiente && config) {
                 const comboKey = `combo_${profile.combo_pendiente}_tarifa` as keyof typeof config;
                 const value = config[comboKey];
-                if (value && Number(value) > 0) {
-                  unitPrice = Number(value);
-                } else {
-                  unitPrice = baseUnitPrice;
-                }
+                unitPrice = value && Number(value) > 0 ? Number(value) : resolveUnitPrice(cuota);
               } else {
-                unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+                unitPrice = resolveUnitPrice(cuota);
               }
             } else {
-              // La fecha de cambio es después del próximo mes, usar tarifa actual
-              unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+              unitPrice = resolveUnitPrice(cuota);
             }
           } else {
-            // Para meses pasados o futuros sin cambio pendiente, usar la tarifa de la cuota
-            unitPrice = resolveUnitPrice(cuota) || baseUnitPrice;
+            unitPrice = resolveUnitPrice(cuota);
           }
 
-          // Obtener clases previstas y canceladas del mes actual
-          const clasesPrevistas = Number(cuota?.clases_previstas ?? 0);
-          const clasesCanceladasAnticipacion = Number(cuota?.clases_canceladas_anticipacion ?? 0);
-          const clasesCanceladasTardia = Number(cuota?.clases_canceladas_tardia ?? 0);
-          
-          // Para el cálculo del balance, usar clases previstas (no clases_a_cobrar)
-          // Las cancelaciones se restarán del total
-          let clases = isCurrent ? clasesPrevistas : Number(cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0);
-          let montoRecalculado = false;
-          
-          if (isCurrent && clases === 0 && horariosUsuarioData && horariosUsuarioData.length > 0) {
-            // Calcular clases del mes actual basándose en horarios recurrentes
-            const lastDayCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
-            const schedule = horariosUsuarioData.map((item) => ({
-              diaSemana: Number(item.dia_semana),
-              claseNumero: item.clase_numero !== null && item.clase_numero !== undefined
-                ? Number(item.clase_numero)
-                : null,
-            }));
+          const clases = Number(
+            isCurrent
+              ? (cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0)
+              : (cuota?.clases_a_cobrar ?? cuota?.clases_previstas ?? 0)
+          );
 
-            // Determinar fecha de inicio para este mes (considerar fecha_inicio del usuario)
-            let fechaInicioMes = new Date(currentYear, currentMonthNum - 1, 1);
-            fechaInicioMes.setHours(0, 0, 0, 0);
-            
-            // Si el usuario se registró después del inicio del mes, usar su fecha de registro
-            if (userStartDate && userStartDate > fechaInicioMes) {
-              fechaInicioMes = userStartDate;
-            }
-            
-            // También verificar fecha_inicio de los horarios recurrentes
-            if (horariosRecurrentesConFecha && horariosRecurrentesConFecha.length > 0) {
-              const fechasInicio = horariosRecurrentesConFecha
-                .filter(hr => hr.fecha_inicio)
-                .map(hr => new Date(hr.fecha_inicio));
-              
-              if (fechasInicio.length > 0) {
-                const minFechaHorarios = new Date(Math.min(...fechasInicio.map(d => d.getTime())));
-                minFechaHorarios.setHours(0, 0, 0, 0);
-                if (minFechaHorarios > fechaInicioMes) {
-                  fechaInicioMes = minFechaHorarios;
-                }
-              }
-            }
+          const totalBase =
+            cuota?.monto_total !== undefined && cuota?.monto_total !== null
+              ? Number(cuota.monto_total)
+              : clases * unitPrice;
 
-            const diaInicio = fechaInicioMes.getMonth() === currentMonthNum - 1 
-              ? fechaInicioMes.getDate() 
-              : 1;
-
-            let clasesCalculadas = 0;
-            for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
-              const fecha = new Date(currentYear, currentMonthNum - 1, dia);
-              const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = formatLocalDate(fecha);
-
-              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
-
-              // Verificar si es feriado (día sin clases)
-              const esFeriado = feriadosSinClases.has(fechaStr);
-
-              // Verificar si está bloqueado por ausencia del admin
-              const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
-                const inicio = getDateOnly(ausencia.fecha_inicio);
-                const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
-                const fechaCheck = getDateOnly(fechaStr);
-                return fechaCheck >= inicio && fechaCheck <= fin;
-              });
-
-              if (tieneHorario && !bloqueado && !esFeriado) {
-                clasesCalculadas++;
-              }
-            }
-
-            // Agregar turnos variables del mes actual
-            if (vacantesData) {
-              clasesCalculadas += vacantesData.length;
-            }
-
-            if (clasesCalculadas > 0) {
-              clases = clasesCalculadas;
-              montoRecalculado = true;
-            }
-          }
-          
-          // Calcular el monto base
-          // Para el mes actual: usar monto_total original de la cuota (el alumno ya pagó)
-          // NO aplicar ajustes dinámicos al mes actual
-          // Para otros meses: usar monto_total de la cuota
-          let totalBase: number;
-          if (isCurrent) {
-            // Usar el monto_total original de la cuota - el alumno ya pagó por esto
-            // NO modificar dinámicamente con cancelaciones o vacantes
-            totalBase = cuota?.monto_total !== undefined 
-              ? Number(cuota.monto_total) 
-              : clasesPrevistas * unitPrice;
-          } else {
-            // Para meses pasados/futuros, usar monto_total de la cuota
-            totalBase = montoRecalculado 
-              ? clases * unitPrice
-              : (cuota?.monto_total !== undefined 
-                  ? Number(cuota.monto_total) 
-                  : clases * unitPrice);
-          }
-          
-          // Calcular el monto de cancelaciones (solo anticipadas, las tardías se cobran)
-          const montoCancelacionesAnticipadas = isCurrent 
-            ? clasesCanceladasAnticipacion * unitPrice 
-            : 0;
-          
-          // Si recalculamos el monto base, también recalcular el monto con descuento
-          // pero mantener el descuento porcentual si existe
+          const descuentoPct = Number(cuota?.descuento_porcentaje ?? 0);
+          const montoDesc = Number(cuota?.monto_con_descuento);
           let totalConDescuento: number;
-          if (montoRecalculado && cuota?.descuento_porcentaje !== undefined && Number(cuota.descuento_porcentaje) > 0) {
-            // Si hay descuento, aplicarlo al nuevo monto base
-            const descuentoPorcentaje = Number(cuota.descuento_porcentaje);
-            totalConDescuento = totalBase * (1 - descuentoPorcentaje / 100);
+          if (descuentoPct > 0 && Number.isFinite(montoDesc)) {
+            totalConDescuento = montoDesc;
+          } else if (Number.isFinite(montoDesc) && montoDesc > 0) {
+            totalConDescuento = montoDesc;
           } else {
-            // Si no hay descuento, monto_con_descuento=0 (default viejo de BD) NO debe tapar monto_total
-            const descuentoPct = Number(cuota?.descuento_porcentaje ?? 0);
-            const montoDesc = Number(cuota?.monto_con_descuento);
-            if (descuentoPct > 0 && Number.isFinite(montoDesc)) {
-              totalConDescuento = montoDesc;
-            } else if (Number.isFinite(montoDesc) && montoDesc > 0) {
-              totalConDescuento = montoDesc;
-            } else {
-              totalConDescuento = totalBase;
-            }
+            totalConDescuento = totalBase;
           }
-          const descuento = totalBase - totalConDescuento;
-          const descuentoPorcentaje = cuota?.descuento_porcentaje !== undefined
-            ? Number(cuota.descuento_porcentaje)
-            : totalBase > 0 ? (descuento / totalBase) * 100 : 0;
 
           const entry: BalanceEntry = {
             clases,
             precioUnitario: unitPrice,
-            descuento,
-            descuentoPorcentaje,
+            descuento: totalBase - totalConDescuento,
+            descuentoPorcentaje: descuentoPct,
             total: totalBase,
             totalConDescuento,
             mesNombre: cuota?.mes ? monthNames[cuota.mes - 1] : monthNames[nextMonthNum - 1],
@@ -508,43 +349,12 @@ export const useUserBalance = (): UseUserBalanceReturn => {
             estadoPago: cuota?.estado_pago ?? undefined,
             isCurrent,
             isNext,
+            isEstimate: options?.isEstimate,
           };
 
-          // Para el mes actual, NO modificar el total dinámicamente
-          // El alumno ya pagó por las clases que le corresponden
-          // Solo mostrar información de cancelaciones y vacantes para referencia
-          if (entry.isCurrent) {
-            // NO modificar el total - usar el monto_total original de la cuota
-            // El total ya está calculado correctamente desde la base de datos
-            
-            // Solo mostrar ajustes como información, pero NO aplicarlos al total
-            if (clasesCanceladasAnticipacion > 0 || vacantesCount > 0) {
-              const montoVacantesActual = vacantesCount * unitPrice;
-              entry.ajustes = {
-                cancelaciones: {
-                  cantidad: clasesCanceladasAnticipacion,
-                  monto: montoCancelacionesAnticipadas,
-                },
-                vacantes: {
-                  cantidad: vacantesCount,
-                  monto: montoVacantesActual,
-                },
-              };
-            }
-          }
-
-          // Para el mes siguiente, agregar ajustes con cancelaciones y vacantes del mes actual
-          // Restar cancelaciones y sumar vacantes del mes actual al total del mes siguiente
-          if (entry.isNext) {
-            // Aplicar ajustes del mes actual al mes siguiente:
-            // - Restar cancelaciones (saldo a favor)
-            // - Sumar vacantes (clases adicionales reservadas)
-            const totalConAjustes = totalBase - cancelacionesMonto + vacantesMonto;
-            const totalConDescuentoYAjustes = totalConDescuento - cancelacionesMonto + vacantesMonto;
-            
-            entry.total = totalConAjustes;
-            entry.totalConDescuento = totalConDescuentoYAjustes;
-            
+          // Mes actual: sin ajustes dinámicos (congelado).
+          // Mes siguiente: desglose informativo de eventos del mes corriente (ya bakeados en monto).
+          if (entry.isNext && (totalCancelacionesCount > 0 || vacantesCount > 0)) {
             entry.ajustes = {
               cancelaciones: {
                 cantidad: totalCancelacionesCount,
@@ -562,275 +372,59 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const entries: BalanceEntry[] = filteredCuotas.map((cuota) => buildEntry(cuota));
 
-        const hasNextEntry = entries.some((entry) => entry.isNext);
-        if (!hasNextEntry) {
+        // Si falta mes siguiente en DB, estimar solo para UI (el ensure debería haberlo creado).
+        if (!entries.some((e) => e.isNext)) {
           const startNextMonth = new Date(nextYear, nextMonthNum - 1, 1);
           const endNextMonth = new Date(nextYear, nextMonthNum, 0);
-          const startNextMonthStr = formatLocalDate(startNextMonth);
-          const endNextMonthStr = formatLocalDate(endNextMonth);
           const lastDayNextMonth = endNextMonth.getDate();
-
-          const { data: horariosRecurrentes } = await supabase
-            .from('horarios_recurrentes_usuario')
-            .select('dia_semana, fecha_inicio, fecha_fin, activo')
-            .eq('usuario_id', user.id)
-            .eq('activo', true);
-
-          const { data: turnosVariablesProximo } = await supabase
-            .from('turnos_variables')
-            .select('id')
-            .eq('cliente_id', user.id)
-            .eq('estado', 'confirmada')
-            .gte('turno_fecha', startNextMonthStr)
-            .lte('turno_fecha', endNextMonthStr);
-
-          const { data: ausenciasAdminEstimacion } = await supabase
-            .from('ausencias_admin')
-            .select('fecha_inicio, fecha_fin')
-            .eq('activo', true)
-            .or(`fecha_inicio.lte.${endNextMonthStr},fecha_fin.gte.${startNextMonthStr}`);
-
-          // Obtener feriados del mes siguiente
-          const { data: feriadosProximo } = await supabase
-            .from('feriados')
-            .select('fecha, tipo, activo')
-            .eq('activo', true)
-            .gte('fecha', startNextMonthStr)
-            .lte('fecha', endNextMonthStr);
-
-          // Crear Set de fechas de feriados del mes siguiente (días sin clases)
-          const feriadosProximoSinClases = new Set(
-            (feriadosProximo || [])
-              .filter(f => f.tipo === 'dia_habil_feriado')
-              .map(f => normalizeDateKey(f.fecha))
-          );
-
           let clasesEstimadas = 0;
-
-          if (horariosRecurrentes && horariosRecurrentes.length > 0) {
+          if (horariosRecurrentesConFecha?.length) {
             for (let dia = 1; dia <= lastDayNextMonth; dia++) {
               const fecha = new Date(nextYear, nextMonthNum - 1, dia);
               const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = formatLocalDate(fecha);
-
-              const tieneHorario = horariosRecurrentes.some((hr: any) => {
-                if (hr.dia_semana !== diaSemanaDB) return false;
-                if (hr.fecha_inicio) {
-                  const fechaInicio = new Date(hr.fecha_inicio);
-                  fechaInicio.setHours(0, 0, 0, 0);
-                  if (fecha < fechaInicio) return false;
-                }
-                if (hr.fecha_fin) {
-                  const fechaFin = new Date(hr.fecha_fin);
-                  fechaFin.setHours(23, 59, 59, 999);
-                  if (fecha > fechaFin) return false;
-                }
+              const tieneHorario = horariosRecurrentesConFecha.some((hr: any) => {
+                if (Number(hr.dia_semana) !== diaSemanaDB) return false;
+                if (hr.fecha_inicio && fecha < getDateOnly(hr.fecha_inicio)) return false;
+                if (hr.fecha_fin && fecha > getDateOnly(hr.fecha_fin)) return false;
                 return true;
               });
-
-              // Verificar si es feriado (día sin clases)
-              const esFeriado = feriadosProximoSinClases.has(fechaStr);
-
-              const bloqueado = ausenciasAdminEstimacion?.some((ausencia: any) => {
-                const inicio = new Date(ausencia.fecha_inicio);
-                inicio.setHours(0, 0, 0, 0);
-                const fin = ausencia.fecha_fin ? new Date(ausencia.fecha_fin) : inicio;
-                fin.setHours(23, 59, 59, 999);
-                return fecha >= inicio && fecha <= fin;
-              });
-
-              if (tieneHorario && !bloqueado && !esFeriado) {
-                clasesEstimadas++;
-              }
+              if (tieneHorario) clasesEstimadas++;
             }
           }
-
-          if (turnosVariablesProximo) {
-            clasesEstimadas += turnosVariablesProximo.length;
-          }
-
-          const totalEstimado = clasesEstimadas * baseUnitPrice;
-
+          const unit = resolveUnitPrice();
+          const totalEstimado = Math.max(0, clasesEstimadas + vacantesCount - totalCancelacionesCount) * unit;
           entries.push(
             buildEntry(
               {
-                clases_a_cobrar: clasesEstimadas,
-                tarifa_unitaria: baseUnitPrice,
+                clases_a_cobrar: Math.max(0, clasesEstimadas + vacantesCount - totalCancelacionesCount),
+                clases_previstas: clasesEstimadas,
+                tarifa_unitaria: unit,
                 monto_total: totalEstimado,
                 monto_con_descuento: totalEstimado,
                 mes: nextMonthNum,
                 anio: nextYear,
                 estado_pago: null,
               },
-              { forceNext: true }
-            )
-          );
-        }
-
-        const hasCurrentEntry = entries.some((entry) => entry.isCurrent);
-        if (!hasCurrentEntry) {
-          // Si no hay cuota para el mes actual, calcular basándose en horarios recurrentes
-          const lastDayCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
-          
-          // Determinar fecha de inicio para este mes (considerar fecha_inicio del usuario)
-          let fechaInicioMes = new Date(currentYear, currentMonthNum - 1, 1);
-          fechaInicioMes.setHours(0, 0, 0, 0);
-          
-          // Si el usuario se registró después del inicio del mes, usar su fecha de registro
-          if (userStartDate && userStartDate > fechaInicioMes) {
-            fechaInicioMes = userStartDate;
-          }
-          
-          // También verificar fecha_inicio de los horarios recurrentes
-          if (horariosRecurrentesConFecha && horariosRecurrentesConFecha.length > 0) {
-            const fechasInicio = horariosRecurrentesConFecha
-              .filter(hr => hr.fecha_inicio)
-              .map(hr => new Date(hr.fecha_inicio));
-            
-            if (fechasInicio.length > 0) {
-              const minFechaHorarios = new Date(Math.min(...fechasInicio.map(d => d.getTime())));
-              minFechaHorarios.setHours(0, 0, 0, 0);
-              if (minFechaHorarios > fechaInicioMes) {
-                fechaInicioMes = minFechaHorarios;
-              }
-            }
-          }
-
-          const diaInicio = fechaInicioMes.getMonth() === currentMonthNum - 1 
-            ? fechaInicioMes.getDate() 
-            : 1;
-          
-          // Reutilizar horariosUsuarioData que ya se cargó antes
-          let clasesEstimadas = 0;
-          
-          if (horariosUsuarioData && horariosUsuarioData.length > 0) {
-            const schedule = horariosUsuarioData.map((item) => ({
-              diaSemana: Number(item.dia_semana),
-              claseNumero: item.clase_numero !== null && item.clase_numero !== undefined
-                ? Number(item.clase_numero)
-                : null,
-            }));
-
-            for (let dia = diaInicio; dia <= lastDayCurrentMonth; dia++) {
-              const fecha = new Date(currentYear, currentMonthNum - 1, dia);
-              const diaSemanaDB = toDbWeekday(fecha);
-              const fechaStr = formatLocalDate(fecha);
-
-              const tieneHorario = schedule.some((hr) => hr.diaSemana === diaSemanaDB);
-
-              // Verificar si es feriado (día sin clases)
-              const esFeriado = feriadosSinClases.has(fechaStr);
-
-              // Verificar si está bloqueado por ausencia del admin
-              const bloqueado = ausenciasAdminData?.some((ausencia: any) => {
-                const inicio = getDateOnly(ausencia.fecha_inicio);
-                const fin = ausencia.fecha_fin ? getDateOnly(ausencia.fecha_fin) : inicio;
-                const fechaCheck = getDateOnly(fechaStr);
-                return fechaCheck >= inicio && fechaCheck <= fin;
-              });
-
-              if (tieneHorario && !bloqueado && !esFeriado) {
-                clasesEstimadas++;
-              }
-            }
-          }
-
-          // Agregar turnos variables del mes actual
-          if (vacantesData) {
-            clasesEstimadas += vacantesData.length;
-          }
-
-          const totalEstimado = clasesEstimadas * baseUnitPrice;
-
-          entries.push(
-            buildEntry(
-              {
-                clases_a_cobrar: clasesEstimadas,
-                tarifa_unitaria: baseUnitPrice,
-                monto_total: totalEstimado,
-                monto_con_descuento: totalEstimado,
-                mes: currentMonthNum,
-                anio: currentYear,
-                estado_pago: null,
-              },
-              { forceNext: false }
+              { forceNext: true, isEstimate: true }
             )
           );
         }
 
         entries.sort((a, b) => {
-          if (a.anio === b.anio) {
-            return b.mesNumero - a.mesNumero;
-          }
+          if (a.anio === b.anio) return b.mesNumero - a.mesNumero;
           return b.anio - a.anio;
         });
-        const currentFromLoad = entries.find((entry) => entry.isCurrent) ?? null;
-        let snapshotToUse = lockedCurrentSnapshotRef.current;
-        if (currentFromLoad) {
-          const sameMonth =
-            snapshotToUse &&
-            snapshotToUse.anio === currentFromLoad.anio &&
-            snapshotToUse.mesNumero === currentFromLoad.mesNumero;
-          // Reemplazar snapshot si cambió el mes, o si el mes actual pasó de $0/sin clases
-          // a datos reales (caso típico: setup inicial de usuario nuevo).
-          const setupCompletado =
-            sameMonth &&
-            (Number(snapshotToUse!.clases) === 0 || Number(snapshotToUse!.total) === 0) &&
-            (Number(currentFromLoad.clases) > 0 || Number(currentFromLoad.total) > 0);
 
-          if (!sameMonth || setupCompletado) {
-            snapshotToUse = { ...currentFromLoad };
-            lockedCurrentSnapshotRef.current = snapshotToUse;
-          } else if (snapshotToUse) {
-            // Mismo mes: actualizar montos/ajustes; conservar clases/precio base salvo que el
-            // recalc traiga más clases (recalc post-setup / cambio de plan).
-            const clases =
-              Number(currentFromLoad.clases) > Number(snapshotToUse.clases)
-                ? currentFromLoad.clases
-                : snapshotToUse.clases;
-            const precioUnitario =
-              Number(currentFromLoad.precioUnitario) > 0
-                ? currentFromLoad.precioUnitario
-                : snapshotToUse.precioUnitario;
-            snapshotToUse = {
-              ...snapshotToUse,
-              clases,
-              precioUnitario,
-              descuento: currentFromLoad.descuento,
-              descuentoPorcentaje: currentFromLoad.descuentoPorcentaje,
-              total: currentFromLoad.total,
-              totalConDescuento: currentFromLoad.totalConDescuento,
-              ajustes: currentFromLoad.ajustes,
-              estadoPago: currentFromLoad.estadoPago,
-            };
-            lockedCurrentSnapshotRef.current = snapshotToUse;
-          }
-        } else if (snapshotToUse) {
-          snapshotToUse = null;
-          lockedCurrentSnapshotRef.current = null;
-        }
-
-        const finalEntries =
-          snapshotToUse && currentFromLoad
-            ? entries.map((entry) =>
-                entry.isCurrent &&
-                entry.anio === snapshotToUse!.anio &&
-                entry.mesNumero === snapshotToUse!.mesNumero
-                  ? { ...snapshotToUse! }
-                  : entry
-              )
-            : entries;
-
-        const trimmedEntries =
-          userStartMonth
-            ? finalEntries.filter((entry) => {
-                const entryMonth = new Date(entry.anio, entry.mesNumero - 1, 1);
-                entryMonth.setHours(0, 0, 0, 0);
-                return entryMonth >= userStartMonth!;
-              })
-            : finalEntries;
+        const trimmedEntries = userStartMonth
+          ? entries.filter((entry) => {
+              const entryMonth = new Date(entry.anio, entry.mesNumero - 1, 1);
+              entryMonth.setHours(0, 0, 0, 0);
+              return entryMonth >= userStartMonth!;
+            })
+          : entries;
 
         setHistory(trimmedEntries);
+        balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
       } catch (err) {
         console.error('Error al cargar balance:', err);
         setError('Error al cargar el balance');
@@ -840,85 +434,42 @@ export const useUserBalance = (): UseUserBalanceReturn => {
       }
     };
 
-    // Solo cargar si no hay caché válido
-    if (cachedBalance.userId !== user.id || (nowBalance - cachedBalance.timestamp) >= BALANCE_CACHE_DURATION_MS || history.length === 0) {
-      // Primera carga con spinner
+    if (
+      cachedBalance.userId !== user.id ||
+      nowBalance - cachedBalance.timestamp >= BALANCE_CACHE_DURATION_MS ||
+      history.length === 0
+    ) {
       loadBalance(true);
     } else {
       setLoading(false);
     }
 
-    // Refrescar ante eventos manuales (solo si la página está visible)
     const manualHandler = () => {
-      // Tras setup de horarios / cambios de plan: invalidar snapshot $0 y recargar.
-      lockedCurrentSnapshotRef.current = null;
       balanceCacheRef.current = { userId: null, timestamp: 0 };
       if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         loadBalance(false);
-        balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
       }
     };
     window.addEventListener('balance:refresh', manualHandler);
 
-    // Suscripciones en tiempo real a todas las fuentes que impactan el balance
     const channel = supabase.channel(`balance-realtime-${user.id}`);
-
-    // Función helper para recargar solo si la página está visible
     const reloadIfVisible = () => {
-      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        balanceCacheRef.current = { userId: null, timestamp: 0 };
         loadBalance(false);
-        balanceCacheRef.current = { userId: user.id, timestamp: Date.now() };
       }
     };
 
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'cuotas_mensuales', filter: `usuario_id=eq.${user.id}` },
-      reloadIfVisible
-    );
-
-    // Cancelaciones del usuario (afectan conteo de cancelaciones)
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` },
-      reloadIfVisible
-    );
-
-    // Turnos variables reservados por el usuario (afectan vacantes/ajustes)
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'turnos_variables', filter: `cliente_id=eq.${user.id}` },
-      reloadIfVisible
-    );
-
-    // Cambios en vista de horarios (cuando se crean/activan horarios recurrentes)
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario', filter: `usuario_id=eq.${user.id}` },
-      reloadIfVisible
-    );
-
-    // Cambios de perfil que alteran combo/tarifa personalizada
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` },
-      reloadIfVisible
-    );
-
-    // Cambios globales de configuración de combos
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'configuracion_admin' },
-      reloadIfVisible
-    );
-
-    // Ausencias del admin (bloqueos) impactan estimación de próximas clases
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'ausencias_admin' },
-      () => loadBalance(false)
-    );
-
-    // Feriados impactan el cálculo de clases
-    channel.on('postgres_changes',
-      { event: '*', schema: 'public', table: 'feriados' },
-      reloadIfVisible
-    );
-
-    channel.subscribe();
+    channel
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'cuotas_mensuales', filter: `usuario_id=eq.${user.id}` }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_cancelados', filter: `cliente_id=eq.${user.id}` }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables', filter: `cliente_id=eq.${user.id}` }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario', filter: `usuario_id=eq.${user.id}` }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: `id=eq.${user.id}` }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'configuracion_admin' }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ausencias_admin' }, reloadIfVisible)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'feriados' }, reloadIfVisible)
+      .subscribe();
 
     return () => {
       try {
@@ -928,24 +479,17 @@ export const useUserBalance = (): UseUserBalanceReturn => {
         supabase.removeChannel(channel);
       } catch {}
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id]);
 
   const currentEntry = useMemo(
     () => history.find((entry) => entry.isCurrent) ?? null,
     [history]
   );
-
   const nextEntry = useMemo(
     () => history.find((entry) => entry.isNext) ?? null,
     [history]
   );
 
-  return {
-    history,
-    currentEntry,
-    nextEntry,
-    loading,
-    error,
-  };
+  return { history, currentEntry, nextEntry, loading, error };
 };
-

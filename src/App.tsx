@@ -33,7 +33,6 @@ import { supabase } from "./lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatLocalDate, todayLocal } from "./lib/dateLocal";
-import { useIsMobile } from "./hooks/use-mobile";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -48,7 +47,6 @@ const Dashboard = () => {
   const [tutorialDismissed, setTutorialDismissed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const isMobile = useIsMobile();
   const [profileOpen, setProfileOpen] = useState(false);
   const [supportOpen, setSupportOpen] = useState(false);
   const [infoGuideOpen, setInfoGuideOpen] = useState(false);
@@ -786,7 +784,7 @@ const Dashboard = () => {
                 <img
                   src="/assets/malda.svg"
                   alt="Logo Malda"
-                  className="h-8 w-auto max-h-9 object-contain object-left sm:h-9 sm:max-h-10"
+                  className="h-[1.6rem] w-auto max-h-[1.8rem] object-contain object-left sm:h-[1.8rem] sm:max-h-8"
                 />
               )}
             </div>
@@ -918,18 +916,15 @@ const Dashboard = () => {
             {/* Calcular la vista inicial basada en la pestaña activa */}
             {(() => {
               let initialView: 'mis-clases' | 'turnos-disponibles' | 'perfil' = 'mis-clases';
-              // En mobile la bottom nav es la fuente de verdad; ocultar pills internas evita desync
-              let hideSubNav = isMobile;
+              // Navbar desktop unificada en App; en mobile usa bottom nav.
+              // Siempre ocultar la subnav interna para no saltar de posición.
+              const hideSubNav = true;
               
               if (activeTab === 'clases') {
                 initialView = 'mis-clases';
               } else if (activeTab === 'vacantes') {
                 initialView = 'turnos-disponibles';
-              } else if (activeTab === 'records') {
-                hideSubNav = true;
               } else if (activeTab === 'balance') {
-                // En balance siempre ocultar la navbar de RecurringScheduleView
-                hideSubNav = true;
                 if (balanceSubView === 'mis-clases') {
                   initialView = 'mis-clases';
                 } else if (balanceSubView === 'vacantes') {
@@ -939,48 +934,54 @@ const Dashboard = () => {
               
               return (
                 <>
-                  {/* Subnavbar desktop cuando no está la de RecurringScheduleView */}
-                  {(activeTab === 'records' || (activeTab === 'balance' && balanceSubView === 'balance')) && (
-                    <div className="hidden sm:flex justify-center mb-4">
-                      <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
-                        <button
-                          onClick={() => goToTab('clases')}
-                          className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Mis clases
-                        </button>
-                        <button
-                          onClick={() => goToTab('vacantes')}
-                          className="px-4 py-2 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-                        >
-                          Vacantes
-                        </button>
-                        <button
-                          onClick={() => {
-                            setBalanceSubView('balance');
-                            goToTab('balance');
-                          }}
-                          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                            activeTab === 'balance'
-                              ? 'bg-secondary text-foreground'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Balance y pagos
-                        </button>
-                        <button
-                          onClick={() => goToTab('records')}
-                          className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-                            activeTab === 'records'
-                              ? 'bg-secondary text-foreground'
-                              : 'text-muted-foreground hover:text-foreground'
-                          }`}
-                        >
-                          Records
-                        </button>
-                      </div>
+                  {/* Subnavbar desktop fija (misma posición en todas las tabs) */}
+                  <div className="hidden sm:flex justify-center mb-4 pt-2">
+                    <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+                      <button
+                        onClick={() => goToTab('clases')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'clases'
+                            ? 'bg-secondary text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Mis clases
+                      </button>
+                      <button
+                        onClick={() => goToTab('vacantes')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'vacantes'
+                            ? 'bg-secondary text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Vacantes
+                      </button>
+                      <button
+                        onClick={() => {
+                          setBalanceSubView('balance');
+                          goToTab('balance');
+                        }}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'balance'
+                            ? 'bg-secondary text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Balance
+                      </button>
+                      <button
+                        onClick={() => goToTab('records')}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                          activeTab === 'records'
+                            ? 'bg-secondary text-foreground'
+                            : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        Rankings
+                      </button>
                     </div>
-                  )}
+                  </div>
 
                   {/* Contenido de balance (solo cuando balanceSubView === 'balance') */}
                   {activeTab === 'balance' && balanceSubView === 'balance' && (
@@ -1028,11 +1029,10 @@ const Dashboard = () => {
                                 <span className="text-muted-foreground">Cantidad de clases</span>
                                 <span className="font-medium">{entry.clases}</span>
                               </div>
-                              {entry.ajustes && entry.ajustes.cancelaciones.cantidad > 0 && entry.isCurrent && (
-                                <div className="flex items-center justify-between text-xs text-muted-foreground">
-                                  <span>Clases canceladas</span>
-                                  <span>-{entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}</span>
-                                </div>
+                              {entry.isCurrent && (
+                                <p className="text-[11px] text-muted-foreground">
+                                  Los cambios de este mes impactan el próximo.
+                                </p>
                               )}
                               {entry.descuentoPorcentaje > 0 && (
                                 <div className="flex items-center justify-between">
@@ -1045,11 +1045,11 @@ const Dashboard = () => {
                                   </span>
                                 </div>
                               )}
-                              {entry.ajustes && !entry.isCurrent && (
+                              {entry.ajustes && entry.isNext && (
                                 <>
                                   <div className="flex items-center justify-between">
                                     <span className="text-muted-foreground">
-                                      Clases canceladas {mesActualNombre}
+                                      Clases canceladas / feriados {mesActualNombre}
                                     </span>
                                     <div className="text-right">
                                       <p className="font-medium text-green-500">
@@ -1074,21 +1074,6 @@ const Dashboard = () => {
                                     </div>
                                   </div>
                                 </>
-                              )}
-                              {entry.ajustes && entry.isCurrent && entry.ajustes.cancelaciones.cantidad > 0 && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-muted-foreground">
-                                    Descuento por cancelaciones
-                                  </span>
-                                  <div className="text-right">
-                                    <p className="font-medium text-green-500">
-                                      -${formatCurrency(entry.ajustes.cancelaciones.monto)}
-                                    </p>
-                                    <p className="text-[11px] text-muted-foreground">
-                                      {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'} cancelada{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
-                                    </p>
-                                  </div>
-                                </div>
                               )}
                               <div className="border-t pt-2 flex items-center justify-between font-semibold">
                                 <span>Total</span>
@@ -1209,7 +1194,7 @@ const Dashboard = () => {
                   aria-current={activeTab === 'records'}
                 >
                   <Trophy className="h-5 w-5" />
-                  <span className="text-caption font-medium">Records</span>
+                  <span className="text-caption font-medium">Rankings</span>
                 </button>
               </div>
             </nav>
@@ -1277,7 +1262,7 @@ const Dashboard = () => {
                   infoGuideSection === 'balance' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
                 }`}
               >
-                Balance y pagos
+                Balance
               </button>
             </div>
             <div className="md:hidden">
@@ -1292,7 +1277,7 @@ const Dashboard = () => {
                 {misClasesGuide}
               </div>
               <div className="space-y-4">
-                <h3 className="text-heading text-center">Balance y pagos</h3>
+                <h3 className="text-heading text-center">Balance</h3>
                 {balanceGuide}
               </div>
             </div>

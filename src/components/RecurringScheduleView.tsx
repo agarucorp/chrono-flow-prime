@@ -2026,7 +2026,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   }
 
   return (
-    <div className="space-y-3 sm:space-y-6 pt-1 sm:pt-2 pb-20 sm:pb-2 md:pb-2">
+    <div className={`space-y-3 sm:space-y-6 pb-20 sm:pb-2 md:pb-2 ${hideSubNav ? 'pt-0' : 'pt-1 sm:pt-2'}`}>
       {/* Subnavbar - solo mostrar si no está oculta */}
       {!hideSubNav && (
         <div className="space-y-3 sm:space-y-4 mt-1 sm:mt-0">
@@ -2041,7 +2041,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              Mis Clases
+              Mis clases
             </button>
             <button
               onClick={() => handleViewChange('turnos-disponibles')}
@@ -2063,7 +2063,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               onClick={() => window.dispatchEvent(new CustomEvent('nav:records'))}
               className="px-4 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
             >
-              Records
+              Rankings
             </button>
           </div>
           </div>
