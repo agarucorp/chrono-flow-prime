@@ -876,11 +876,6 @@ const Dashboard = () => {
                               <CardTitle className="text-heading">
                                 Cuota {entry.mesNombre} {entry.anio}
                               </CardTitle>
-                              {entry.isNext && (
-                                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                                  <span>Se actualiza con tus cambios</span>
-                                </div>
-                              )}
                             </CardHeader>
                             <CardContent className="space-y-3 text-sm">
                               <div className="flex items-center justify-between">
@@ -890,7 +885,7 @@ const Dashboard = () => {
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Clases del plan</span>
+                                <span className="text-muted-foreground">Clases del mes</span>
                                 <span className="font-medium">{entry.desglose.plan}</span>
                               </div>
                               {entry.desglose.vacantes > 0 && (
@@ -1176,7 +1171,7 @@ const Dashboard = () => {
                     <span className="font-medium">${formatCurrency(entry.precioUnitario)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Clases del plan</span>
+                    <span className="text-muted-foreground">Clases del mes</span>
                     <span className="font-medium">{entry.desglose.plan}</span>
                   </div>
                   {entry.desglose.vacantes > 0 && (
