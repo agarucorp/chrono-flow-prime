@@ -16,7 +16,7 @@ import {
   parseAuthUrlParams,
   waitForAuthSession,
 } from "@/lib/authCallbacks";
-import { AUTH_STORAGE_KEY, getRememberSession, setRememberSession } from "@/lib/authStorage";
+import { AUTH_STORAGE_KEY } from "@/lib/authStorage";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -62,8 +62,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [awaitingEmailConfirmUi, setAwaitingEmailConfirmUi] = useState(
     () => isEmailConfirmCallback() || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1'
   );
-  const [rememberSession, setRememberSessionState] = useState(() => getRememberSession());
-
   // Tras click en "Confirmar email": esperar PKCE, cerrar sesión y quedarse en login
   useEffect(() => {
     const { error, errorDescription } = parseAuthUrlParams();
@@ -233,13 +231,9 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       // Login real con Supabase
       try {
         setIsLoading(true);
-        setRememberSession(rememberSession);
-        // Evitar que una sesión previa en localStorage “reviva” si no quiere persistir
-        if (!rememberSession) {
-          localStorage.removeItem(AUTH_STORAGE_KEY);
-        } else {
-          sessionStorage.removeItem(AUTH_STORAGE_KEY);
-        }
+        // La sesión persiste siempre en localStorage; limpiamos la copia que
+        // pudiera haber quedado en sessionStorage de la versión anterior.
+        sessionStorage.removeItem(AUTH_STORAGE_KEY);
         const result = await signIn(credentials.email, credentials.password);
 
         if (!result.success || !result.user) {
@@ -461,15 +455,26 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex flex-col items-center bg-black p-2 pt-32 pb-0 md:p-4 md:pt-4 h-screen md:min-h-screen overflow-x-hidden">
-      {/* Contenido principal centrado */}
-      <div className="flex-1 flex flex-col items-center w-full pt-0 pb-0 md:pt-0">
-        <div className="hidden md:flex justify-center mb-0">
-          <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[220px] w-full" />
-        </div>
-        {/* Grupo modal + footer para mobile */}
-        <div className="w-full max-w-md flex flex-col md:space-y-8 mt-0 md:mt-0 md:mb-8 flex-1 md:flex-none md:justify-center justify-start md:justify-center pb-0 md:pb-0">
-          <div className="space-y-4 md:space-y-8 mb-6 md:mb-0">
+    <div className="flex h-screen min-h-screen flex-col overflow-x-hidden bg-black md:flex-row">
+      {/* Desktop: panel izquierdo — logo full black */}
+      <aside className="relative hidden md:flex md:w-1/2 md:flex-col md:items-center md:justify-center bg-black">
+        <img
+          src="/assets/logovertical.svg"
+          alt="Logo MaldaGym"
+          className="max-w-[280px] w-[55%] object-contain"
+        />
+        {/* Línea divisoria central */}
+        <div
+          aria-hidden
+          className="absolute inset-y-0 right-0 w-px bg-white/15"
+        />
+      </aside>
+
+      {/* Mobile: layout actual · Desktop: panel derecho carbon */}
+      <div className="flex flex-1 flex-col items-center bg-black p-2 pt-32 pb-0 md:w-1/2 md:justify-center md:bg-card md:p-8 md:pt-8">
+        {/* Grupo modal + footer */}
+        <div className="flex w-full max-w-md flex-1 flex-col justify-start pb-0 md:mb-0 md:flex-none md:justify-center md:space-y-8">
+          <div className="mb-6 space-y-4 md:mb-0 md:space-y-8">
           {/* Login/Register Card */}
           <Card className="animate-slide-up border-border shadow-elegant">
           <CardHeader className="space-y-1 p-3 md:p-6">
@@ -547,17 +552,6 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                     </div>
                   </div>
 
-                  <label className="flex items-center gap-2 cursor-pointer select-none pt-1">
-                    <input
-                      type="checkbox"
-                      checked={rememberSession}
-                      onChange={(e) => setRememberSessionState(e.target.checked)}
-                      className="h-3.5 w-3.5 rounded border-border bg-background accent-primary"
-                    />
-                    <span className="text-[11px] text-muted-foreground md:text-xs">
-                      Mantener la sesión iniciada
-                    </span>
-                  </label>
                 </>
               ) : currentStep === 1 ? (
                 // Step 1: Personal Information
@@ -809,24 +803,19 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         </Card>
           </div>
           
-          {/* Footer - Agrupado con modal en mobile */}
-          <footer className="w-full pt-0 pb-0 md:pt-2 md:pb-4 flex-shrink-0 bg-black mt-0 md:mt-0">
-        <div className="flex items-center justify-center gap-2">
-          <p className="text-xs text-white/70">Powered by</p>
-          <a 
-            href="https://www.agarucorp.com" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="inline-block"
-          >
-            <img 
-              src="/agarucorp-logo.svg" 
-              alt="AgaruCorp" 
-              className="h-[17px] w-auto opacity-70 hover:opacity-100 transition-opacity"
-              style={{ maxWidth: '120px' }}
-            />
-          </a>
-        </div>
+          {/* Footer */}
+          <footer className="mt-0 w-full flex-shrink-0 bg-transparent pb-0 pt-0 md:mt-0 md:bg-transparent md:pb-4 md:pt-2">
+            <div className="flex items-center justify-center gap-2">
+              <p className="text-xs text-white/70">Powered by</p>
+              <a
+                href="https://www.agarucorp.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs font-medium tracking-wide text-white/70 transition-colors hover:text-white hover:underline"
+              >
+                AGARUCORP
+              </a>
+            </div>
           </footer>
         </div>
       </div>

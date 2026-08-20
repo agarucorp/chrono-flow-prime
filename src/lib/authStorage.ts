@@ -1,53 +1,31 @@
-/** Preferencia "mantener sesión" + storage adaptativo para supabase-js. */
-
-export const REMEMBER_SESSION_KEY = 'maldagym_remember_session';
 export const AUTH_STORAGE_KEY = 'maldagym_supabase_auth';
 
-export function getRememberSession(): boolean {
-  if (typeof window === 'undefined') return false;
-  return localStorage.getItem(REMEMBER_SESSION_KEY) === '1';
-}
-
-export function setRememberSession(remember: boolean) {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(REMEMBER_SESSION_KEY, remember ? '1' : '0');
-}
-
 /**
- * Si "mantener sesión" está activo → localStorage.
- * Si no → sessionStorage (se pierde al cerrar la pestaña).
+ * Storage de la sesión de supabase-js.
+ *
+ * La sesión siempre vive en localStorage. Antes había una preferencia
+ * "mantener sesión iniciada" que la mandaba a sessionStorage; el fallback a
+ * sessionStorage en getItem queda solo para no desloguear a quien todavía
+ * tenga la sesión guardada ahí de la versión anterior.
  */
 export const authStorage: Storage = {
   get length() {
-    return getRememberSession() ? localStorage.length : sessionStorage.length;
+    return localStorage.length;
   },
   clear() {
     localStorage.removeItem(AUTH_STORAGE_KEY);
     sessionStorage.removeItem(AUTH_STORAGE_KEY);
   },
   key(index: number) {
-    return (getRememberSession() ? localStorage : sessionStorage).key(index);
+    return localStorage.key(index);
   },
   getItem(key: string) {
-    if (key !== AUTH_STORAGE_KEY) {
-      return localStorage.getItem(key) ?? sessionStorage.getItem(key);
-    }
-    if (getRememberSession()) {
-      return localStorage.getItem(key);
-    }
-    return sessionStorage.getItem(key);
+    return localStorage.getItem(key) ?? sessionStorage.getItem(key);
   },
   setItem(key: string, value: string) {
-    if (key !== AUTH_STORAGE_KEY) {
-      localStorage.setItem(key, value);
-      return;
-    }
-    if (getRememberSession()) {
-      localStorage.setItem(key, value);
+    localStorage.setItem(key, value);
+    if (key === AUTH_STORAGE_KEY) {
       sessionStorage.removeItem(key);
-    } else {
-      sessionStorage.setItem(key, value);
-      localStorage.removeItem(key);
     }
   },
   removeItem(key: string) {

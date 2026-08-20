@@ -153,7 +153,7 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
                       animation: direction === 'forward' ? 'slideInFromRight 0.7s ease-in-out forwards' : 'slideInFromLeft 0.7s ease-in-out forwards'
                     }}
                   >
-                    <h2 className="text-[19px] sm:text-[20px] font-semibold tracking-tight text-white text-left w-full">
+                    <h2 className="text-title text-left w-full">
                       {currentSlide.title}
                     </h2>
                     <p className="text-[15px] font-light sm:text-[12px] sm:font-normal text-muted-foreground leading-relaxed text-left w-full">

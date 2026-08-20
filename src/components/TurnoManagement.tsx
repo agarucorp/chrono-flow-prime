@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -12,6 +12,7 @@ import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { formatLocalDate } from '@/lib/dateLocal';
 
 interface HorarioClase {
   id: number;
@@ -102,6 +103,27 @@ export const TurnoManagement = () => {
   } = useSystemConfig();
   const { createAusenciaUnica, createAusenciaPeriodo, fetchAusencias, deleteAusencia } = useAdmin();
   const { toast } = useToast();
+
+  // Cualquier cambio de grilla, capacidad o ausencias mueve la cantidad de
+  // clases de los alumnos, y la cuota es un valor guardado: hay que reescribirla.
+  const recalcularCuotasAfectadas = useCallback(async () => {
+    const hoy = new Date();
+    const desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const hasta = new Date(hoy.getFullYear(), hoy.getMonth() + 2, 0);
+
+    const { error } = await supabase.rpc('fn_admin_recalcular_rango', {
+      p_desde: formatLocalDate(desde),
+      p_hasta: formatLocalDate(hasta),
+    });
+
+    if (error) {
+      console.error('Error recalculando cuotas:', error);
+      return;
+    }
+
+    window.dispatchEvent(new Event('clasesDelMes:updated'));
+    window.dispatchEvent(new Event('balance:refresh'));
+  }, []);
 
   // Cargar tarifas escalonadas al montar
   useEffect(() => {
@@ -232,10 +254,6 @@ export const TurnoManagement = () => {
       console.error('Error:', error);
       toast({ title: 'Error', description: 'No se pudo actualizar la capacidad', variant: 'destructive' });
     }
-  };
-
-  const guardarCapacidad = async () => {
-    setIsCapacidadDialogOpen(false);
   };
 
   const abrirTarifa = () => {
@@ -373,11 +391,6 @@ export const TurnoManagement = () => {
         updated_at: new Date().toISOString()
       };
 
-      // Agregar tarifa si fue modificada (retrocompatibilidad)
-      if (tarifaClase && parseFloat(tarifaClase) >= 0) {
-        updateData.precio_clase = parseFloat(tarifaClase);
-      }
-
       // Agregar tarifas escalonadas
       if (combo1Tarifa && parseFloat(combo1Tarifa) >= 0) {
         updateData.combo_1_tarifa = parseFloat(combo1Tarifa);
@@ -413,11 +426,13 @@ export const TurnoManagement = () => {
         return;
       }
 
-      // Sincronización con horarios_semanales usando clase_numero
-      const diasLaborales = [1, 2, 3, 4, 5];
+      // La grilla se replica en los 7 días: el sábado y el domingo sólo se
+      // ofrecen si el admin habilita el fin de semana, pero sus horarios tienen
+      // que seguir a los días hábiles para no quedar desfasados.
+      const diasSemana = [1, 2, 3, 4, 5, 6, 7];
       const nowIso = new Date().toISOString();
 
-      for (const ds of diasLaborales) {
+      for (const ds of diasSemana) {
         // Traer existentes del día con clase_numero
         const { data: existentes, error: errorExistentes } = await supabase
           .from('horarios_semanales')
@@ -479,7 +494,25 @@ export const TurnoManagement = () => {
             }
           }
         }
+
+        // Las clases que el admin quitó del popup se dan de baja. Sin esto
+        // seguían apareciendo en vacantes y cobrándose.
+        const sobrantes = (existentes || []).filter(
+          (e: any) => e.clase_numero > horariosFijos.length
+        );
+        if (sobrantes.length > 0) {
+          const { error: errorBaja } = await supabase
+            .from('horarios_semanales')
+            .update({ activo: false, updated_at: nowIso })
+            .in('id', sobrantes.map((e: any) => e.id));
+
+          if (errorBaja) {
+            console.error('❌ Error dando de baja clases sobrantes:', { dia: ds, errorBaja });
+          }
+        }
       }
+
+      await recalcularCuotasAfectadas();
 
       toast({ 
         title: 'Guardado exitoso', 
@@ -535,8 +568,8 @@ export const TurnoManagement = () => {
         description: `Capacidad de Clase ${claseNumero} actualizada a ${nuevaCapacidad}` 
       });
       
-      // Disparar evento para actualizar otros componentes
       window.dispatchEvent(new Event('capacidad:updated'));
+      await recalcularCuotasAfectadas();
     } catch (error) {
       console.error(`Error inesperado actualizando capacidad de clase ${claseNumero}:`, error);
       toast({ 
@@ -605,8 +638,8 @@ export const TurnoManagement = () => {
           };
           setAusenciasUnicas(prev => [...prev, nuevaAusencia]);
 
-          // Disparar evento para que los usuarios recarguen sus calendarios
           window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+          await recalcularCuotasAfectadas();
 
           // Limpiar formulario
           setNuevaAusenciaUnica({ fechaCompleta: '', dia: '', mes: '', año: '', clasesCanceladas: [] });
@@ -662,8 +695,8 @@ export const TurnoManagement = () => {
         };
         setAusenciasPeriodo(prev => [...prev, nuevaAusencia]);
 
-        // Disparar evento para que los usuarios recarguen sus calendarios
         window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+        await recalcularCuotasAfectadas();
 
         // Limpiar formulario
         setNuevaAusenciaPeriodo({ fechaDesde: '', fechaHasta: '' });
@@ -697,8 +730,8 @@ export const TurnoManagement = () => {
           setAusenciasPeriodo(prev => prev.filter(ausencia => ausencia.id !== id));
         }
         
-        // Disparar evento para que los usuarios recarguen sus calendarios
         window.dispatchEvent(new Event('ausenciasAdmin:updated'));
+        await recalcularCuotasAfectadas();
         
         toast({
           title: 'Ausencia eliminada',

@@ -269,36 +269,14 @@ export const FinSemanaConfigModal = ({
         finSemanaId = insertData?.id;
       }
 
-      // Crear turnos disponibles para los horarios personalizados
-      if (horariosPersonalizados.length > 0 && finSemanaId) {
-        for (const horario of horariosPersonalizados) {
-          const horaInicio = horario.hora_inicio.length === 5 ? horario.hora_inicio : `${horario.hora_inicio}:00`;
-          const horaFin = horario.hora_fin.length === 5 ? horario.hora_fin : `${horario.hora_fin}:00`;
-
-          // Verificar si ya existe
-          const { data: existente } = await supabase
-            .from('turnos_disponibles')
-            .select('id')
-            .eq('turno_fecha', fecha)
-            .eq('turno_hora_inicio', horaInicio)
-            .eq('turno_hora_fin', horaFin)
-            .eq('creado_desde_feriado_id', finSemanaId)
-            .maybeSingle();
-
-          if (!existente) {
-            const { error: errorDisponible } = await supabase
-              .from('turnos_disponibles')
-              .insert({
-                turno_fecha: fecha,
-                turno_hora_inicio: horaInicio,
-                turno_hora_fin: horaFin,
-                creado_desde_feriado_id: finSemanaId
-              });
-
-            if (errorDisponible) {
-              console.error('Error creando turno disponible:', errorDisponible);
-            }
-          }
+      // Los cupos del día salen de horarios_personalizados, no hay que
+      // materializarlos. Sólo hay que liberar reservas previas de esa fecha.
+      if (finSemanaId) {
+        const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
+          p_feriado_id: finSemanaId,
+        });
+        if (aplicarError) {
+          showError('El fin de semana se guardó, pero no se pudieron liberar las reservas del día.');
         }
       }
 
@@ -307,7 +285,7 @@ export const FinSemanaConfigModal = ({
       resetearFormulario();
       onClose();
       window.dispatchEvent(new CustomEvent('feriados:updated'));
-      window.dispatchEvent(new CustomEvent('turnosDisponibles:updated'));
+      window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
       window.dispatchEvent(new CustomEvent('balance:refresh'));
       onFinSemanaGuardado?.();
     } catch (error: any) {
@@ -326,13 +304,11 @@ export const FinSemanaConfigModal = ({
     let loadingToast = showLoading('Eliminando fin de semana habilitado...');
 
     try {
-      // Eliminar turnos disponibles asociados
-      await supabase
-        .from('turnos_disponibles')
-        .delete()
-        .eq('creado_desde_feriado_id', editandoFinSemana.id);
+      const { error: revertirError } = await supabase.rpc('fn_admin_revertir_feriado', {
+        p_feriado_id: editandoFinSemana.id,
+      });
+      if (revertirError) throw revertirError;
 
-      // Eliminar el feriado
       const { error } = await supabase
         .from('feriados')
         .delete()
@@ -345,7 +321,7 @@ export const FinSemanaConfigModal = ({
       resetearFormulario();
       onClose();
       window.dispatchEvent(new CustomEvent('feriados:updated'));
-      window.dispatchEvent(new CustomEvent('turnosDisponibles:updated'));
+      window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
       window.dispatchEvent(new CustomEvent('balance:refresh'));
       onFinSemanaGuardado?.();
     } catch (error: any) {

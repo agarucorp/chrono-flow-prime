@@ -8,6 +8,15 @@ interface AuthState {
   error: string | null
 }
 
+interface SignUpResult {
+  success: boolean
+  user?: any
+  error?: string
+  warning?: string
+  /** La cuenta existe pero no puede entrar hasta confirmar el email. */
+  needsEmailConfirmation?: boolean
+}
+
 export const useAuth = () => {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
@@ -214,7 +223,7 @@ export const useAuth = () => {
     }
     localStorage.setItem('lastSignUpAttempt', Date.now().toString());
 
-    const attempt = async (triesLeft: number, delayMs: number, attemptNumber: number = 1): Promise<{ success: boolean; user?: any; error?: string; warning?: string }> => {
+    const attempt = async (triesLeft: number, delayMs: number, attemptNumber: number = 1): Promise<SignUpResult> => {
       try {
         const signUpOptions: Parameters<typeof supabase.auth.signUp>[0] = {
           email,

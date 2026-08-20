@@ -5,9 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { flushSync } from 'react-dom';
 import { Check, AlertCircle, ArrowLeft, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
-import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
 import { addDaysLocal, formatLocalDate, formatMonthEs, todayLocal } from '@/lib/dateLocal';
 
@@ -46,9 +44,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
   currentSchedules,
   currentPlan
 }) => {
-  const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
-  const { obtenerCapacidadActual } = useSystemConfig();
 
   const [horariosClase, setHorariosClase] = useState<HorarioClase[]>([]);
   const [horariosSeleccionados, setHorariosSeleccionados] = useState<Set<string>>(new Set());
@@ -90,12 +86,8 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
   const fetchHorariosClase = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('horarios_semanales')
-        .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, capacidad, activo')
-        .eq('activo', true)
-        .order('dia_semana', { ascending: true })
-        .order('clase_numero', { ascending: true });
+
+      const { data, error } = await supabase.rpc('fn_ocupacion_plan_semanal');
 
       if (error) {
         console.error('Error cargando horarios:', error);
@@ -103,99 +95,43 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
         return;
       }
 
-      const capacidadGlobal = obtenerCapacidadActual() || 4;
-
-      // Pre-seleccionar horarios actuales del usuario
+      // La ocupación que devuelve el RPC ya excluye al usuario actual, así que
+      // sus propios horarios nunca se le muestran como completos.
       const horariosSeleccionadosIniciales = new Set<string>();
 
-      const horariosConCapacidad = await Promise.all(
-        (data || []).map(async (item) => {
-          const horaInicioRaw = item.hora_inicio || '';
-          const horaFinRaw = item.hora_fin || '';
-          
-          let horaInicio: string;
-          let horaFin: string;
-          
-          if (horaInicioRaw.includes(':')) {
-            const partsInicio = horaInicioRaw.split(':');
-            horaInicio = `${partsInicio[0].padStart(2, '0')}:${partsInicio[1].padStart(2, '0')}:${(partsInicio[2] || '00').padStart(2, '0')}`;
-          } else {
-            horaInicio = horaInicioRaw + ':00:00';
-          }
-          
-          if (horaFinRaw.includes(':')) {
-            const partsFin = horaFinRaw.split(':');
-            horaFin = `${partsFin[0].padStart(2, '0')}:${partsFin[1].padStart(2, '0')}:${(partsFin[2] || '00').padStart(2, '0')}`;
-          } else {
-            horaFin = horaFinRaw + ':00:00';
-          }
-
-          // Contar usuarios recurrentes, EXCLUYENDO los del usuario actual
-          let usuariosRecurrentesCount = 0;
-          
-          try {
-            const { data: countData, error: rpcError } = await supabase.rpc(
-              'contar_usuarios_horario_recurrente',
-              {
-                p_dia_semana: item.dia_semana,
-                p_hora_inicio: horaInicio.substring(0, 5),
-                p_hora_fin: horaFin.substring(0, 5)
-              }
-            );
-
-            if (rpcError) {
-              const { data: usuariosRecurrentes } = await supabase
-                .from('horarios_recurrentes_usuario')
-                .select('id, usuario_id, hora_inicio, hora_fin')
-                .eq('dia_semana', item.dia_semana)
-                .eq('activo', true);
-
-              if (usuariosRecurrentes) {
-                const usuariosRecurrentesFiltrados = usuariosRecurrentes.filter(usr => {
-                  if (usr.usuario_id === user?.id) return false; // Excluir usuario actual
-                  const usrHoraInicio = (usr.hora_inicio || '').substring(0, 5);
-                  const usrHoraFin = (usr.hora_fin || '').substring(0, 5);
-                  return usrHoraInicio === horaInicio.substring(0, 5) && usrHoraFin === horaFin.substring(0, 5);
-                });
-                usuariosRecurrentesCount = usuariosRecurrentesFiltrados.length;
-              }
-            } else {
-              // Si RPC funciona, restar 1 si el usuario actual tiene este horario
-              usuariosRecurrentesCount = typeof countData === 'number' ? countData : parseInt(String(countData)) || 0;
-              const usuarioTieneEsteHorario = currentSchedules.some(cs => 
-                cs.dia_semana === item.dia_semana &&
-                cs.clase_numero === item.clase_numero
-              );
-              if (usuarioTieneEsteHorario && usuariosRecurrentesCount > 0) {
-                usuariosRecurrentesCount -= 1;
-              }
-            }
-          } catch (error) {
-            console.error('Error contando usuarios:', error);
-          }
-
-          // Verificar si este horario está en los horarios actuales del usuario
-          const esHorarioActual = currentSchedules.some(cs => 
-            cs.dia_semana === item.dia_semana &&
-            cs.clase_numero === item.clase_numero
+      const horariosConCapacidad = (data || [])
+        .filter((slot: { dia_semana: number }) => slot.dia_semana >= 1 && slot.dia_semana <= 5)
+        .map((slot: {
+          horario_id: string;
+          dia_semana: number;
+          clase_numero: number;
+          hora_inicio: string;
+          hora_fin: string;
+          capacidad: number;
+          ocupados: number;
+          completo: boolean;
+        }) => {
+          const esHorarioActual = currentSchedules.some(
+            cs => cs.dia_semana === slot.dia_semana && cs.clase_numero === slot.clase_numero
           );
 
           if (esHorarioActual) {
-            horariosSeleccionadosIniciales.add(item.id);
+            horariosSeleccionadosIniciales.add(slot.horario_id);
           }
 
-          // Usar capacidad específica de la clase o capacidad global como fallback
-          const capacidadClase = item.capacidad || capacidadGlobal;
-          const cupoCompleto = usuariosRecurrentesCount >= capacidadClase;
-
           return {
-            ...item,
-            capacidad_maxima: capacidadClase,
-            usuariosActuales: usuariosRecurrentesCount,
-            cupoCompleto: cupoCompleto
+            id: slot.horario_id,
+            dia_semana: slot.dia_semana,
+            clase_numero: slot.clase_numero,
+            hora_inicio: slot.hora_inicio,
+            hora_fin: slot.hora_fin,
+            capacidad: slot.capacidad,
+            activo: true,
+            capacidad_maxima: slot.capacidad,
+            usuariosActuales: slot.ocupados,
+            cupoCompleto: slot.completo,
           };
-        })
-      );
+        });
 
       setHorariosClase(horariosConCapacidad);
       setHorariosSeleccionados(horariosSeleccionadosIniciales);
@@ -309,164 +245,51 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
     }).format(precio);
   };
 
+  // Cambio de plan y de horarios.
+  //
+  // Siempre aplica desde el 1° del mes siguiente, incluso si el alumno mantiene
+  // la misma cantidad de días. El mes en curso ya está cobrado, así que mover una
+  // clase de lunes a miércoles hoy cambiaría clases que el alumno ya pagó y
+  // liberaría o pisaría cupos de una grilla cerrada.
+  //
+  // fn_cambiar_plan cierra los horarios viejos a fin de mes, abre los nuevos el
+  // 1°, libera las vacantes que el alumno tenía reservadas para meses futuros y
+  // recalcula la cuota, todo en una transacción.
   const handleConfirm = async () => {
     try {
       setSaving(true);
       const loadingToast = showLoading('Actualizando horarios...');
 
-      if (!user?.id) {
-        dismissToast(loadingToast);
-        showError('Error', 'No se pudo identificar al usuario');
+      const { data, error } = await supabase.rpc('fn_cambiar_plan', {
+        p_horario_ids: Array.from(horariosSeleccionados)
+      });
+
+      dismissToast(loadingToast);
+
+      if (error) {
+        console.error('Error actualizando el plan:', error);
+        showError('No se pudo actualizar tu plan', error.message);
         return;
       }
 
-      // Obtener la tarifa del paquete seleccionado
-      const paquete = PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado);
-      const tarifaPorClase = paquete?.precioPorClase || 0;
+      const resultado = data as { combo?: number; desde?: string } | null;
+      const desde = resultado?.desde ? new Date(`${resultado.desde}T00:00:00`) : new Date();
+      showSuccess(
+        '¡Cambio programado!',
+        `Tu plan de ${resultado?.combo ?? horariosSeleccionados.size} día(s) aplica desde el 1 de ${formatMonthEs(desde, false)}. Hasta entonces mantenés los horarios actuales.`
+      );
 
-      // Detectar si es cambio de plan o solo de horarios
-      const esCambioDePlan = paqueteSeleccionado !== currentPlan;
-
-      const ahora = new Date();
-      const manana = addDaysLocal(ahora, 1);
-      const hoyStr = todayLocal();
-      const mananaStr = formatLocalDate(manana);
-      
-      // Calcular 1ro del próximo mes
-      const primeroDiaProximoMes = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
-      const primeroDiaProximoMesStr = formatLocalDate(primeroDiaProximoMes);
-      
-      // Calcular último día del mes actual
-      const ultimoDiaMesActual = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 0);
-      const ultimoDiaMesActualStr = formatLocalDate(ultimoDiaMesActual);
-
-      if (esCambioDePlan) {
-        // CAMBIO DE PLAN: Aplica desde el próximo mes
-        
-        // 1. Marcar horarios actuales con fecha_fin = último día del mes actual
-        const { error: updateOldError } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .update({ fecha_fin: ultimoDiaMesActualStr })
-          .eq('usuario_id', user.id)
-          .eq('activo', true)
-          .is('fecha_fin', null);
-
-        if (updateOldError) {
-          console.error('Error marcando fin de horarios antiguos:', updateOldError);
-        }
-
-        // 2. Crear nuevos horarios con fecha_inicio = 1ro del próximo mes
-        const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
-          const horario = horariosClase.find(h => h.id === horarioId);
-          return {
-            usuario_id: user.id,
-            dia_semana: horario?.dia_semana,
-            clase_numero: horario?.clase_numero,
-            hora_inicio: horario?.hora_inicio,
-            hora_fin: horario?.hora_fin,
-            activo: true,
-            fecha_inicio: primeroDiaProximoMesStr,
-            combo_aplicado: paqueteSeleccionado,
-            tarifa_personalizada: tarifaPorClase
-          };
-        });
-
-        const { error: insertError } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .insert(horariosRecurrentes);
-
-        if (insertError) {
-          dismissToast(loadingToast);
-          console.error('Error guardando horarios recurrentes:', insertError);
-          showError('Error', `No se pudieron guardar tus horarios recurrentes: ${insertError.message}`);
-          return;
-        }
-
-        // 3. Guardar cambio de plan como pendiente (NO actualizar combo_asignado todavía)
-        const { error: profileUpdateError } = await supabase
-          .from('profiles')
-          .update({ 
-            combo_pendiente: paqueteSeleccionado,
-            tarifa_pendiente: tarifaPorClase,
-            fecha_cambio_plan: primeroDiaProximoMesStr
-          })
-          .eq('id', user.id);
-
-        if (profileUpdateError) {
-          console.warn('No se pudo guardar el cambio pendiente:', profileUpdateError);
-        }
-
-        dismissToast(loadingToast);
-        const nombreMes = formatMonthEs(primeroDiaProximoMes, false);
-        showSuccess(
-          '¡Cambio de plan programado!', 
-          `Tu nuevo Plan ${paqueteSeleccionado} aplicará desde el 1 de ${nombreMes}. Hasta entonces, mantenés tu plan actual.`
-        );
-
-      } else {
-        // CAMBIO DE HORARIOS (mismo plan): Aplica desde mañana
-        
-        // 1. Marcar horarios actuales con fecha_fin = hoy
-        const { error: updateOldError } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .update({ fecha_fin: hoyStr })
-          .eq('usuario_id', user.id)
-          .eq('activo', true)
-          .is('fecha_fin', null);
-
-        if (updateOldError) {
-          console.error('Error marcando fin de horarios antiguos:', updateOldError);
-        }
-
-        // 2. Crear nuevos horarios con fecha_inicio = mañana
-        const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
-          const horario = horariosClase.find(h => h.id === horarioId);
-          return {
-            usuario_id: user.id,
-            dia_semana: horario?.dia_semana,
-            clase_numero: horario?.clase_numero,
-            hora_inicio: horario?.hora_inicio,
-            hora_fin: horario?.hora_fin,
-            activo: true,
-            fecha_inicio: mananaStr,
-            combo_aplicado: paqueteSeleccionado,
-            tarifa_personalizada: tarifaPorClase
-          };
-        });
-
-        const { error: insertError } = await supabase
-          .from('horarios_recurrentes_usuario')
-          .insert(horariosRecurrentes);
-
-        if (insertError) {
-          dismissToast(loadingToast);
-          console.error('Error guardando horarios recurrentes:', insertError);
-          showError('Error', `No se pudieron guardar tus horarios recurrentes: ${insertError.message}`);
-          return;
-        }
-
-        dismissToast(loadingToast);
-        showSuccess(
-          '¡Horarios actualizados!', 
-          `Tus nuevos horarios aplicarán desde mañana.`
-        );
-      }
-
-      // Disparar eventos para actualizar todas las vistas
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
-        window.dispatchEvent(new CustomEvent('balance:refresh'));
-        window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
-        window.dispatchEvent(new CustomEvent('alumnosHorarios:updated'));
-        window.dispatchEvent(new CustomEvent('turnosVariables:updated'));
-      }, 300);
+      window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
+      window.dispatchEvent(new CustomEvent('balance:refresh'));
+      window.dispatchEvent(new CustomEvent('clasesDelMes:updated'));
+      window.dispatchEvent(new CustomEvent('alumnosHorarios:updated'));
+      window.dispatchEvent(new CustomEvent('turnosVariables:updated'));
 
       onComplete();
       onClose();
     } catch (error: any) {
       console.error('Error actualizando horarios:', error);
       showError('Error', error.message || 'Error al actualizar horarios');
-      setSaving(false);
     } finally {
       setSaving(false);
     }

@@ -93,144 +93,33 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   const fetchHorariosClase = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('horarios_semanales')
-        .select('id, dia_semana, clase_numero, hora_inicio, hora_fin, capacidad, activo')
-        .eq('activo', true)
-        .order('dia_semana', { ascending: true })
-        .order('clase_numero', { ascending: true });
+
+      const { data, error } = await supabase.rpc('fn_ocupacion_plan_semanal');
 
       if (error) {
-        console.error('❌ Error cargando horarios:', error);
+        console.error('Error cargando horarios:', error);
         showError('Error', 'No se pudieron cargar los horarios disponibles');
         return;
       }
 
-      // Para cada horario, verificar cuántos usuarios recurrentes ya están registrados
-      // Usar capacidad por clase (item.capacidad) en lugar de capacidad global
-      const horariosConCapacidad = await Promise.all(
-        (data || []).map(async (item) => {
-          const capacidadClase = item.capacidad || 4; // Usar capacidad de la clase específica
-          // Normalizar formato de hora: puede venir como HH:MM o HH:MM:SS
-          // Necesitamos usar el mismo formato que se guarda en la BD
-          const horaInicioRaw = item.hora_inicio || '';
-          const horaFinRaw = item.hora_fin || '';
-          
-          // Normalizar a formato HH:MM:SS (PostgreSQL TIME)
-          let horaInicio: string;
-          let horaFin: string;
-          
-          if (horaInicioRaw.includes(':')) {
-            const partsInicio = horaInicioRaw.split(':');
-            horaInicio = `${partsInicio[0].padStart(2, '0')}:${partsInicio[1].padStart(2, '0')}:${(partsInicio[2] || '00').padStart(2, '0')}`;
-          } else {
-            horaInicio = horaInicioRaw + ':00:00';
-          }
-          
-          if (horaFinRaw.includes(':')) {
-            const partsFin = horaFinRaw.split(':');
-            horaFin = `${partsFin[0].padStart(2, '0')}:${partsFin[1].padStart(2, '0')}:${(partsFin[2] || '00').padStart(2, '0')}`;
-          } else {
-            horaFin = horaFinRaw + ':00:00';
-          }
-
-          // Contar usuarios recurrentes activos en este horario
-          // Usar RPC para evitar problemas de RLS - la función cuenta todos los usuarios sin restricciones
-          // Si no existe la función, usar consulta directa como fallback
-          let usuariosRecurrentesCount = 0;
-          
-          try {
-            // Usar función RPC para contar usuarios sin restricciones de RLS
-            const { data: countData, error: rpcError } = await supabase.rpc(
-              'contar_usuarios_horario_recurrente',
-              {
-                p_dia_semana: item.dia_semana,
-                p_hora_inicio: horaInicio.substring(0, 5), // Solo HH:MM
-                p_hora_fin: horaFin.substring(0, 5) // Solo HH:MM
-              }
-            );
-
-            if (rpcError) {
-              console.error('Error en RPC contar_usuarios_horario_recurrente:', rpcError);
-              console.error('Parámetros:', { 
-                dia_semana: item.dia_semana, 
-                hora_inicio: horaInicio.substring(0, 5), 
-                hora_fin: horaFin.substring(0, 5) 
-              });
-              // Si hay error en RPC, usar fallback (limitado por RLS pero mejor que nada)
-              const { data: usuariosRecurrentes, error: errorRecurrentes } = await supabase
-                .from('horarios_recurrentes_usuario')
-                .select('id, hora_inicio, hora_fin', { count: 'exact' })
-                .eq('dia_semana', item.dia_semana)
-                .eq('activo', true);
-
-              if (errorRecurrentes) {
-                console.error('Error en fallback de conteo:', errorRecurrentes);
-                usuariosRecurrentesCount = 0;
-              } else {
-                // Filtrar manualmente por hora ya que el formato puede variar
-                const usuariosRecurrentesFiltrados = (usuariosRecurrentes || []).filter(usr => {
-                  const usrHoraInicio = (usr.hora_inicio || '').substring(0, 5); // HH:MM
-                  const usrHoraFin = (usr.hora_fin || '').substring(0, 5); // HH:MM
-                  const itemHoraInicio = horaInicio.substring(0, 5); // HH:MM
-                  const itemHoraFin = horaFin.substring(0, 5); // HH:MM
-                  return usrHoraInicio === itemHoraInicio && usrHoraFin === itemHoraFin;
-                });
-                usuariosRecurrentesCount = usuariosRecurrentesFiltrados.length;
-              }
-            } else {
-              // RPC funcionó correctamente
-              usuariosRecurrentesCount = typeof countData === 'number' ? countData : parseInt(String(countData)) || 0;
-            }
-          } catch (error) {
-            console.error('Error inesperado en conteo de usuarios:', error);
-            // En caso de error, intentar usar fallback
-            try {
-              const { data: usuariosRecurrentes } = await supabase
-                .from('horarios_recurrentes_usuario')
-                .select('id, hora_inicio, hora_fin')
-                .eq('dia_semana', item.dia_semana)
-                .eq('activo', true);
-              
-              const usuariosRecurrentesFiltrados = (usuariosRecurrentes || []).filter(usr => {
-                const usrHoraInicio = (usr.hora_inicio || '').substring(0, 5);
-                const usrHoraFin = (usr.hora_fin || '').substring(0, 5);
-                return usrHoraInicio === horaInicio.substring(0, 5) && usrHoraFin === horaFin.substring(0, 5);
-              });
-              usuariosRecurrentesCount = usuariosRecurrentesFiltrados.length;
-            } catch (fallbackError) {
-              console.error('Error en fallback también:', fallbackError);
-              usuariosRecurrentesCount = 0; // Si todo falla, asumir 0 (puede estar limitado por RLS)
-            }
-          }
-          const cupoCompleto = usuariosRecurrentesCount >= capacidadClase;
-
-          // Log para debug - siempre mostrar para verificar
-          console.log(`📊 Horario ${item.id} (Día ${item.dia_semana}, Clase ${item.clase_numero}, ${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}): ${usuariosRecurrentesCount}/${capacidadClase} usuarios - ${cupoCompleto ? 'COMPLETO ❌' : 'DISPONIBLE ✅'}`);
-          
-          if (cupoCompleto) {
-            console.warn(`⚠️ BLOQUEO: Horario ${item.id} (${horaInicio.substring(0, 5)}-${horaFin.substring(0, 5)}) está COMPLETO: ${usuariosRecurrentesCount}/${capacidadClase}`);
-          }
-
-          const horarioConCapacidad = {
-            ...item,
-            capacidad_maxima: capacidadClase, // Usar capacidad de la clase específica
-            usuariosActuales: usuariosRecurrentesCount,
-            cupoCompleto: cupoCompleto // Asegurar que siempre sea boolean
-          };
-
-          // Verificación adicional
-          if (horarioConCapacidad.cupoCompleto) {
-            console.log(`🔒 Horario ${horarioConCapacidad.id} marcado como COMPLETO en el objeto`);
-          }
-
-          return horarioConCapacidad;
-        })
+      setHorariosClase(
+        (data || [])
+          .filter((slot: any) => slot.dia_semana >= 1 && slot.dia_semana <= 5)
+          .map((slot: any) => ({
+            id: slot.horario_id,
+            dia_semana: slot.dia_semana,
+            clase_numero: slot.clase_numero,
+            hora_inicio: slot.hora_inicio,
+            hora_fin: slot.hora_fin,
+            capacidad: slot.capacidad,
+            activo: true,
+            capacidad_maxima: slot.capacidad,
+            usuariosActuales: slot.ocupados,
+            cupoCompleto: slot.completo,
+          }))
       );
-
-      setHorariosClase(horariosConCapacidad);
     } catch (error) {
-      console.error('❌ Error inesperado:', error);
+      console.error('Error inesperado:', error);
       showError('Error', 'Error inesperado al cargar horarios');
     } finally {
       setLoading(false);
@@ -319,104 +208,39 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     }).format(precio);
   };
 
+  // Alta del plan.
+  //
+  // fn_seleccionar_plan inserta los horarios, deriva el combo y la tarifa del
+  // servidor y genera las cuotas, todo en una transacción. Antes esto se hacía
+  // con tres escrituras sueltas desde el cliente, y la tarifa quedaba clavada en
+  // profiles.tarifa_personalizada: si el admin cambiaba los precios de los
+  // combos, este alumno se quedaba con el precio viejo para siempre.
   const handleConfirm = async () => {
     try {
       setSaving(true);
       const loadingToast = showLoading('Guardando horarios...');
 
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', user?.id)
-        .single();
-
-      if (profileError && profileError.code === 'PGRST116') {
-        const { error: createProfileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: user?.id,
-            email: user?.email,
-            role: 'client',
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-
-        if (createProfileError) {
-          console.error('❌ Error creando perfil:', createProfileError);
-          dismissToast(loadingToast);
-          showError('Error', 'Error al crear el perfil de usuario');
-          return;
-        }
-      } else if (profileError) {
-        console.error('❌ Error verificando perfil:', profileError);
-        dismissToast(loadingToast);
-        showError('Error', 'Error al verificar el perfil de usuario');
-        return;
-      } else {
-      }
-
-      // Obtener la tarifa del paquete seleccionado
-      const paquete = PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado);
-      const tarifaPorClase = paquete?.precioPorClase || 0;
-
-      const horariosRecurrentes = Array.from(horariosSeleccionados).map(horarioId => {
-        const horario = horariosClase.find(h => h.id === horarioId);
-        return {
-          usuario_id: user?.id,
-          dia_semana: horario?.dia_semana,
-          clase_numero: horario?.clase_numero, // ⭐ Ahora guardamos clase_numero
-          hora_inicio: horario?.hora_inicio,
-          hora_fin: horario?.hora_fin,
-          activo: true,
-          fecha_inicio: todayLocal(),
-          combo_aplicado: paqueteSeleccionado,
-          tarifa_personalizada: tarifaPorClase
-        };
+      const { data, error } = await supabase.rpc('fn_seleccionar_plan', {
+        p_horario_ids: Array.from(horariosSeleccionados)
       });
-
-      const { error } = await supabase
-        .from('horarios_recurrentes_usuario')
-        .insert(horariosRecurrentes);
-
-      if (error) {
-        dismissToast(loadingToast);
-        console.error('❌ Error guardando horarios recurrentes:', error);
-        showError('Error', `No se pudieron guardar tus horarios recurrentes: ${error.message}`);
-        return;
-      }
-
-      // Actualizar combo asignado y tarifa en el perfil del usuario
-      const { error: profileUpdateError } = await supabase
-        .from('profiles')
-        .update({ 
-          combo_asignado: paqueteSeleccionado,
-          tarifa_personalizada: tarifaPorClase.toString()
-        })
-        .eq('id', user?.id);
-
-      if (profileUpdateError) {
-        console.warn('⚠️ No se pudo actualizar el perfil:', profileUpdateError);
-        // No es crítico, continuamos
-      }
 
       dismissToast(loadingToast);
 
-      showSuccess('¡Horarios confirmados!', `Tus horarios fueron guardados con Plan ${paqueteSeleccionado} - ${formatPrecio(tarifaPorClase)} por clase`);
+      if (error) {
+        console.error('Error guardando el plan:', error);
+        showError('No se pudo guardar tu plan', error.message);
+        return;
+      }
 
-      // Recalcular SOLO este usuario (mes actual + siguiente). No regenerar el mes entero.
+      const resultado = data as { combo?: number; tarifa?: number } | null;
+      showSuccess(
+        '¡Horarios confirmados!',
+        `Plan de ${resultado?.combo ?? horariosSeleccionados.size} día(s) — ${formatPrecio(Number(resultado?.tarifa ?? 0))} por clase`
+      );
+
       const ahora = new Date();
       const mesActual = ahora.getMonth() + 1;
       const anioActual = ahora.getFullYear();
-
-      if (user?.id) {
-        const { error: cuotaError } = await supabase.rpc(
-          'fn_recalcular_cuotas_usuario_actual_y_siguiente',
-          { p_usuario_id: user.id }
-        );
-        if (cuotaError) {
-          console.error('⚠️ Error generando cuota mensual:', cuotaError);
-        }
-      }
 
       // Enviar email de bienvenida con cuota del mes actual
       try {

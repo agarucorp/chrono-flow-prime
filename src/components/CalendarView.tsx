@@ -752,32 +752,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       setCancelingAlumno(true);
       const loadingToast = showLoading('Cancelando clase...');
 
-      // Verificar si ya existe una cancelación para este turno
-      const { data: cancelacionExistente } = await supabase
-        .from('turnos_cancelados')
-        .select('id')
-        .eq('cliente_id', selectedAlumno.usuario_id)
-        .eq('turno_fecha', selectedAlumno.fecha || formatLocalDate(currentDate))
-        .eq('turno_hora_inicio', selectedAlumno.hora_inicio)
-        .eq('turno_hora_fin', selectedAlumno.hora_fin);
-
-      if (cancelacionExistente && cancelacionExistente.length > 0) {
-        dismissToast(loadingToast);
-        showError('Error', 'Esta clase ya ha sido cancelada');
-        return;
-      }
-
-      // Crear registro de cancelación
-      const { error } = await supabase
-        .from('turnos_cancelados')
-        .insert({
-          cliente_id: selectedAlumno.usuario_id,
-          turno_fecha: selectedAlumno.fecha || formatLocalDate(currentDate),
-          turno_hora_inicio: selectedAlumno.hora_inicio,
-          turno_hora_fin: selectedAlumno.hora_fin,
-          tipo_cancelacion: 'admin',
-          motivo_cancelacion: 'Cancelada por administrador'
-        });
+      const { error } = await supabase.rpc('fn_admin_cancelar_clase_por_hora', {
+        p_usuario_id: selectedAlumno.usuario_id,
+        p_turno_fecha: selectedAlumno.fecha || formatLocalDate(currentDate),
+        p_hora_inicio: normalizeTimeToHhMm(selectedAlumno.hora_inicio),
+      });
 
       dismissToast(loadingToast);
 
@@ -787,10 +766,11 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         return;
       }
 
-      showSuccess('Clase cancelada', `La clase de ${selectedAlumno.nombre} ha sido cancelada exitosamente`);
+      showSuccess('Clase cancelada', `La clase de ${selectedAlumno.nombre} ha sido cancelada exitosamente. El cupo queda disponible en vacantes.`);
 
-      // Recargar horarios de alumnos
       await fetchAlumnosHorarios();
+      window.dispatchEvent(new Event('clasesDelMes:updated'));
+      window.dispatchEvent(new Event('balance:refresh'));
 
       setShowCancelAlumnoModal(false);
       setSelectedAlumno(null);
@@ -871,45 +851,16 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     if (!selectedUser || !selectedSlot) return;
 
     try {
-      // Validar capacidad máxima antes de agregar usuario
-      const capacidadMaxima = obtenerCapacidadActual() || 4;
-      const fechaTurno = formatLocalDate(currentDate);
-      
-      // Contar cuántos usuarios ya tienen reserva para este horario
-      const { data: reservasHorario, error: errorReservasHorario } = await supabase
-        .from('turnos_variables')
-        .select('id')
-        .eq('turno_fecha', fechaTurno)
-        .eq('turno_hora_inicio', selectedSlot.horaInicio + ':00')
-        .eq('turno_hora_fin', selectedSlot.horaFin + ':00')
-        .eq('estado', 'confirmada');
-
-      if (errorReservasHorario) {
-        console.error('Error verificando capacidad del horario:', errorReservasHorario);
-        showError('Error al verificar capacidad', errorReservasHorario.message);
-        return;
-      }
-
-      const usuariosEnHorario = reservasHorario?.length || 0;
-      
-      if (usuariosEnHorario >= capacidadMaxima) {
-        showError('Cupo completo', `Este horario ya tiene ${capacidadMaxima} usuarios registrados. No hay más cupos disponibles.`);
-        return;
-      }
-
       setAddingUser(true);
       const loadingToast = showLoading('Agregando usuario...');
 
-      // Crear turno variable para el usuario
-      const { error } = await supabase
-        .from('turnos_variables')
-        .insert({
-          cliente_id: selectedUser.id,
-          turno_fecha: formatLocalDate(currentDate),
-          turno_hora_inicio: selectedSlot.horaInicio + ':00',
-          turno_hora_fin: selectedSlot.horaFin + ':00',
-          estado: 'confirmada'
-        });
+      // El RPC valida capacidad real del día (feriado, ausencia, capacidad
+      // especial) y recalcula la cuota del alumno.
+      const { error } = await supabase.rpc('fn_admin_agregar_clase_por_hora', {
+        p_usuario_id: selectedUser.id,
+        p_turno_fecha: formatLocalDate(currentDate),
+        p_hora_inicio: normalizeTimeToHhMm(selectedSlot.horaInicio),
+      });
 
       dismissToast(loadingToast);
 
@@ -921,8 +872,9 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
       showSuccess('Usuario agregado', `${selectedUser.full_name} ha sido agregado a la clase exitosamente`);
 
-      // Recargar horarios de alumnos
       await fetchAlumnosHorarios();
+      window.dispatchEvent(new Event('clasesDelMes:updated'));
+      window.dispatchEvent(new Event('balance:refresh'));
 
       setShowAddUserModal(false);
       setShowConfirmModal(false);
@@ -951,35 +903,30 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     try {
       setReservationLoading(true);
 
-      let error;
+      const hora = (turno.hora_inicio || '').slice(0, 5);
+      const { data: grilla, error: grillaError } = await supabase
+        .from('horarios_semanales')
+        .select('clase_numero, hora_inicio')
+        .eq('activo', true);
 
-      if (turno.id === 'temp') {
-        // Crear nuevo turno si es temporal
-        const { error: insertError } = await supabase
-          .from('turnos')
-          .insert({
-            fecha: turno.fecha,
-            hora_inicio: turno.hora_inicio,
-            hora_fin: turno.hora_fin,
-            estado: 'ocupado',
-            cliente_id: user.id,
-            servicio: turno.servicio,
-            created_at: new Date().toISOString(),
-            updated_at: new Date().toISOString()
-          });
-        error = insertError;
-      } else {
-        // Actualizar turno existente
-        const { error: updateError } = await supabase
-          .from('turnos')
-          .update({
-            estado: 'ocupado',
-            cliente_id: user.id,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', turno.id);
-        error = updateError;
+      if (grillaError) {
+        showError('Error al reservar', grillaError.message);
+        return;
       }
+
+      const claseNumero = (grilla || []).find(
+        (s: { hora_inicio: string; clase_numero: number }) => String(s.hora_inicio).slice(0, 5) === hora
+      )?.clase_numero;
+
+      if (!claseNumero) {
+        showError('Error', 'No se encontró esa clase en la grilla');
+        return;
+      }
+
+      const { error } = await supabase.rpc('reservar_vacante', {
+        p_turno_fecha: turno.fecha,
+        p_clase_numero: claseNumero,
+      });
 
       if (error) {
         showError('Error al reservar', error.message);
@@ -989,15 +936,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       showSuccess('¡Entrenamiento reservado!',
         `Has reservado entrenamiento para el ${new Date(turno.fecha + 'T00:00:00').toLocaleDateString('es-ES')} (${formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)})`);
 
-      // Recargar turnos
       await fetchTurnos();
 
-      // Notificar al componente padre
       if (onTurnoReservado) {
         onTurnoReservado();
       }
 
-      // Cerrar modal
       setShowReservationModal(false);
       setSelectedTurno(null);
     } catch (error) {

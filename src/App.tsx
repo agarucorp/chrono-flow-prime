@@ -6,7 +6,6 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as SonnerToaster } from "@/components/ui/sonner";
 import { LoginFormSimple } from "./components/LoginFormSimple";
 import { ResetPasswordForm } from "./components/ResetPasswordForm";
-import { TurnoReservation } from "./components/TurnoReservation";
 import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
@@ -448,7 +447,6 @@ const Dashboard = () => {
   const [viewEpoch, setViewEpoch] = useState(0);
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
-  const [vacantesCount, setVacantesCount] = useState(0);
   const {
     history: balanceHistory,
     loading: balanceLoading,
@@ -606,140 +604,6 @@ const Dashboard = () => {
       window.removeEventListener('nav:records', toRecords);
     };
   }, [goToTab]);
-
-  // Cargar contador de vacantes disponibles (con caché, solo cuando sea necesario)
-  const vacantesCountCacheRef = useRef<{ userId: string | null; count: number; timestamp: number }>({ 
-    userId: null, 
-    count: 0, 
-    timestamp: 0 
-  });
-  const VACANTES_CACHE_DURATION_MS = 5 * 60 * 1000; // 5 minutos en caché
-  
-  useEffect(() => {
-    if (!user?.id) {
-      setVacantesCount(0);
-      vacantesCountCacheRef.current = { userId: null, count: 0, timestamp: 0 };
-      return;
-    }
-
-    const cargarVacantesCount = async () => {
-      try {
-        const fechaHoy = new Date();
-        const fechaManana = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth(), fechaHoy.getDate() + 1);
-        const fechaMananaStr = formatLocalDate(fechaManana);
-        
-        // Calcular el último día del mes actual
-        const ultimoDiaMes = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 1, 0);
-        const fechaHastaStr = formatLocalDate(ultimoDiaMes);
-        
-        // Obtener todas las clases disponibles del mes actual usando la función SQL
-        const { data: clasesDisponibles, error: errorClases } = await supabase
-          .rpc('obtener_clases_disponibles', {
-            p_fecha_desde: fechaMananaStr,
-            p_fecha_hasta: fechaHastaStr
-          });
-
-        if (errorClases) {
-          console.error('Error cargando clases disponibles:', errorClases);
-          return;
-        }
-
-        // Obtener turnos ya reservados por el usuario del mes actual
-        const { data: turnosReservados, error: errorReservados } = await supabase
-          .from('turnos_variables')
-          .select('turno_fecha, turno_hora_inicio, turno_hora_fin')
-          .eq('cliente_id', user.id)
-          .eq('estado', 'confirmada')
-          .gte('turno_fecha', fechaMananaStr)
-          .lte('turno_fecha', fechaHastaStr);
-
-        if (errorReservados) {
-          console.error('Error cargando turnos reservados:', errorReservados);
-          return;
-        }
-
-        // Crear un Set de turnos reservados por el usuario
-        const turnosReservadosSet = new Set(
-          (turnosReservados || []).map(r => 
-            `${r.turno_fecha}_${r.turno_hora_inicio}_${r.turno_hora_fin}`
-          )
-        );
-
-        // Contar cupos disponibles excluyendo los ya reservados por el usuario
-        let count = 0;
-        (clasesDisponibles || []).forEach((clase) => {
-          const turnoKey = `${clase.turno_fecha}_${clase.turno_hora_inicio}_${clase.turno_hora_fin}`;
-          if (!turnosReservadosSet.has(turnoKey)) {
-            count += clase.cupos_disponibles;
-          }
-        });
-        
-        setVacantesCount(count);
-        // Guardar en caché
-        vacantesCountCacheRef.current = { userId: user.id, count, timestamp: Date.now() };
-      } catch (error) {
-        console.error('Error calculando contador de vacantes:', error);
-      }
-    };
-
-    // Solo cargar si no hay caché válido
-    const nowVacantes = Date.now();
-    const cachedVacantes = vacantesCountCacheRef.current;
-    if (cachedVacantes.userId !== user.id || (nowVacantes - cachedVacantes.timestamp) >= VACANTES_CACHE_DURATION_MS || cachedVacantes.count === 0) {
-      cargarVacantesCount();
-    } else {
-      setVacantesCount(cachedVacantes.count);
-    }
-
-    // Suscripción en tiempo real a cambios (solo si la página está visible)
-    const channel = supabase
-      .channel('vacantes_count_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_disponibles' }, () => {
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          const nowTime = Date.now();
-          const cachedTime = vacantesCountCacheRef.current;
-          // Solo recargar si ha pasado más de 1 minuto desde la última carga
-          if (!cachedTime.timestamp || (nowTime - cachedTime.timestamp) > 60000) {
-            cargarVacantesCount();
-          }
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'turnos_variables' }, () => {
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          const nowTime2 = Date.now();
-          const cachedTime2 = vacantesCountCacheRef.current;
-          // Solo recargar si ha pasado más de 1 minuto desde la última carga
-          if (!cachedTime2.timestamp || (nowTime2 - cachedTime2.timestamp) > 60000) {
-            cargarVacantesCount();
-          }
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_recurrentes_usuario' }, () => {
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          const nowTime3 = Date.now();
-          const cachedTime3 = vacantesCountCacheRef.current;
-          // Solo recargar si ha pasado más de 1 minuto desde la última carga
-          if (!cachedTime3.timestamp || (nowTime3 - cachedTime3.timestamp) > 60000) {
-            cargarVacantesCount();
-          }
-        }
-      })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'horarios_semanales' }, () => {
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          const nowTime4 = Date.now();
-          const cachedTime4 = vacantesCountCacheRef.current;
-          // Solo recargar si ha pasado más de 1 minuto desde la última carga
-          if (!cachedTime4.timestamp || (nowTime4 - cachedTime4.timestamp) > 60000) {
-            cargarVacantesCount();
-          }
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
 
   // Onboarding incompleto: no mostrar el panel (solo tutorial + alta de horarios)
   const onboardingIncomplete =
@@ -1012,11 +876,11 @@ const Dashboard = () => {
                               <CardTitle className="text-heading">
                                 Cuota {entry.mesNombre} {entry.anio}
                               </CardTitle>
-                                     {entry.isEstimate && (
-                                       <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                                         <span>Estimación</span>
-                                       </div>
-                                     )}
+                              {entry.isNext && (
+                                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
+                                  <span>Se actualiza con tus cambios</span>
+                                </div>
+                              )}
                             </CardHeader>
                             <CardContent className="space-y-3 text-sm">
                               <div className="flex items-center justify-between">
@@ -1026,12 +890,60 @@ const Dashboard = () => {
                                 </span>
                               </div>
                               <div className="flex items-center justify-between">
-                                <span className="text-muted-foreground">Cantidad de clases</span>
+                                <span className="text-muted-foreground">Clases del plan</span>
+                                <span className="font-medium">{entry.desglose.plan}</span>
+                              </div>
+                              {entry.desglose.vacantes > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Vacantes reservadas</span>
+                                  <span className="font-medium text-amber-400">
+                                    +{entry.desglose.vacantes}
+                                  </span>
+                                </div>
+                              )}
+                              {entry.desglose.canceladasACredito > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Canceladas a tiempo</span>
+                                  <span className="font-medium text-green-500">
+                                    -{entry.desglose.canceladasACredito}
+                                  </span>
+                                </div>
+                              )}
+                              {entry.desglose.canceladasTardias > 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">
+                                    Canceladas con menos de 72hs
+                                  </span>
+                                  <span className="font-medium text-muted-foreground">
+                                    {entry.desglose.canceladasTardias} (se cobran)
+                                  </span>
+                                </div>
+                              )}
+                              {entry.desglose.ajusteMesAnterior !== 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">
+                                    Ajuste de {mesActualNombre}
+                                  </span>
+                                  <span
+                                    className={`font-medium ${
+                                      entry.desglose.ajusteMesAnterior > 0
+                                        ? 'text-amber-400'
+                                        : 'text-green-500'
+                                    }`}
+                                  >
+                                    {entry.desglose.ajusteMesAnterior > 0 ? '+' : ''}
+                                    {entry.desglose.ajusteMesAnterior}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between border-t pt-2">
+                                <span className="text-muted-foreground">Clases a cobrar</span>
                                 <span className="font-medium">{entry.clases}</span>
                               </div>
                               {entry.isCurrent && (
                                 <p className="text-[11px] text-muted-foreground">
-                                  Los cambios de este mes impactan el próximo.
+                                  Esta cuota ya está emitida. Los cambios que hagas ahora impactan el
+                                  próximo mes.
                                 </p>
                               )}
                               {entry.descuentoPorcentaje > 0 && (
@@ -1044,36 +956,6 @@ const Dashboard = () => {
                                     })}% (-${formatCurrency(entry.descuento)})
                                   </span>
                                 </div>
-                              )}
-                              {entry.ajustes && entry.isNext && (
-                                <>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
-                                      Clases canceladas / feriados {mesActualNombre}
-                                    </span>
-                                    <div className="text-right">
-                                      <p className="font-medium text-green-500">
-                                        -${formatCurrency(entry.ajustes.cancelaciones.monto)}
-                                      </p>
-                                      <p className="text-[11px] text-muted-foreground">
-                                        {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
-                                      </p>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center justify-between">
-                                    <span className="text-muted-foreground">
-                                      Vacantes reservadas {mesActualNombre}
-                                    </span>
-                                    <div className="text-right">
-                                      <p className="font-medium text-amber-400">
-                                        +${formatCurrency(entry.ajustes.vacantes.monto)}
-                                      </p>
-                                      <p className="text-[11px] text-muted-foreground">
-                                        {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
-                                      </p>
-                                    </div>
-                                  </div>
-                                </>
                               )}
                               <div className="border-t pt-2 flex items-center justify-between font-semibold">
                                 <span>Total</span>
@@ -1102,11 +984,6 @@ const Dashboard = () => {
                                     : entry.estadoPago === 'vencida'
                                     ? 'Vencida'
                                     : 'Pendiente'}
-                                </div>
-                              )}
-                              {entry.isEstimate && (
-                                <div className="text-xs text-muted-foreground">
-                                  Se actualiza en tiempo real ante cambios.
                                 </div>
                               )}
                             </CardContent>
@@ -1168,11 +1045,6 @@ const Dashboard = () => {
                 >
                   <span className="relative">
                     <Zap className="h-5 w-5" />
-                    {vacantesCount > 0 && (
-                      <span className="absolute -top-1.5 -right-2 min-w-[16px] h-4 px-1 rounded-md bg-primary text-[9px] font-semibold text-primary-foreground flex items-center justify-center">
-                        {vacantesCount > 9 ? '9+' : vacantesCount}
-                      </span>
-                    )}
                   </span>
                   <span className="text-caption font-medium">Vacantes</span>
                 </button>
@@ -1293,15 +1165,10 @@ const Dashboard = () => {
           <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
             {fullHistoryEntries.map((entry) => (
               <Card key={`history-${entry.anio}-${entry.mesNumero}`}>
-                <CardHeader className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <CardHeader>
                   <CardTitle className="text-[12px] font-semibold sm:text-base">
                     Cuota {entry.mesNombre} {entry.anio}
                   </CardTitle>
-                         {entry.isEstimate && (
-                           <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.3em] text-muted-foreground">
-                             <span>Estimación</span>
-                           </div>
-                         )}
                 </CardHeader>
                 <CardContent className="space-y-3 text-[12px] sm:text-sm">
                   <div className="flex items-center justify-between">
@@ -1309,7 +1176,38 @@ const Dashboard = () => {
                     <span className="font-medium">${formatCurrency(entry.precioUnitario)}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-muted-foreground">Cantidad de clases</span>
+                    <span className="text-muted-foreground">Clases del plan</span>
+                    <span className="font-medium">{entry.desglose.plan}</span>
+                  </div>
+                  {entry.desglose.vacantes > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Vacantes reservadas</span>
+                      <span className="font-medium text-amber-400">+{entry.desglose.vacantes}</span>
+                    </div>
+                  )}
+                  {entry.desglose.canceladasACredito > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Canceladas a tiempo</span>
+                      <span className="font-medium text-green-500">
+                        -{entry.desglose.canceladasACredito}
+                      </span>
+                    </div>
+                  )}
+                  {entry.desglose.ajusteMesAnterior !== 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Ajuste del mes anterior</span>
+                      <span
+                        className={`font-medium ${
+                          entry.desglose.ajusteMesAnterior > 0 ? 'text-amber-400' : 'text-green-500'
+                        }`}
+                      >
+                        {entry.desglose.ajusteMesAnterior > 0 ? '+' : ''}
+                        {entry.desglose.ajusteMesAnterior}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between border-t pt-2">
+                    <span className="text-muted-foreground">Clases a cobrar</span>
                     <span className="font-medium">{entry.clases}</span>
                   </div>
                   {entry.descuentoPorcentaje > 0 && (
@@ -1323,46 +1221,10 @@ const Dashboard = () => {
                       </span>
                     </div>
                   )}
-                  {entry.ajustes && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">
-                          Clases canceladas {mesActualNombre}
-                        </span>
-                        <div className="text-right">
-                          <p className="font-medium text-green-500">
-                            -${formatCurrency(entry.ajustes.cancelaciones.monto)}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {entry.ajustes.cancelaciones.cantidad} clase{entry.ajustes.cancelaciones.cantidad === 1 ? '' : 's'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground">
-                          Vacantes reservadas {mesActualNombre}
-                        </span>
-                        <div className="text-right">
-                          <p className="font-medium text-amber-400">
-                            +${formatCurrency(entry.ajustes.vacantes.monto)}
-                          </p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {entry.ajustes.vacantes.cantidad} clase{entry.ajustes.vacantes.cantidad === 1 ? '' : 's'}
-                          </p>
-                        </div>
-                      </div>
-                    </>
-                  )}
                   <div className="border-t pt-2 flex items-center justify-between font-semibold">
                     <span>Total</span>
                     <span className="text-green-600">${formatCurrency(entry.totalConDescuento)}</span>
                   </div>
-                  {/* Se quita el estado para historial */}
-                  {entry.isEstimate && (
-                    <div className="text-xs text-muted-foreground">
-                      Se actualiza en tiempo real ante cambios.
-                    </div>
-                  )}
                 </CardContent>
               </Card>
             ))}

@@ -67,176 +67,31 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       setLoading(true);
       const loadingToast = showLoading('Eliminando clase...');
 
-      // Determinar el tipo de turno
-      const esTurnoVariable = turno.id.startsWith('variable_');
-      const esTurnoRecurrente = turno.servicio === 'Entrenamiento Recurrente';
+      if (!turno.cliente_id) {
+        dismissToast(loadingToast);
+        showError('Error', 'La clase no tiene un alumno asociado');
+        return;
+      }
 
-      if (esTurnoVariable) {
-        // CANCELAR TURNO VARIABLE
-        const turnoVariableId = turno.id.replace('variable_', '');
+      // El RPC resuelve solo si la clase es del plan o una vacante reservada,
+      // libera el cupo y recalcula la cuota del alumno.
+      const { error } = await supabase.rpc('fn_admin_cancelar_clase_por_hora', {
+        p_usuario_id: turno.cliente_id,
+        p_turno_fecha: turno.fecha,
+        p_hora_inicio: turno.hora_inicio.slice(0, 5),
+      });
 
-        // 1. Buscar el turno variable específico
-        const { data: turnoVariable, error: errorBuscar } = await supabase
-          .from('turnos_variables')
-          .select('id, cliente_id, creado_desde_disponible_id')
-          .eq('id', turnoVariableId)
-          .eq('estado', 'confirmada')
-          .single();
-
-        if (errorBuscar || !turnoVariable) {
-          showError('Error', 'No se encontró el turno variable');
-          return;
-        }
-
-        // 2. Eliminar el turno variable
-        const { error: errorEliminar } = await supabase
-          .from('turnos_variables')
-          .delete()
-          .eq('id', turnoVariable.id);
-
-        if (errorEliminar) {
-          showError('Error', 'No se pudo eliminar el turno variable');
-          return;
-        }
-
-        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
-        const fechaHoraTurno = new Date(turno.fecha);
-        const [hora, minuto] = turno.hora_inicio.split(':');
-        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-
-        const ahora = new Date();
-        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-        const esCancelacionTardia = diferenciaHoras < 24;
-
-        // 4. Crear registro en turnos_cancelados (esto creará turnos_disponibles automáticamente)
-        const { error: errorCancelacion } = await supabase
-          .from('turnos_cancelados')
-          .insert({
-            cliente_id: turnoVariable.cliente_id,
-            turno_fecha: turno.fecha,
-            turno_hora_inicio: turno.hora_inicio,
-            turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin',
-            cancelacion_tardia: esCancelacionTardia
-          });
-
-        if (errorCancelacion) {
-          showError('Error', 'No se pudo crear la cancelación');
-          return;
-        }
-
-      } else if (esTurnoRecurrente) {
-
-        const { data: cancelacionExistente, error: errorVerificar } = await supabase
-          .from('turnos_cancelados')
-          .select('id')
-          .eq('cliente_id', turno.cliente_id)
-          .eq('turno_fecha', turno.fecha)
-          .eq('turno_hora_inicio', turno.hora_inicio)
-          .eq('turno_hora_fin', turno.hora_fin);
-
-        if (errorVerificar) {
-          console.error('❌ Error verificando cancelación existente:', errorVerificar);
-          showError('Error', 'No se pudo verificar cancelaciones existentes');
-          return;
-        }
-
-        if (cancelacionExistente && cancelacionExistente.length > 0) {
-          showError('Error', 'Este turno ya está cancelado');
-          return;
-        }
-
-        // Calcular si la cancelación es tardía (dentro de 24hs)
-        const fechaHoraTurno = new Date(turno.fecha);
-        const [hora, minuto] = turno.hora_inicio.split(':');
-        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-
-        const ahora = new Date();
-        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-        const esCancelacionTardia = diferenciaHoras < 24;
-
-        // Crear registro de cancelación
-        const { error: errorCancelacion } = await supabase
-          .from('turnos_cancelados')
-          .insert({
-            cliente_id: turno.cliente_id,
-            turno_fecha: turno.fecha,
-            turno_hora_inicio: turno.hora_inicio,
-            turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin',
-            cancelacion_tardia: esCancelacionTardia
-          });
-
-        if (errorCancelacion) {
-          console.error('❌ Error creando cancelación:', errorCancelacion);
-          showError('Error', 'No se pudo crear la cancelación del turno recurrente');
-          return;
-        }
-      } else {
-        // CANCELAR TURNO NORMAL
-        // 1. Buscar el turno específico
-        const { data: turnoCliente, error: errorBuscar } = await supabase
-          .from('turnos')
-          .select('*')
-          .eq('fecha', turno.fecha)
-          .eq('hora_inicio', turno.hora_inicio)
-          .eq('cliente_id', turno.cliente_id)
-          .eq('estado', 'ocupado')
-          .single();
-
-        if (errorBuscar || !turnoCliente) {
-          showError('Error', 'No se encontró la reserva del cliente');
-          return;
-        }
-
-        // 2. Marcar turno como cancelado y liberar cliente
-        const { error: errorCancelar } = await supabase
-          .from('turnos')
-          .update({
-            estado: 'cancelado',
-            cliente_id: null,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', turnoCliente.id);
-
-        if (errorCancelar) {
-          showError('Error', 'No se pudo cancelar el turno');
-          return;
-        }
-
-        // 3. Calcular si la cancelación es tardía (dentro de 24hs)
-        const fechaHoraTurno = new Date(turno.fecha);
-        const [hora, minuto] = turno.hora_inicio.split(':');
-        fechaHoraTurno.setHours(parseInt(hora), parseInt(minuto), 0, 0);
-
-        const ahora = new Date();
-        const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-        const esCancelacionTardia = diferenciaHoras < 24;
-
-        // 4. Crear registro en turnos_cancelados
-        const { error: errorCancelacion } = await supabase
-          .from('turnos_cancelados')
-          .insert({
-            cliente_id: turno.cliente_id,
-            turno_fecha: turno.fecha,
-            turno_hora_inicio: turno.hora_inicio,
-            turno_hora_fin: turno.hora_fin,
-            tipo_cancelacion: 'admin',
-            cancelacion_tardia: esCancelacionTardia
-          });
-
-        if (errorCancelacion) {
-          showError('Error', 'No se pudo crear la cancelación');
-          return;
-        }
+      if (error) {
+        dismissToast(loadingToast);
+        showError('Error', error.message || 'No se pudo eliminar la clase');
+        return;
       }
 
       dismissToast(loadingToast);
-      showSuccess('Clase eliminada', 'La clase ha sido cancelada exitosamente. Aparecerá en vacantes y el usuario la verá como cancelada.');
+      showSuccess('Clase eliminada', 'La clase fue cancelada. El cupo queda disponible en vacantes y el alumno la verá como cancelada.');
 
-      window.dispatchEvent(new Event('turnosCancelados:updated'));
-      window.dispatchEvent(new Event('turnosVariables:updated'));
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      window.dispatchEvent(new Event('balance:refresh'));
 
       onClose();
       onTurnoUpdated();

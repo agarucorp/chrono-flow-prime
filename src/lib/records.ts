@@ -112,17 +112,17 @@ export const RECORD_MEDAL_STYLES: Record<
 > = {
   oro: {
     label: '1°',
-    className: 'bg-[#D4AF37] text-black',
-    ring: 'ring-[#D4AF37]/40',
+    className: 'bg-[hsl(var(--medal-gold))] text-black',
+    ring: 'ring-[hsl(var(--medal-gold))]/40',
   },
   plata: {
     label: '2°',
-    className: 'bg-[#C0C0C0] text-black',
-    ring: 'ring-[#C0C0C0]/40',
+    className: 'bg-[hsl(var(--medal-silver))] text-black',
+    ring: 'ring-[hsl(var(--medal-silver))]/40',
   },
   bronce: {
     label: '3°',
-    className: 'bg-[#CD7F32] text-black',
-    ring: 'ring-[#CD7F32]/40',
+    className: 'bg-[hsl(var(--medal-bronze))] text-black',
+    ring: 'ring-[hsl(var(--medal-bronze))]/40',
   },
 };

@@ -59,6 +59,11 @@
 
     --radius: 0.625rem;
 
+    /* Rankings — medallas (únicos acentos no-neutros intencionales) */
+    --medal-gold: 43 65% 52%;
+    --medal-silver: 0 0% 75%;
+    --medal-bronze: 24 55% 50%;
+
     --sidebar-background: 0 0% 4%;
     --sidebar-foreground: 0 0% 92%;
     --sidebar-primary: 0 0% 96%;
