@@ -271,12 +271,16 @@ const LandingPage = () => {
   const isLg = useIsLg();
   const galleryItems = isLg ? buildGalleryDesktop() : buildGalleryMobile();
 
-  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
-    e.preventDefault();
+  const scrollToSection = (targetId: string) => {
     const element = document.getElementById(targetId);
     if (element) {
       element.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
+  };
+
+  const handleSmoothScroll = (e: React.MouseEvent<HTMLAnchorElement>, targetId: string) => {
+    e.preventDefault();
+    scrollToSection(targetId);
   };
 
   return (
@@ -378,7 +382,7 @@ const LandingPage = () => {
             </p>
             <div className="flex flex-col gap-6">
               <Button
-                onClick={() => navigate('/login')}
+                onClick={() => scrollToSection('planes')}
                 className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
               >
                 Ver planes
@@ -417,7 +421,7 @@ const LandingPage = () => {
               </p>
               <div className="flex flex-col sm:flex-row gap-6 mt-10">
                 <Button
-                  onClick={() => navigate('/login')}
+                  onClick={() => scrollToSection('planes')}
                   className="bg-white text-black hover:bg-gray-100 rounded-lg px-8 py-3 text-base font-medium transition-all duration-200 shadow-sm"
                 >
                   Ver planes

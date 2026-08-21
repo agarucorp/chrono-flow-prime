@@ -1539,7 +1539,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               onClick={() => window.dispatchEvent(new CustomEvent('nav:records'))}
               className="px-4 py-2 rounded-md text-sm font-medium transition-colors text-muted-foreground hover:text-foreground"
             >
-              Rankings
+              Records
             </button>
           </div>
           </div>
