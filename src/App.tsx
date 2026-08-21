@@ -842,7 +842,7 @@ const Dashboard = () => {
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
-                        Rankings
+                        Records
                       </button>
                     </div>
                   </div>
@@ -1061,7 +1061,7 @@ const Dashboard = () => {
                   aria-current={activeTab === 'records'}
                 >
                   <Trophy className="h-5 w-5" />
-                  <span className="text-caption font-medium">Rankings</span>
+                  <span className="text-caption font-medium">Records</span>
                 </button>
               </div>
             </nav>
