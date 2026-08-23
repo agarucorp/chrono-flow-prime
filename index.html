@@ -1,37 +1,34 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>MALDA®</title>
-    <meta name="description" content="Sistema de gestión de turnos para MALDA®" />
+    <meta name="description" content="Sistema de autogestión de horarios para entrenamientos personalizados" />
     <meta name="author" content="MALDA®" />
 
     <meta property="og:title" content="MALDA®" />
     <meta property="og:description" content="Sistema de autogestión de horarios para entrenamientos personalizados" />
     <meta property="og:type" content="website" />
-    <meta property="og:image" id="og-image" content="" />
+    <meta property="og:url" content="https://www.maldagym.com/" />
+    <meta property="og:site_name" content="MALDA®" />
+    <meta property="og:locale" content="es_AR" />
+    <meta property="og:image" content="https://www.maldagym.com/biglogo.png" />
+    <meta property="og:image:secure_url" content="https://www.maldagym.com/biglogo.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:alt" content="MALDA® — Entrenamientos personalizados" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" id="twitter-image" content="" />
-    
-    <script>
-      // Generar URLs absolutas para Open Graph y Twitter Cards
-      (function() {
-        const baseUrl = window.location.origin;
-        const ogImage = document.getElementById('og-image');
-        const twitterImage = document.getElementById('twitter-image');
-        if (ogImage) ogImage.setAttribute('content', baseUrl + '/biglogo.png');
-        if (twitterImage) twitterImage.setAttribute('content', baseUrl + '/biglogo.png');
-      })();
-    </script>
-    
-    <!-- Favicon (tab del navegador) -->
+    <meta name="twitter:title" content="MALDA®" />
+    <meta name="twitter:description" content="Sistema de autogestión de horarios para entrenamientos personalizados" />
+    <meta name="twitter:image" content="https://www.maldagym.com/biglogo.png" />
+
+    <!-- Favicon (tab del navegador) — se mantiene el actual -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
     <link rel="icon" type="image/svg+xml" href="/assets/favicon.svg" />
-    <link rel="shortcut icon" type="image/svg+xml" href="/assets/favicon.svg" />
-    <!-- Icono al “Agregar a inicio” / PWA (cuadrado) -->
-    <link rel="apple-touch-icon" href="/assets/favicon_app.svg" />
+    <link rel="shortcut icon" href="/favicon.ico" />
+    <!-- Icono al “Agregar a inicio” / PWA -->
+    <link rel="apple-touch-icon" href="/group22.svg" />
     <link rel="manifest" href="/site.webmanifest" />
     <meta name="theme-color" content="#000000" />
     <meta name="mobile-web-app-capable" content="yes" />

@@ -62,6 +62,10 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [awaitingEmailConfirmUi, setAwaitingEmailConfirmUi] = useState(
     () => isEmailConfirmCallback() || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1'
   );
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
+  const [isResendingConfirmation, setIsResendingConfirmation] = useState(false);
+  const [resendCooldown, setResendCooldown] = useState(0);
+  const [resendFeedback, setResendFeedback] = useState<string | null>(null);
   // Tras click en "Confirmar email": esperar PKCE, cerrar sesión y quedarse en login
   useEffect(() => {
     const { error, errorDescription } = parseAuthUrlParams();
@@ -81,6 +85,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     sessionStorage.setItem(EMAIL_CONFIRMED_FLAG, '1');
     setAwaitingEmailConfirmUi(true);
     setIsRegisterMode(false);
+    setPendingConfirmationEmail(null);
 
     let cancelled = false;
     (async () => {
@@ -98,6 +103,12 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       cancelled = true;
     };
   }, [signOut, showSuccess, showError]);
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const timer = window.setTimeout(() => setResendCooldown((s) => s - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [resendCooldown]);
 
   // Si ya hay sesión confirmada, ir al panel (nunca con email pendiente ni post-confirmación)
   useEffect(() => {
@@ -367,22 +378,11 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           return;
         }
         
-        // Mostrar mensaje de éxito (o warning si existe)
-        if (result.warning) {
-          showError(
-            'Cuenta creada',
-            'Tu cuenta se creó correctamente, pero hubo un problema al enviar el email de confirmación. Por favor, contacta al administrador para confirmar tu cuenta manualmente.'
-          );
-        } else {
-          showSuccess('Correo enviado', 'Revisa tu casilla de correo para confirmar tu cuenta. La cuenta se creará una vez que confirmes el email.');
-        }
-        
-        // Pequeño delay para que el toast se muestre
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
+        const createdEmail = registerData.email.trim();
         setError(null);
         setIsRegisterMode(false);
         setCurrentStep(1);
+        setCredentials({ email: createdEmail, password: "" });
         setRegisterData({
           firstName: "",
           lastName: "",
@@ -401,10 +401,19 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           password: "",
           confirmPassword: ""
         });
-        
-        // Limpiar estados de visibilidad de contraseñas
         setShowPassword(false);
         setShowConfirmPassword(false);
+
+        if (result.warning) {
+          showError(
+            'Cuenta creada',
+            'Tu cuenta se creó, pero no pudimos enviar el email. Contactá al entrenador para confirmarla.'
+          );
+        } else {
+          setPendingConfirmationEmail(createdEmail);
+          setResendFeedback(null);
+          setResendCooldown(0);
+        }
         
       } catch (err) {
         console.error('Error inesperado en registro:', err);
@@ -436,6 +445,41 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     setCurrentStep(1);
     setError(null);
     setCredentials({ email: "", password: "" });
+  };
+
+  const handleGoToLoginFromConfirmation = () => {
+    setPendingConfirmationEmail(null);
+    setResendFeedback(null);
+    setResendCooldown(0);
+    setIsRegisterMode(false);
+    setIsRecoverMode(false);
+    setCurrentStep(1);
+    setError(null);
+  };
+
+  const handleResendConfirmation = async () => {
+    if (!pendingConfirmationEmail || isResendingConfirmation || resendCooldown > 0) return;
+    setIsResendingConfirmation(true);
+    setResendFeedback(null);
+    try {
+      const { error: resendError } = await supabase.auth.resend({
+        type: 'signup',
+        email: pendingConfirmationEmail,
+      });
+      if (resendError) throw resendError;
+      setResendFeedback('Te lo volvimos a enviar. Revisá también spam.');
+      setResendCooldown(60);
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : '').toLowerCase();
+      if (msg.includes('rate limit') || msg.includes('429')) {
+        setResendFeedback('Esperá un minuto y volvé a intentar.');
+        setResendCooldown(60);
+      } else {
+        setResendFeedback('No pudimos reenviarlo ahora. Probá de nuevo en un rato.');
+      }
+    } finally {
+      setIsResendingConfirmation(false);
+    }
   };
 
   // Si está en modo recuperación, mostrar formulario de recuperación
@@ -477,6 +521,49 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
           <div className="mb-6 space-y-4 md:mb-0 md:space-y-8">
           {/* Login/Register Card */}
           <Card className="animate-slide-up border-border shadow-elegant">
+          {pendingConfirmationEmail ? (
+            <>
+              <CardHeader className="space-y-3 p-6 text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-border bg-muted">
+                  <Mail className="h-5 w-5 text-foreground" />
+                </div>
+                <CardTitle>Revisá tu correo</CardTitle>
+                <CardDescription className="text-pretty">
+                  Te enviamos un enlace a{' '}
+                  <span className="font-medium text-foreground">{pendingConfirmationEmail}</span>
+                  {' '}para confirmar tu cuenta. Hasta que no lo abras, no vas a poder ingresar.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6 p-6 pt-0">
+                <p className="text-center text-sm text-muted-foreground">
+                  ¿No lo recibiste todavía?{' '}
+                  <button
+                    type="button"
+                    onClick={handleResendConfirmation}
+                    disabled={isResendingConfirmation || resendCooldown > 0}
+                    className="font-medium text-foreground underline underline-offset-4 decoration-foreground/40 hover:decoration-foreground disabled:no-underline disabled:opacity-50"
+                  >
+                    {isResendingConfirmation
+                      ? 'Enviando...'
+                      : resendCooldown > 0
+                        ? `Volver a enviar (${resendCooldown}s)`
+                        : 'Volver a enviar'}
+                  </button>
+                </p>
+                {resendFeedback && (
+                  <p className="text-center text-xs text-muted-foreground">{resendFeedback}</p>
+                )}
+                <Button
+                  type="button"
+                  className="h-11 w-full text-sm"
+                  onClick={handleGoToLoginFromConfirmation}
+                >
+                  Iniciar sesión
+                </Button>
+              </CardContent>
+            </>
+          ) : (
+            <>
           <CardHeader className="space-y-1 p-3 md:p-6">
             <CardTitle className="text-center">
               {isRegisterMode ? `Crear Cuenta - Paso ${currentStep} de 2` : "Acceso"}
@@ -718,7 +805,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                   type="button"
                   variant="outline"
                   onClick={handleBackStep}
-                  className="w-full mb-4 text-[12px] md:text-base"
+                  className="w-full h-11 text-sm"
                 >
                   Volver al paso anterior
                 </Button>
@@ -800,6 +887,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               )}
             </div>
           </CardContent>
+            </>
+          )}
         </Card>
           </div>
           
