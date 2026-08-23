@@ -612,7 +612,7 @@ const Dashboard = () => {
   if (!isAdmin && (loadingHorarios || hasHorarios === null || adminLoading)) {
     return (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-        <img src="/assets/logovertical.svg" alt="Malda" className="max-w-[160px] opacity-90" />
+        <img src="/assets/logovertical.svg" alt="Malda" className="w-[31%] max-w-[109px] object-contain md:max-w-[238px]" />
       </div>
     );
   }
@@ -1318,7 +1318,7 @@ const AppContent = ({ loading }: { loading: boolean }) => {
       {/* Overlay de carga global: solo para rutas protegidas */}
       {loading && !isPublicRoute && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black">
-          <img src="/assets/logovertical.svg" alt="Logo" className="max-w-[180px] md:max-w-xs" />
+          <img src="/assets/logovertical.svg" alt="Logo" className="w-[31%] max-w-[109px] object-contain md:max-w-[238px]" />
         </div>
       )}
     </>
