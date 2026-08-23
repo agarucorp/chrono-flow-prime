@@ -553,6 +553,7 @@ export default function Admin() {
   const filteredUsers = allUsers.filter(user => {
     // Excluir administradores - solo mostrar clientes
     if (user.role === 'admin') return false;
+    if (!user.horarios_recurrentes || user.horarios_recurrentes.length === 0) return false;
     
     const matchesSearch = user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          user.email.toLowerCase().includes(searchTerm.toLowerCase());

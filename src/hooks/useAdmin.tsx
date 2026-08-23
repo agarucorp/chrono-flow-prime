@@ -310,8 +310,13 @@ export const useAdmin = () => {
           fecha_desactivacion: user.fecha_desactivacion || null
         };
       });
+
+      // Sin horarios configurados no van al listado (cuentas sin confirmar / filas vacías).
+      const usuariosConHorarios = usuariosMarcados.filter(
+        (user) => (user.horarios_recurrentes?.length ?? 0) > 0
+      );
       
-      setAllUsers(usuariosMarcados);
+      setAllUsers(usuariosConHorarios);
     } catch (err) {
       console.error('❌ Error inesperado obteniendo usuarios:', err);
     }

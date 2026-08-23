@@ -499,7 +499,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   }
 
   return (
-    <div className="flex h-screen min-h-screen flex-col overflow-x-hidden bg-black md:flex-row">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-black md:h-screen md:flex-row">
       {/* Desktop: panel izquierdo — logo full black */}
       <aside className="relative hidden md:flex md:w-1/2 md:flex-col md:items-center md:justify-center bg-black">
         <img
@@ -514,13 +514,16 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         />
       </aside>
 
-      {/* Mobile: layout actual · Desktop: panel derecho carbon */}
-      <div className="flex flex-1 flex-col items-center bg-black p-2 pt-32 pb-0 md:w-1/2 md:justify-center md:bg-card md:p-8 md:pt-8">
-        {/* Grupo modal + footer */}
-        <div className="flex w-full max-w-md flex-1 flex-col justify-start pb-0 md:mb-0 md:flex-none md:justify-center md:space-y-8">
-          <div className="mb-6 space-y-4 md:mb-0 md:space-y-8">
+      {/* Mobile: logo + modal centrados, sin scroll · Desktop: panel derecho carbon */}
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-black px-5 py-8 md:w-1/2 md:bg-card md:p-8">
+        <div className="flex w-full max-w-md flex-col items-center">
+          <img
+            src="/assets/logovertical.svg"
+            alt="Logo MALDA"
+            className="mb-6 w-[36%] max-w-[128px] object-contain md:hidden"
+          />
           {/* Login/Register Card */}
-          <Card className="animate-slide-up border-border shadow-elegant">
+          <Card className="w-full animate-slide-up border-border shadow-elegant">
           {pendingConfirmationEmail ? (
             <>
               <CardHeader className="space-y-3 p-6 text-center">
@@ -890,10 +893,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
             </>
           )}
         </Card>
-          </div>
-          
-          {/* Footer */}
-          <footer className="mt-0 w-full flex-shrink-0 bg-transparent pb-0 pt-0 md:mt-0 md:bg-transparent md:pb-4 md:pt-2">
+          <footer className="mt-6 w-full flex-shrink-0 bg-transparent md:pb-0">
             <div className="flex items-center justify-center gap-2">
               <p className="text-xs text-white/70">Powered by</p>
               <a
