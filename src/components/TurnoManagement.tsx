@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { useToast } from '@/hooks/use-toast';
+import { useNotifications } from '@/hooks/useNotifications';
 import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
@@ -88,6 +89,7 @@ export const TurnoManagement = () => {
     { id: 9, nombre: 'Clase 9', horaInicio: '20:00', horaFin: '21:00' }
   ]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<number | null>(null);
   const [horariosSemanales, setHorariosSemanales] = useState<HorarioSemanal[]>([]);
   const [loadingHorarios, setLoadingHorarios] = useState(false);
@@ -103,6 +105,7 @@ export const TurnoManagement = () => {
   } = useSystemConfig();
   const { createAusenciaUnica, createAusenciaPeriodo, fetchAusencias, deleteAusencia } = useAdmin();
   const { toast } = useToast();
+  const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
 
   // Cualquier cambio de grilla, capacidad o ausencias mueve la cantidad de
   // clases de los alumnos, y la cuota es un valor guardado: hay que reescribirla.
@@ -377,21 +380,22 @@ export const TurnoManagement = () => {
   };
 
   const handleGuardarHorarios = async () => {
+    if (guardando) return;
+    setGuardando(true);
+    const loadingToast = showLoading('Guardando configuración...');
+
     try {
-      // Calcular horarios de apertura y cierre basándose en los horarios del popup
       const horariosInicio = horariosFijos.map(h => h.horaInicio).sort();
       const horariosFin = horariosFijos.map(h => h.horaFin).sort();
       const horarioApertura = horariosInicio[0] || '08:00';
       const horarioCierre = horariosFin[horariosFin.length - 1] || '20:00';
 
-      // Preparar datos para actualizar configuracion_admin (sin capacidad global)
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         horario_apertura: horarioApertura,
         horario_cierre: horarioCierre,
         updated_at: new Date().toISOString()
       };
 
-      // Agregar tarifas escalonadas
       if (combo1Tarifa && parseFloat(combo1Tarifa) >= 0) {
         updateData.combo_1_tarifa = parseFloat(combo1Tarifa);
       }
@@ -408,175 +412,112 @@ export const TurnoManagement = () => {
         updateData.combo_5_tarifa = parseFloat(combo5Tarifa);
       }
 
-      
-      const { data: updateResult, error: errorConfiguracion } = await supabase
+      const { error: errorConfiguracion } = await supabase
         .from('configuracion_admin')
         .update(updateData)
-        .eq('sistema_activo', true)
-        .select();
-
+        .eq('sistema_activo', true);
 
       if (errorConfiguracion) {
         console.error('Error guardando configuración:', errorConfiguracion);
-        toast({ 
-          title: 'Error', 
-          description: `No se pudo guardar la configuración: ${errorConfiguracion.message}`, 
-          variant: 'destructive' 
-        });
+        dismissToast(loadingToast);
+        showError('No se pudo guardar la configuración', errorConfiguracion.message);
         return;
       }
 
-      // La grilla se replica en los 7 días: el sábado y el domingo sólo se
-      // ofrecen si el admin habilita el fin de semana, pero sus horarios tienen
-      // que seguir a los días hábiles para no quedar desfasados.
+      // La grilla se replica en los 7 días: sábado y domingo siguen a los hábiles
+      // para no quedar desfasados si después se habilita el fin de semana.
       const diasSemana = [1, 2, 3, 4, 5, 6, 7];
       const nowIso = new Date().toISOString();
 
-      for (const ds of diasSemana) {
-        // Traer existentes del día con clase_numero
+      for (let i = 0; i < horariosFijos.length; i++) {
+        const h = horariosFijos[i];
+        const claseNumero = i + 1;
+        const hi = (h.horaInicio || '00:00').substring(0, 5) + ':00';
+        const hf = (h.horaFin || '00:00').substring(0, 5) + ':00';
+        const capacidadClase = Number(
+          capacidadesClases[h.id] ?? capacidadesClases[claseNumero] ?? 4
+        );
+
         const { data: existentes, error: errorExistentes } = await supabase
           .from('horarios_semanales')
-          .select('id, clase_numero, hora_inicio, hora_fin, capacidad')
-          .eq('dia_semana', ds)
-          .order('clase_numero');
-        
+          .select('id, dia_semana')
+          .eq('clase_numero', claseNumero);
+
         if (errorExistentes) {
           console.error('Error leyendo horarios existentes:', errorExistentes);
-          continue;
+          dismissToast(loadingToast);
+          showError('No se pudieron leer los horarios', errorExistentes.message);
+          return;
         }
 
-        // Procesar cada clase del popup
-        for (let i = 0; i < horariosFijos.length; i++) {
-          const h = horariosFijos[i];
-          const claseNumero = i + 1; // Clase 1, 2, 3, etc.
-          const hi = (h.horaInicio || '00:00').substring(0, 5) + ':00';
-          const hf = (h.horaFin || '00:00').substring(0, 5) + ':00';
+        const { error: errorUpd } = await supabase
+          .from('horarios_semanales')
+          .update({
+            hora_inicio: hi,
+            hora_fin: hf,
+            capacidad: capacidadClase,
+            activo: true,
+            updated_at: nowIso,
+          })
+          .eq('clase_numero', claseNumero);
 
-          // Buscar si ya existe esta clase_numero para este día
-          const existente = existentes?.find((e: any) => e.clase_numero === claseNumero);
-
-          if (existente) {
-            // Actualizar el horario existente (las horas pueden cambiar, pero clase_numero es fijo)
-            // NO actualizar capacidad aquí - se maneja individualmente por clase
-            const { error: errorUpd } = await supabase
-              .from('horarios_semanales')
-              .update({ 
-                hora_inicio: hi, 
-                hora_fin: hf, 
-                activo: true, 
-                updated_at: nowIso 
-              })
-              .eq('id', existente.id);
-            
-            if (errorUpd) {
-              console.error('❌ Error actualizando clase:', { dia: ds, clase: claseNumero, errorUpd });
-            } else {
-            }
-          } else {
-            // Insertar nuevo slot con clase_numero
-            // Usar la capacidad de la clase desde capacidadesClases, o 4 por defecto
-            const capacidadClase = capacidadesClases[claseNumero] || 4;
-            const { error: errorIns } = await supabase
-              .from('horarios_semanales')
-              .insert({ 
-                dia_semana: ds, 
-                clase_numero: claseNumero,
-                hora_inicio: hi, 
-                hora_fin: hf, 
-                capacidad: capacidadClase, 
-                activo: true, 
-                updated_at: nowIso 
-              });
-            
-            if (errorIns) {
-              console.error('❌ Error insertando clase:', { dia: ds, clase: claseNumero, errorIns });
-            } else {
-            }
-          }
+        if (errorUpd) {
+          console.error('Error actualizando clase:', { clase: claseNumero, errorUpd });
+          dismissToast(loadingToast);
+          showError(`No se pudo guardar la Clase ${claseNumero}`, errorUpd.message);
+          return;
         }
 
-        // Las clases que el admin quitó del popup se dan de baja. Sin esto
-        // seguían apareciendo en vacantes y cobrándose.
-        const sobrantes = (existentes || []).filter(
-          (e: any) => e.clase_numero > horariosFijos.length
-        );
-        if (sobrantes.length > 0) {
-          const { error: errorBaja } = await supabase
+        const diasExistentes = new Set((existentes || []).map((e: { dia_semana: number }) => e.dia_semana));
+        const diasFaltantes = diasSemana.filter((ds) => !diasExistentes.has(ds));
+        if (diasFaltantes.length > 0) {
+          const { error: errorIns } = await supabase
             .from('horarios_semanales')
-            .update({ activo: false, updated_at: nowIso })
-            .in('id', sobrantes.map((e: any) => e.id));
+            .insert(
+              diasFaltantes.map((ds) => ({
+                dia_semana: ds,
+                clase_numero: claseNumero,
+                hora_inicio: hi,
+                hora_fin: hf,
+                capacidad: capacidadClase,
+                activo: true,
+                updated_at: nowIso,
+              }))
+            );
 
-          if (errorBaja) {
-            console.error('❌ Error dando de baja clases sobrantes:', { dia: ds, errorBaja });
+          if (errorIns) {
+            console.error('Error insertando clase:', { clase: claseNumero, errorIns });
+            dismissToast(loadingToast);
+            showError(`No se pudo crear la Clase ${claseNumero}`, errorIns.message);
+            return;
           }
         }
       }
 
-      await recalcularCuotasAfectadas();
-
-      toast({ 
-        title: 'Guardado exitoso', 
-        description: 'Configuración y horarios sincronizados correctamente' 
-      });
-      
-      setIsDialogOpen(false);
-      
-      // Recargar configuraciones
-      window.location.reload(); // Temporal - después se puede optimizar
-      
-    } catch (error) {
-      console.error('Error guardando configuración:', error);
-      toast({ 
-        title: 'Error', 
-        description: 'Error inesperado al guardar', 
-        variant: 'destructive' 
-      });
-    }
-  };
-
-  // Actualizar capacidad de una clase específica
-  const handleActualizarCapacidadClase = async (claseNumero: number, nuevaCapacidad: number) => {
-    try {
-      // Actualizar todos los horarios de esa clase (todos los días de la semana)
-      const { error } = await supabase
+      const { error: errorBaja } = await supabase
         .from('horarios_semanales')
-        .update({ 
-          capacidad: nuevaCapacidad,
-          updated_at: new Date().toISOString()
-        })
-        .eq('clase_numero', claseNumero)
-        .eq('activo', true);
+        .update({ activo: false, updated_at: nowIso })
+        .gt('clase_numero', horariosFijos.length);
 
-      if (error) {
-        console.error(`Error actualizando capacidad de clase ${claseNumero}:`, error);
-        toast({ 
-          title: 'Error', 
-          description: `No se pudo actualizar la capacidad de la Clase ${claseNumero}`, 
-          variant: 'destructive' 
-        });
+      if (errorBaja) {
+        console.error('Error dando de baja clases sobrantes:', errorBaja);
+        dismissToast(loadingToast);
+        showError('No se pudieron desactivar las clases quitadas', errorBaja.message);
         return;
       }
 
-      // Actualizar estado local
-      setCapacidadesClases(prev => ({
-        ...prev,
-        [claseNumero]: nuevaCapacidad
-      }));
-
-      toast({ 
-        title: 'Guardado', 
-        description: `Capacidad de Clase ${claseNumero} actualizada a ${nuevaCapacidad}` 
-      });
-      
       window.dispatchEvent(new Event('capacidad:updated'));
-      await recalcularCuotasAfectadas();
+
+      dismissToast(loadingToast);
+      showSuccess('Configuración guardada', 'Cupos, tarifas y horarios sincronizados');
+      setIsDialogOpen(false);
+      void recalcularCuotasAfectadas();
     } catch (error) {
-      console.error(`Error inesperado actualizando capacidad de clase ${claseNumero}:`, error);
-      toast({ 
-        title: 'Error', 
-        description: 'Error inesperado al actualizar la capacidad', 
-        variant: 'destructive' 
-      });
+      console.error('Error guardando configuración:', error);
+      dismissToast(loadingToast);
+      showError('Error inesperado al guardar');
+    } finally {
+      setGuardando(false);
     }
   };
 
@@ -773,17 +714,23 @@ export const TurnoManagement = () => {
           <div className="space-y-0 sm:space-y-4 pt-0 sm:pt-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-4">
               {/* CTA 1: Capacidad, tarifa y horarios */}
-              <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <Dialog
+                open={isDialogOpen}
+                onOpenChange={(open) => {
+                  if (guardando) return;
+                  setIsDialogOpen(open);
+                }}
+              >
                 <DialogTrigger asChild>
                   <div className="h-12 w-full rounded-xl bg-primary text-primary-foreground hover:bg-primary/90 transition-colors font-heading flex items-center justify-center cursor-pointer" style={{ padding: '12px 24px', fontSize: '14px' }}>
                     Capacidad, tarifa y horarios
                   </div>
                 </DialogTrigger>
-                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-y-auto p-3 sm:p-6 rounded-xl">
+                <DialogContent className="w-[90%] max-w-[20rem] sm:max-w-2xl max-h-[80vh] overflow-hidden p-3 sm:p-6 rounded-xl flex flex-col">
                   <DialogHeader>
                   </DialogHeader>
                   
-                  <div className="space-y-4">
+                  <div className="space-y-4 overflow-y-auto min-h-0 flex-1 pr-1">
                     {/* Card para capacidad por clase - Lista de las 9 clases */}
                     <div className="p-4 border border-border rounded-lg bg-muted/50">
                       <div className="text-center mb-3">
@@ -805,8 +752,12 @@ export const TurnoManagement = () => {
                             <Select
                               value={capacidadesClases[horario.id]?.toString() || '4'}
                               onValueChange={(value) => {
-                                const nuevaCapacidad = parseInt(value);
-                                handleActualizarCapacidadClase(horario.id, nuevaCapacidad);
+                                const nuevaCapacidad = parseInt(value, 10);
+                                if (Number.isNaN(nuevaCapacidad)) return;
+                                setCapacidadesClases((prev) => ({
+                                  ...prev,
+                                  [horario.id]: nuevaCapacidad,
+                                }));
                               }}
                             >
                               <SelectTrigger className="w-16 h-8 text-center" style={{ fontSize: '12px' }}>
@@ -991,20 +942,24 @@ export const TurnoManagement = () => {
                     </div>
                   </div>
 
-                  <DialogFooter className="gap-2">
+                  <DialogFooter className="gap-2 shrink-0 pt-3 border-t border-border">
                     <Button
+                      type="button"
                       variant="outline"
                       onClick={() => setIsDialogOpen(false)}
+                      disabled={guardando}
                       style={{ fontSize: '12px' }}
                     >
                       Cancelar
                     </Button>
-                    <Button 
-                      onClick={handleGuardarHorarios} 
+                    <Button
+                      type="button"
+                      onClick={handleGuardarHorarios}
+                      disabled={guardando}
                       style={{ fontSize: '12px' }}
                       className="bg-white text-black hover:bg-gray-100 border border-gray-300"
                     >
-                      Guardar
+                      {guardando ? 'Guardando...' : 'Guardar'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
