@@ -70,7 +70,7 @@ export function parseRecordValorScore(valor: string, unidad: RecordUnidad): numb
 
 /**
  * Ranking: menor tiempo primero, mayor peso primero.
- * Empates: nombre A→Z, luego id estable.
+ * Empates de valor: nombre A→Z, luego id estable (solo desempata el orden visual).
  */
 export function sortRecordsByRanking(
   entries: RecordEntry[],
@@ -96,13 +96,46 @@ export function sortRecordsByRanking(
   });
 }
 
+function scoresTied(a: number | null, b: number | null): boolean {
+  if (a == null && b == null) return true;
+  if (a == null || b == null) return false;
+  return a === b;
+}
+
+/**
+ * Puesto 1-based sobre una lista ya ordenada.
+ * Mismo peso o mismo tiempo → el mismo número; el siguiente salta
+ * (1, 2, 2, 4). El orden entre empatados no cambia el puesto.
+ */
+export function getRecordPlaceNumbers(
+  entries: RecordEntry[],
+  unidad: RecordUnidad
+): number[] {
+  const places = new Array<number>(entries.length);
+  let i = 0;
+  while (i < entries.length) {
+    const score = parseRecordValorScore(entries[i].valor, unidad);
+    let j = i + 1;
+    while (
+      j < entries.length &&
+      scoresTied(score, parseRecordValorScore(entries[j].valor, unidad))
+    ) {
+      j++;
+    }
+    const place = i + 1;
+    for (let k = i; k < j; k++) places[k] = place;
+    i = j;
+  }
+  return places;
+}
+
 export type RecordMedal = 'oro' | 'plata' | 'bronce';
 
-/** Medalla para puestos 1–3 (índice 0-based). */
-export function getRecordMedal(rankIndex: number): RecordMedal | null {
-  if (rankIndex === 0) return 'oro';
-  if (rankIndex === 1) return 'plata';
-  if (rankIndex === 2) return 'bronce';
+/** Medalla para puestos 1–3 (número de puesto, no índice de fila). */
+export function getRecordMedal(place: number): RecordMedal | null {
+  if (place === 1) return 'oro';
+  if (place === 2) return 'plata';
+  if (place === 3) return 'bronce';
   return null;
 }
 

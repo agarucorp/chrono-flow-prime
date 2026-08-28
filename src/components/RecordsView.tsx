@@ -5,6 +5,7 @@ import {
   RECORD_MEDAL_STYLES,
   formatRecordValor,
   getRecordMedal,
+  getRecordPlaceNumbers,
   sortRecordsByRanking,
 } from '@/lib/records';
 
@@ -56,6 +57,7 @@ export function RecordsView() {
           entries.filter((e) => e.disciplina_id === disc.id),
           disc.unidad
         );
+        const places = getRecordPlaceNumbers(rows, disc.unidad);
         return (
           <Card key={disc.id}>
             <CardHeader className="pb-3">
@@ -76,7 +78,8 @@ export function RecordsView() {
                     </thead>
                     <tbody>
                       {rows.map((row, index) => {
-                        const medal = getRecordMedal(index);
+                        const place = places[index];
+                        const medal = getRecordMedal(place);
                         const medalStyle = medal ? RECORD_MEDAL_STYLES[medal] : null;
                         return (
                           <tr
@@ -90,13 +93,13 @@ export function RecordsView() {
                                 <span
                                   className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold ring-2 ${medalStyle.className} ${medalStyle.ring}`}
                                   title={medal === 'oro' ? 'Oro' : medal === 'plata' ? 'Plata' : 'Bronce'}
-                                  aria-label={`Puesto ${index + 1}, ${medal}`}
+                                  aria-label={`Puesto ${place}, ${medal}`}
                                 >
                                   {medalStyle.label}
                                 </span>
                               ) : (
                                 <span className="inline-flex h-6 w-6 items-center justify-center text-caption text-muted-foreground">
-                                  {index + 1}
+                                  {place}
                                 </span>
                               )}
                             </td>

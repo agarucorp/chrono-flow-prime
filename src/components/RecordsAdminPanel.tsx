@@ -35,6 +35,7 @@ import {
   RECORD_MEDAL_STYLES,
   formatRecordValor,
   getRecordMedal,
+  getRecordPlaceNumbers,
   isValidRecordValor,
   sortRecordsByRanking,
   type RecordDisciplina,
@@ -265,6 +266,7 @@ export function RecordsAdminPanel() {
               entries.filter((e) => e.disciplina_id === disc.id),
               disc.unidad
             );
+            const places = getRecordPlaceNumbers(rows, disc.unidad);
             return (
               <div key={disc.id} className="surface-inset p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -298,7 +300,8 @@ export function RecordsAdminPanel() {
                 ) : (
                   <div className="space-y-1.5">
                     {rows.map((row, index) => {
-                      const medal = getRecordMedal(index);
+                      const place = places[index];
+                      const medal = getRecordMedal(place);
                       const medalStyle = medal ? RECORD_MEDAL_STYLES[medal] : null;
                       return (
                         <div
@@ -310,13 +313,13 @@ export function RecordsAdminPanel() {
                               <span
                                 className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold ring-2 ${medalStyle.className} ${medalStyle.ring}`}
                                 title={medal === 'oro' ? 'Oro' : medal === 'plata' ? 'Plata' : 'Bronce'}
-                                aria-label={`Puesto ${index + 1}, ${medal}`}
+                                aria-label={`Puesto ${place}, ${medal}`}
                               >
                                 {medalStyle.label}
                               </span>
                             ) : (
                               <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center text-caption text-muted-foreground">
-                                {index + 1}
+                                {place}
                               </span>
                             )}
                             <div className="min-w-0">

@@ -52,9 +52,11 @@ interface RecurringScheduleViewProps {
   hideSubNav?: boolean;
   /** Incrementa en cada navegación del App para forzar sync aunque initialView no cambie */
   viewEpoch?: number;
+  /** Admin viendo el panel alumno: se puede navegar, no se reserva ni cancela. */
+  readOnly?: boolean;
 }
 
-export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false, viewEpoch = 0 }: RecurringScheduleViewProps) => {
+export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav = false, viewEpoch = 0, readOnly = false }: RecurringScheduleViewProps) => {
   const { user, signOut } = useAuthContext();
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
@@ -1338,6 +1340,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // si aplica penalidad por hacerlo con menos de 72hs y el recálculo de la cuota.
   // El cupo vuelve a vacantes solo, porque la disponibilidad es derivada.
   const handleCancelarClase = async (clase: ClaseDelDia) => {
+    if (readOnly) {
+      toast({
+        title: "Vista previa",
+        description: "En este modo no se cancelan clases ni se ocupan cupos.",
+      });
+      return;
+    }
     if (!user?.id) return;
 
     if (clase.horario.clase_numero == null) {
@@ -1409,6 +1418,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // cliente valida por su cuenta, dos pestañas abiertas alcanzan para pasar por
   // encima de la capacidad.
   const handleConfirmarReserva = async () => {
+    if (readOnly) {
+      toast({
+        title: "Vista previa",
+        description: "En este modo no se reservan vacantes ni se ocupan cupos.",
+      });
+      setShowReservaModal(false);
+      setTurnoToReserve(null);
+      return;
+    }
     if (!turnoToReserve || !user?.id) return;
 
     if (turnoToReserve.clase_numero == null) {

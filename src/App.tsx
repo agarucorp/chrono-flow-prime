@@ -32,6 +32,7 @@ import { supabase } from "./lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatLocalDate, todayLocal } from "./lib/dateLocal";
+import { isAlumnoPreview, stopAlumnoPreview } from "./lib/alumnoPreview";
 
 // Componente Dashboard que usa el contexto de autenticación
 const Dashboard = () => {
@@ -54,6 +55,14 @@ const Dashboard = () => {
   const [currentSchedules, setCurrentSchedules] = useState<any[]>([]);
   const [currentPlan, setCurrentPlan] = useState<number | null>(null);
   const { isAdmin, isLoading: adminLoading } = useAdmin();
+  const [previewFlag, setPreviewFlag] = useState(isAlumnoPreview);
+  const previewAlumno = Boolean(isAdmin && previewFlag);
+
+  useEffect(() => {
+    const sync = () => setPreviewFlag(isAlumnoPreview());
+    window.addEventListener('malda:preview-alumno', sync);
+    return () => window.removeEventListener('malda:preview-alumno', sync);
+  }, []);
   
   // Función para obtener las iniciales del usuario
   const getInitials = (email: string) => {
@@ -99,6 +108,10 @@ const Dashboard = () => {
   };
 
   const handleOpenChangeSchedule = async () => {
+    if (previewAlumno) {
+      toast.info('Vista previa: no se pueden cambiar horarios');
+      return;
+    }
     if (!user?.id) return;
     try {
       // Cargar horarios actuales
@@ -335,7 +348,13 @@ const Dashboard = () => {
 
   // Escuchar evento de apertura de perfil desde la navbar mobile
   useEffect(() => {
-    const handleProfileOpen = () => setProfileOpen(true);
+    const handleProfileOpen = () => {
+      if (isAlumnoPreview()) {
+        toast.info('Vista previa: no se edita el perfil');
+        return;
+      }
+      setProfileOpen(true);
+    };
     const handleSignOutEvent = () => handleSignOut();
     const handleSupportOpen = () => setSupportOpen(true);
     const handleInfoGuideOpen = () => setInfoGuideOpen(true);
@@ -639,12 +658,30 @@ const Dashboard = () => {
     <div className="min-h-screen bg-black sm:bg-[url('/gymdesktop-background.png')] sm:bg-cover sm:bg-center sm:bg-no-repeat relative">
       {/* Overlay oscuro sobre la imagen (desktop) */}
       <div className="hidden sm:block absolute inset-0 bg-black/70 pointer-events-none" aria-hidden />
+      {previewAlumno && (
+        <div className="relative z-20 flex items-center justify-between gap-3 border-b border-white/10 bg-white px-4 py-2 text-sm text-black">
+          <span className="min-w-0 truncate font-medium">
+            Vista previa del panel alumno · no se guardan cambios
+          </span>
+          <button
+            type="button"
+            className="shrink-0 rounded-full bg-black px-3 py-1 text-xs font-medium text-white hover:bg-black/80"
+            onClick={() => {
+              stopAlumnoPreview();
+              setPreviewFlag(false);
+              navigate('/admin');
+            }}
+          >
+            Volver al admin
+          </button>
+        </div>
+      )}
       {/* Header restaurado */}
       <header className="relative z-10 border-b border-border bg-black/95 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex-1 flex items-center min-w-0 py-2">
-              {!isAdmin && (
+              {(!isAdmin || previewAlumno) && (
                 <img
                   src="/assets/malda.svg"
                   alt="Logo Malda"
@@ -677,7 +714,13 @@ const Dashboard = () => {
                       <p className="text-xs text-muted-foreground">{user?.email}</p>
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => setProfileOpen(true)}>
+                    <DropdownMenuItem className="cursor-pointer" onClick={() => {
+                      if (previewAlumno) {
+                        toast.info('Vista previa: no se edita el perfil');
+                        return;
+                      }
+                      setProfileOpen(true);
+                    }}>
                       <Settings className="h-4 w-4 mr-2" />
                       Configurar Perfil
                     </DropdownMenuItem>
@@ -765,7 +808,7 @@ const Dashboard = () => {
               </p>
             </div>
           </div>
-        ) : hasHorarios === false ? (
+        ) : hasHorarios === false && !previewAlumno ? (
           <div className="flex items-center justify-center py-8">
             <div className="text-center">
               <p className="text-muted-foreground">
@@ -1012,7 +1055,7 @@ const Dashboard = () => {
                       ? 'hidden'
                       : 'mt-4'
                   }>
-                    <RecurringScheduleView initialView={initialView} hideSubNav={hideSubNav} viewEpoch={viewEpoch} />
+                    <RecurringScheduleView initialView={initialView} hideSubNav={hideSubNav} viewEpoch={viewEpoch} readOnly={previewAlumno} />
                   </div>
                 </>
               );

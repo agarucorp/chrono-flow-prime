@@ -44,6 +44,7 @@ import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { startAlumnoPreview, stopAlumnoPreview } from '@/lib/alumnoPreview';
 import { 
   AlertDialog,
   AlertDialogAction,
@@ -306,37 +307,6 @@ export default function Admin() {
     return dias[idx] || '—';
   };
 
-  // Función para obtener días de asistencia del usuario
-  const getDiasAsistencia = (userId: string) => {
-    const user = allUsers.find(u => u.id === userId);
-    if (!user || !user.horarios_recurrentes || user.horarios_recurrentes.length === 0) {
-      return '—';
-    }
-    
-    // Extraer todos los días únicos de todos los horarios
-    const diasSet = new Set<string>();
-    for (const h of user.horarios_recurrentes) {
-      if (h.dias_semana && Array.isArray(h.dias_semana)) {
-        h.dias_semana.forEach(dia => diasSet.add(dia));
-      }
-    }
-    
-    if (diasSet.size === 0) return '—';
-    
-    // Mapear días de texto a números para ordenar
-    const diaMap: Record<string, number> = {
-      'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 
-      'Viernes': 5, 'Sábado': 6, 'Domingo': 7
-    };
-    
-    const diasUnicos = Array.from(diasSet)
-      .map(dia => diaMap[dia] || 0)
-      .filter(d => d !== 0)
-      .sort((a, b) => a - b);
-
-    return diasUnicos.map(d => getDiaCorto(d)).join(', ');
-  };
-
   // Función para obtener los días de asistencia del usuario (1..5, sin repetidos)
   const getHorariosUsuario = (userId: string): string[] => {
     try {
@@ -454,6 +424,10 @@ export default function Admin() {
       navigate('/user', { replace: true });
     }
   }, [isLoading, isAdmin, navigate]);
+
+  useEffect(() => {
+    stopAlumnoPreview();
+  }, []);
 
   // Sincronizar phones desde auth.users al cargar Admin
   useEffect(() => {
@@ -926,12 +900,11 @@ export default function Admin() {
               <CardContent className="p-0 w-full max-w-full">
                 {/* Vista de escritorio - Tabla completa */}
                 <div className="hidden md:block overflow-x-auto w-full max-w-full">
-                  <table className="w-full min-w-[780px]">
+                  <table className="w-full min-w-[640px]">
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium min-w-[180px]">Usuario</th>
                         <th className="text-left p-3 font-medium min-w-[100px]">Plan</th>
-                        <th className="text-left p-3 font-medium min-w-[140px]">Asistencia</th>
                         <th className="text-left p-3 font-medium min-w-[200px]">Horarios</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
                       </tr>
@@ -940,7 +913,6 @@ export default function Admin() {
                       {sortedUsers
                         .filter(u => !(u.email || '').toLowerCase().includes('test'))
                         .map((user) => {
-                        const diasAsistencia = getDiasAsistencia(user.id);
                         const planPrecio = getPlanPrecioClase(user);
                         
                         return (
@@ -968,9 +940,6 @@ export default function Admin() {
                               <p className="text-sm tabular-nums text-foreground">
                                 {planPrecio != null ? formatPlanPrecio(planPrecio) : '—'}
                               </p>
-                            </td>
-                            <td className="p-3">
-                              <p className="text-sm text-muted-foreground">{diasAsistencia}</p>
                             </td>
                             <td className="p-3">
                               {(() => {
@@ -1033,7 +1002,7 @@ export default function Admin() {
 
                 {/* Vista móvil - Lista con scroll horizontal */}
                 <div className="md:hidden overflow-x-auto w-full">
-                  <div className="min-w-[680px]">
+                  <div className="min-w-[520px]">
                     {/* Encabezados de columna */}
                     <div className="flex items-center px-4 py-2 border-b bg-muted/30 gap-4">
                       <div className="flex-1 min-w-[160px]">
@@ -1041,9 +1010,6 @@ export default function Admin() {
                       </div>
                       <div className="w-[80px] text-center shrink-0">
                         <p className="text-xs font-medium text-foreground/80 uppercase">Plan</p>
-                      </div>
-                      <div className="flex-1 text-center min-w-[120px]">
-                        <p className="text-xs font-medium text-foreground/80 uppercase">Asistencia</p>
                       </div>
                       <div className="flex-1 text-center min-w-[150px]">
                         <p className="text-xs font-medium text-foreground/80 uppercase">Horarios</p>
@@ -1055,7 +1021,6 @@ export default function Admin() {
                       {sortedUsers
                         .filter(u => !(u.email || '').toLowerCase().includes('test'))
                         .map((user) => {
-                        const diasAsistencia = getDiasAsistencia(user.id);
                         const horarios = getHorariosUsuario(user.id);
                         const planPrecio = getPlanPrecioClase(user);
                         
@@ -1075,9 +1040,6 @@ export default function Admin() {
                               <p className="text-[10px] tabular-nums text-foreground">
                                 {planPrecio != null ? formatPlanPrecio(planPrecio) : '—'}
                               </p>
-                            </div>
-                            <div className="flex-1 text-center min-w-[120px]">
-                              <p className="text-[10px] text-muted-foreground">{diasAsistencia}</p>
                             </div>
                             <div className="flex-1 text-center min-w-[150px]">
                               {horarios.length === 0 ? (
@@ -1706,6 +1668,20 @@ export default function Admin() {
           </Card>
         </div>
       )}
+
+      {/* Vista previa del panel alumno: no ocupa cupos ni genera cuota */}
+      <button
+        type="button"
+        onClick={() => {
+          startAlumnoPreview();
+          navigate('/user');
+        }}
+        className="fixed z-[60] bottom-20 right-4 md:bottom-6 inline-flex h-9 w-9 items-center justify-center rounded-full bg-black/80 text-white/40 hover:text-white/70 hover:bg-black"
+        aria-label="Ver panel alumno en vista previa"
+        title="Ver como alumno"
+      >
+        <Eye className="h-4 w-4" />
+      </button>
 
       {/* Navbar Mobile - fija en bottom, solo visible en móvil */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur-sm">
