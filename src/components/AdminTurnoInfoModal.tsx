@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
-import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
 
 interface Turno {
   id: string;
@@ -78,7 +78,7 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       const { error } = await supabase.rpc('fn_admin_cancelar_clase_por_hora', {
         p_usuario_id: turno.cliente_id,
         p_turno_fecha: turno.fecha,
-        p_hora_inicio: turno.hora_inicio.slice(0, 5),
+        p_hora_inicio: normalizeTimeToHhMm(turno.hora_inicio),
       });
 
       if (error) {
@@ -91,10 +91,12 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       showSuccess('Clase eliminada', 'La clase fue cancelada. El cupo queda disponible en vacantes y el alumno la verá como cancelada.');
 
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
+      window.dispatchEvent(new Event('alumnosHorarios:updated'));
       window.dispatchEvent(new Event('balance:refresh'));
 
-      onClose();
       onTurnoUpdated();
+      onClose();
 
     } catch (error) {
       console.error('Error eliminando clase:', error);

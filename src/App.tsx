@@ -28,7 +28,9 @@ import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { useUserBalance } from "./hooks/useUserBalance";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
+import { StayLoggedInDialog } from "./components/StayLoggedInDialog";
 import { supabase } from "./lib/supabase";
+import { setRememberSession } from "./lib/authStorage";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatLocalDate, todayLocal } from "./lib/dateLocal";
@@ -52,6 +54,7 @@ const Dashboard = () => {
   const [infoGuideOpen, setInfoGuideOpen] = useState(false);
   const [infoGuideSection, setInfoGuideSection] = useState<'clases' | 'balance'>('clases');
   const [changeScheduleOpen, setChangeScheduleOpen] = useState(false);
+  const [stayLoggedInOpen, setStayLoggedInOpen] = useState(false);
   const [currentSchedules, setCurrentSchedules] = useState<any[]>([]);
   const [currentPlan, setCurrentPlan] = useState<number | null>(null);
   const { isAdmin, isLoading: adminLoading } = useAdmin();
@@ -176,11 +179,25 @@ const Dashboard = () => {
   }, [user, hasHorarios]);
 
   const handleRecurringSetupComplete = async () => {
+    const isFirstSetup = hasHorarios !== true;
     setShowRecurringModal(false);
     setHasCompletedSetup(true);
     setHasHorarios(true);
     hasHorariosCheckRef.current = { userId: user?.id ?? null, hasHorarios: true, timestamp: Date.now() };
+    if (isFirstSetup && !previewAlumno && !isAdmin) {
+      setStayLoggedInOpen(true);
+    }
     await persistTutorialDone();
+  };
+
+  const handleStayLoggedInChoose = (remember: boolean) => {
+    setRememberSession(remember);
+    setStayLoggedInOpen(false);
+    if (remember) {
+      toast.success('Sesión guardada en este dispositivo');
+    } else {
+      toast.info('Esta sesión se cierra al salir del navegador');
+    }
   };
 
   /** Fin del tutorial → obligatorio elegir horarios (sin marcar tutorial como “hecho”). */
@@ -291,6 +308,9 @@ const Dashboard = () => {
       setTutorialProcessed(true);
       return;
     }
+
+    // Hasta terminar el alta, la sesión no se guarda en el dispositivo.
+    setRememberSession(false);
 
     if (!tutorialProcessed && !showTutorial) {
       setShowRecurringModal(false);
@@ -643,12 +663,17 @@ const Dashboard = () => {
           open={showTutorial}
           slides={tutorialSlides}
           onClose={handleTutorialClose}
+          onAbandon={abandonOnboarding}
         />
         <RecurringScheduleModal
           isOpen={showRecurringModal}
           onClose={() => undefined}
           onComplete={handleRecurringSetupComplete}
           onAbandon={abandonOnboarding}
+        />
+        <StayLoggedInDialog
+          open={stayLoggedInOpen}
+          onChoose={handleStayLoggedInChoose}
         />
       </div>
     );
@@ -1144,6 +1169,11 @@ const Dashboard = () => {
       <SupportModal
         isOpen={supportOpen}
         onClose={() => setSupportOpen(false)}
+      />
+
+      <StayLoggedInDialog
+        open={stayLoggedInOpen}
+        onChoose={handleStayLoggedInChoose}
       />
 
       <Dialog open={infoGuideOpen} onOpenChange={setInfoGuideOpen}>

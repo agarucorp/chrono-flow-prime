@@ -16,7 +16,8 @@ import {
   parseAuthUrlParams,
   waitForAuthSession,
 } from "@/lib/authCallbacks";
-import { AUTH_STORAGE_KEY } from "@/lib/authStorage";
+import { AUTH_STORAGE_KEY, setRememberSession, shouldRememberSession } from "@/lib/authStorage";
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface LoginFormProps {
   onLogin: () => void;
@@ -58,6 +59,12 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   const [error, setError] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [rememberSession, setRememberSessionChecked] = useState(shouldRememberSession);
+  const [blockedByOnboarding, setBlockedByOnboarding] = useState(false);
+
+  useEffect(() => {
+    if (!user) setBlockedByOnboarding(false);
+  }, [user]);
   const [showSplash, setShowSplash] = useState(false);
   const [awaitingEmailConfirmUi, setAwaitingEmailConfirmUi] = useState(
     () => isEmailConfirmCallback() || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1'
@@ -110,7 +117,8 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     return () => window.clearTimeout(timer);
   }, [resendCooldown]);
 
-  // Si ya hay sesión confirmada, ir al panel (nunca con email pendiente ni post-confirmación)
+  // Si ya hay sesión confirmada: admin o alumno con plan van al panel.
+  // Si el alta no está terminada, no redirigir: así se puede entrar con otra cuenta.
   useEffect(() => {
     if (authLoading || !user || !user.email_confirmed_at) return;
     if (awaitingEmailConfirmUi || sessionStorage.getItem(EMAIL_CONFIRMED_FLAG) === '1') return;
@@ -122,8 +130,23 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
         .eq('id', user.id)
         .maybeSingle();
       if (cancelled) return;
-      if (profile?.role === 'admin') navigate('/admin', { replace: true });
-      else navigate('/user', { replace: true });
+      if (profile?.role === 'admin') {
+        navigate('/admin', { replace: true });
+        return;
+      }
+      const { data: horarios } = await supabase
+        .from('horarios_recurrentes_usuario')
+        .select('id')
+        .eq('usuario_id', user.id)
+        .eq('activo', true)
+        .limit(1);
+      if (cancelled) return;
+      if (horarios && horarios.length > 0) {
+        navigate('/user', { replace: true });
+        return;
+      }
+      setRememberSession(false);
+      setBlockedByOnboarding(true);
     })();
     return () => { cancelled = true; };
   }, [user, authLoading, navigate, awaitingEmailConfirmUi]);
@@ -242,9 +265,10 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
       // Login real con Supabase
       try {
         setIsLoading(true);
-        // La sesión persiste siempre en localStorage; limpiamos la copia que
-        // pudiera haber quedado en sessionStorage de la versión anterior.
-        sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        setRememberSession(rememberSession);
+        if (rememberSession) {
+          sessionStorage.removeItem(AUTH_STORAGE_KEY);
+        }
         const result = await signIn(credentials.email, credentials.password);
 
         if (!result.success || !result.user) {
@@ -502,6 +526,60 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
     );
   }
 
+  if (blockedByOnboarding && user && !pendingConfirmationEmail) {
+    return (
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-black md:h-screen md:flex-row">
+        <aside className="relative hidden md:flex md:w-1/2 md:flex-col md:items-center md:justify-center bg-black">
+          <img
+            src="/assets/logovertical.svg"
+            alt="Logo MaldaGym"
+            className="max-w-[280px] w-[55%] object-contain"
+          />
+          <div aria-hidden className="absolute inset-y-0 right-0 w-px bg-white/15" />
+        </aside>
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center overflow-hidden bg-black px-5 py-8 md:w-1/2 md:bg-card md:p-8">
+          <div className="flex w-full max-w-md flex-col items-center">
+            <img
+              src="/assets/logovertical.svg"
+              alt="Logo MALDA"
+              className="mb-6 w-[36%] max-w-[128px] object-contain md:hidden"
+            />
+            <Card className="w-full animate-slide-up border-border shadow-elegant">
+              <CardHeader className="space-y-1 p-6 text-center">
+                <CardTitle>Alta incompleta</CardTitle>
+                <CardDescription>
+                  Esta cuenta todavía tiene que terminar el tutorial y elegir horarios.
+                  Si querés entrar como admin u otro usuario, cerrá esta sesión.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3 p-6 pt-0">
+                <p className="truncate text-center text-sm text-muted-foreground">{user.email}</p>
+                <Button
+                  type="button"
+                  className="h-11 w-full text-sm"
+                  onClick={() => navigate('/user', { replace: true })}
+                >
+                  Continuar el alta
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="h-11 w-full text-sm"
+                  onClick={async () => {
+                    await signOut();
+                    setBlockedByOnboarding(false);
+                  }}
+                >
+                  Ingresar con otra cuenta
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-[100dvh] flex-col overflow-hidden bg-black md:h-screen md:flex-row">
       {/* Desktop: panel izquierdo — logo full black */}
@@ -644,6 +722,20 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
                         )}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="flex items-center space-x-2 pt-1">
+                    <Checkbox
+                      id="remember-session"
+                      checked={rememberSession}
+                      onCheckedChange={(checked) => setRememberSessionChecked(checked === true)}
+                    />
+                    <Label
+                      htmlFor="remember-session"
+                      className="cursor-pointer text-xs font-normal text-muted-foreground"
+                    >
+                      Mantener sesión iniciada
+                    </Label>
                   </div>
 
                 </>

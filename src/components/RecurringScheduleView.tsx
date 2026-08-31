@@ -1043,7 +1043,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const hastaMes = format(endOfMonth(monthToUse), 'yyyy-MM-dd');
         const { data: cancelacionesMes, error: errorCancelacionesMes } = await supabase
           .from('turnos_cancelados')
-          .select('turno_fecha, turno_hora_inicio, turno_hora_fin, tipo_cancelacion')
+          .select('turno_fecha, turno_hora_inicio, turno_hora_fin, clase_numero, tipo_cancelacion')
           .eq('cliente_id', user.id)
           .gte('turno_fecha', desdeMes)
           .lte('turno_fecha', hastaMes);
@@ -1054,8 +1054,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
         const cancelacionesPorFecha = (cancelacionesMes || []).reduce<Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>>((acc, c: any) => {
           if (!acc[c.turno_fecha]) acc[c.turno_fecha] = new Map<string, 'usuario' | 'admin' | 'sistema'>();
-          const clave = `${normalizeTimeToHhMm(c.turno_hora_inicio)}-${normalizeTimeToHhMm(c.turno_hora_fin)}`;
-          acc[c.turno_fecha].set(clave, (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema');
+          const tipo = (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema';
+          const horaInicio = normalizeTimeToHhMm(c.turno_hora_inicio);
+          const horaFin = normalizeTimeToHhMm(c.turno_hora_fin);
+          acc[c.turno_fecha].set(`${horaInicio}-${horaFin}`, tipo);
+          acc[c.turno_fecha].set(horaInicio, tipo);
+          if (c.clase_numero != null) {
+            acc[c.turno_fecha].set(`clase:${c.clase_numero}`, tipo);
+          }
           return acc;
         }, {});
 
@@ -1292,8 +1298,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const horaInicioNorm = normalizeTimeToHhMm(horario.hora_inicio);
         const horaFinNorm = normalizeTimeToHhMm(horario.hora_fin);
         const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
-        const estaCancelada = cancelacionesMap.has(claveCancelacion);
-        let tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
+        const tipoDesdeMap =
+          cancelacionesMap.get(`clase:${horario.clase_numero}`) ||
+          cancelacionesMap.get(claveCancelacion) ||
+          cancelacionesMap.get(horaInicioNorm);
+        const estaCancelada = Boolean(tipoDesdeMap);
+        let tipoCancelacion = estaCancelada ? tipoDesdeMap : undefined;
         
         // Si es feriado sin horarios personalizados, marcar como cancelado con tipo 'sistema'
         if (esFeriado && !estaCancelada) {

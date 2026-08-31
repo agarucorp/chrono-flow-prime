@@ -15,7 +15,7 @@ import { ReservaConfirmationModal } from './ReservaConfirmationModal';
 import { useAdmin } from '@/hooks/useAdmin';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { format } from 'date-fns';
-import { formatClockRangeAmPm } from '@/lib/timeFormat';
+import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
 import { formatMonthEs, formatMonthYearEs, lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface Turno {
@@ -37,6 +37,7 @@ interface AlumnoHorario {
   email: string;
   telefono?: string;
   tipo: 'recurrente' | 'variable' | 'cancelado';
+  clase_numero?: number | null;
   hora_inicio: string;
   hora_fin: string;
   fecha?: string;
@@ -361,7 +362,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       window.removeEventListener('alumnosHorarios:updated', handleAlumnosHorariosUpdated);
       window.removeEventListener('feriados:updated', handleFeriadosUpdated);
     };
-  }, []);
+  }, [currentDate, isAdminView]);
 
 
   // Cargar slots configurados por admin desde horarios_semanales o feriados
@@ -512,6 +513,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         .select(`
           id,
           dia_semana,
+          clase_numero,
           hora_inicio,
           hora_fin,
           activo,
@@ -556,6 +558,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           turno_fecha,
           turno_hora_inicio,
           turno_hora_fin,
+          clase_numero,
           cliente_id,
           profiles(full_name, first_name, last_name, email, phone, role)
         `)
@@ -583,18 +586,20 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         return hora.substring(0, 5);
       };
 
-      // Crear un Set de turnos cancelados para esta fecha específica
-      const turnosCanceladosHoy = new Set<string>();
+      // Cancelados: por clase_numero (preferido) y por hora de inicio (si el fin no coincide).
+      const canceladosPorClase = new Set<string>();
+      const canceladosPorHora = new Set<string>();
       if (turnosCancelados && turnosCancelados.length > 0) {
         turnosCancelados.forEach(turno => {
           const profile = Array.isArray(turno.profiles) ? turno.profiles[0] : turno.profiles;
           // Filtrar admins: solo agregar si el perfil existe y NO es admin
           if (profile && profile.role !== 'admin') {
-            // Crear clave única normalizada: usuario_id + hora_inicio (normalizada) + hora_fin (normalizada)
             const horaInicioNorm = normalizeHora(turno.turno_hora_inicio || '');
             const horaFinNorm = normalizeHora(turno.turno_hora_fin || '');
-            const claveCancelado = `${turno.cliente_id}-${horaInicioNorm}-${horaFinNorm}`;
-            turnosCanceladosHoy.add(claveCancelado);
+            canceladosPorHora.add(`${turno.cliente_id}-${horaInicioNorm}`);
+            if (turno.clase_numero != null) {
+              canceladosPorClase.add(`${turno.cliente_id}-${turno.clase_numero}`);
+            }
 
             todosAlumnos.push({
               id: turno.id,
@@ -602,6 +607,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
               email: profile.email || '',
               telefono: profile.phone || '',
               tipo: 'cancelado',
+              clase_numero: turno.clase_numero,
               hora_inicio: horaInicioNorm,
               hora_fin: horaFinNorm,
               fecha: turno.turno_fecha,
@@ -629,16 +635,19 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
           const horaInicioNorm = normalizeHora(horario.hora_inicio || '');
           const horaFinNorm = normalizeHora(horario.hora_fin || '');
-          const claveRecurrente = `${horario.usuario_id}-${horaInicioNorm}-${horaFinNorm}`;
+          const canceladoPorClase =
+            horario.clase_numero != null &&
+            canceladosPorClase.has(`${horario.usuario_id}-${horario.clase_numero}`);
+          const canceladoPorHora = canceladosPorHora.has(`${horario.usuario_id}-${horaInicioNorm}`);
 
-          // Solo agregar si NO está cancelado (los cancelados ya están en la lista desde turnos_cancelados)
-          if (!turnosCanceladosHoy.has(claveRecurrente)) {
+          if (!canceladoPorClase && !canceladoPorHora) {
             todosAlumnos.push({
               id: horario.id,
               nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone,
               tipo: 'recurrente',
+              clase_numero: horario.clase_numero,
               hora_inicio: horaInicioNorm,
               hora_fin: horaFinNorm,
               fecha: fechaActual,
@@ -659,9 +668,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
             const horaInicio = normalizeHora(turno.turno_hora_inicio || '');
             const horaFin = normalizeHora(turno.turno_hora_fin || '');
 
-            // Verificar si este turno variable está cancelado usando clave normalizada
-            const claveVariable = `${turno.cliente_id}-${horaInicio}-${horaFin}`;
-            const estaCancelado = turnosCanceladosHoy.has(claveVariable);
+            const estaCancelado = canceladosPorHora.has(`${turno.cliente_id}-${horaInicio}`);
 
             // Verificar si ya existe este usuario para esta hora (evitar duplicados)
             const yaExiste = todosAlumnos.some(alumno =>
@@ -770,6 +777,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
       await fetchAlumnosHorarios();
       window.dispatchEvent(new Event('clasesDelMes:updated'));
+      window.dispatchEvent(new Event('turnosCancelados:updated'));
       window.dispatchEvent(new Event('balance:refresh'));
 
       setShowCancelAlumnoModal(false);
@@ -1683,6 +1691,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           }}
           onTurnoUpdated={() => {
             fetchTurnos();
+            fetchAlumnosHorarios();
             if (onTurnoReservado) {
               onTurnoReservado();
             }

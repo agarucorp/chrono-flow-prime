@@ -19,6 +19,9 @@ const HERO_APP_SCREENSHOTS = [
   { src: '/galeria/IMG_0903%201.jpg', alt: 'App MALDA — vista en el teléfono' },
 ] as const;
 
+/** Poner en true para volver a mostrar el botón flotante de WhatsApp. */
+const SHOW_LANDING_WHATSAPP_FAB = false;
+
 function isHeicPath(url: string) {
   return /\.hei[cf]$/i.test(url);
 }
@@ -1142,7 +1145,8 @@ const LandingPage = () => {
         </div>
       </footer>
 
-      {/* Botón flotante de WhatsApp */}
+      {/* Botón flotante de WhatsApp (oculto de forma temporal) */}
+      {SHOW_LANDING_WHATSAPP_FAB && (
       <a
         href="https://wa.link/tcs28v"
         target="_blank"
@@ -1172,6 +1176,7 @@ const LandingPage = () => {
           </div>
         </div>
       </a>
+      )}
     </div>
   );
 };
