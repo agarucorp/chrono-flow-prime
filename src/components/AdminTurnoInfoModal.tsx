@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Calendar, Clock, User, X, Trash2 } from 'lucide-react';
+import { X, Trash2, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { supabase } from '@/lib/supabase';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
+import { hasClassStarted } from '@/lib/dateLocal';
 
 interface Turno {
   id: string;
@@ -32,11 +33,17 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const [loading, setLoading] = useState(false);
   const [showConfirmAlert, setShowConfirmAlert] = useState(false);
+  const [showYaComenzoAlert, setShowYaComenzoAlert] = useState(false);
 
   if (!isOpen || !turno) return null;
 
-  // Mostrar alerta de confirmación
+  const claseEnCurso = hasClassStarted(turno.fecha, turno.hora_inicio);
+
   const mostrarConfirmacion = () => {
+    if (claseEnCurso) {
+      setShowYaComenzoAlert(true);
+      return;
+    }
     setShowConfirmAlert(true);
   };
 
@@ -52,6 +59,12 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
       if (turno.estado === 'cancelado') {
         showError('Error', 'Esta clase ya está cancelada');
         setShowConfirmAlert(false);
+        return;
+      }
+
+      if (hasClassStarted(turno.fecha, turno.hora_inicio)) {
+        setShowConfirmAlert(false);
+        setShowYaComenzoAlert(true);
         return;
       }
 
@@ -83,7 +96,12 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
 
       if (error) {
         dismissToast(loadingToast);
-        showError('Error', error.message || 'No se pudo eliminar la clase');
+        const msg = error.message || '';
+        if (msg.toLowerCase().includes('ya empezó') || msg.toLowerCase().includes('ya empezo')) {
+          setShowYaComenzoAlert(true);
+          return;
+        }
+        showError('Error', msg || 'No se pudo quitar al alumno de esta clase');
         return;
       }
 
@@ -213,8 +231,15 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                 Confirmar Cancelación
               </h3>
               <p className="text-sm text-gray-500 mb-6">
-                ¿Estás seguro de que quieres cancelar esta clase?<br />
-                El usuario verá la clase como cancelada y aparecerá en vacantes.
+                ¿Cancelar la clase de {turno.cliente_nombre || 'este alumno'} el{' '}
+                {(() => {
+                  const [year, month, day] = (turno.fecha || '').split('-').map(Number);
+                  if (!year || !month || !day) return turno.fecha;
+                  return `${day}/${String(month).padStart(2, '0')}/${year}`;
+                })()}{' '}
+                de {formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}?
+                <br />
+                El cupo se libera en la agenda y en vacantes.
               </p>
 
               <div className="flex space-x-3">
@@ -235,6 +260,35 @@ export const AdminTurnoInfoModal = ({ turno, isOpen, onClose, onTurnoUpdated }: 
                   {loading ? 'Cancelando...' : 'Confirmar'}
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showYaComenzoAlert && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0 w-10 h-10 mx-auto bg-amber-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="h-6 w-6 text-amber-600" />
+              </div>
+            </div>
+
+            <div className="text-center">
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                La clase ya comenzó
+              </h3>
+              <p className="text-sm text-gray-500 mb-6">
+                No es posible quitar a {turno.cliente_nombre || 'este alumno'} de una clase en curso
+                ({formatClockRangeAmPm(turno.hora_inicio, turno.hora_fin)}).
+              </p>
+
+              <Button
+                onClick={() => setShowYaComenzoAlert(false)}
+                className="w-full text-xs sm:text-sm"
+              >
+                Entendido
+              </Button>
             </div>
           </div>
         </div>

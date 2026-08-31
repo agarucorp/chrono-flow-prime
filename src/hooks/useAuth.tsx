@@ -41,6 +41,18 @@ export const useAuth = () => {
             // Evitar deadlock: no await signOut dentro del bootstrap/auth listener
             void supabase.auth.signOut()
           }
+          if (confirmedUser) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', confirmedUser.id)
+              .maybeSingle()
+            if (!profile) {
+              void supabase.auth.signOut()
+              setAuthState({ user: null, loading: false, error: null })
+              return
+            }
+          }
           setAuthState({
             user: confirmedUser,
             loading: false,
@@ -236,8 +248,24 @@ export const useAuth = () => {
         };
         const { data, error } = await supabase.auth.signUp({ ...signUpOptions });
         
-        // Si hay un error, verificar si es un error 500 relacionado con el email
-        // En algunos casos, el usuario se crea pero falla el envío del email
+        // Supabase, con "Confirm email" activo, no tira error si el mail ya existe:
+        // devuelve un user sin identities y no envía correo. Hay que cortar acá.
+        const alreadyRegistered =
+          Boolean(data?.user) &&
+          Array.isArray(data.user.identities) &&
+          data.user.identities.length === 0;
+        if (alreadyRegistered) {
+          localStorage.removeItem('lastSignUpAttempt');
+          if (data.session) {
+            await supabase.auth.signOut();
+          }
+          setAuthState({ user: null, loading: false, error: null });
+          return {
+            success: false,
+            error: 'Este correo ya está registrado',
+          };
+        }
+
         if (error) {
           // Si el error es 500 y el usuario se creó, permitir continuar
           const is500Error = error.status === 500 || error.message?.includes('500');
@@ -318,8 +346,14 @@ export const useAuth = () => {
           errorMsgLower.includes('maximum credits exceeded') ||
           errorMsgLower.includes('credits exceeded') ||
           errorMsgLower.includes('451');
-        
-        if (is500Error && isEmailRelated) {
+
+        if (
+          errorMsgLower.includes('already registered') ||
+          errorMsgLower.includes('already been registered') ||
+          errorMsgLower.includes('user already exists')
+        ) {
+          errorMessage = 'Este correo ya está registrado';
+        } else if (is500Error && isEmailRelated) {
           errorMessage = 'No se pudo enviar el email de confirmación (por ejemplo, límite de créditos de Resend o SMTP). Deshabilita temporalmente el SMTP custom en Supabase o revisa tu proveedor de emails.';
         } else if (is500Error) {
           errorMessage = 'Error del servidor al crear la cuenta. Puede ser temporal, un problema con triggers o con el envío de emails. Contacta al administrador o intenta más tarde.';

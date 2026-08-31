@@ -2217,6 +2217,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   return (
                     <div className="space-y-2">
                       <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
+                      <span className="block font-medium text-foreground">
+                        {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
+                      </span>
                       <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                         <span className="block text-yellow-800 dark:text-yellow-200 font-medium">
                           ⚠️ Cancelación tardía
@@ -2231,6 +2234,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   return (
                     <div className="space-y-2">
                       <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
+                      <span className="block font-medium text-foreground">
+                        {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
+                      </span>
                       <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
                         <span className="block text-green-800 dark:text-green-200 font-medium">
                           ✅ Cancelación con anticipación

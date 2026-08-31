@@ -86,3 +86,16 @@ export function normalizeTimeHhMm(hora: string | null | undefined): string {
   if (!match) return s.length >= 5 ? s.substring(0, 5) : s;
   return `${match[1].padStart(2, "0")}:${match[2]}`;
 }
+
+/** True si el turno ya empezó (hora Argentina, sin DST). Ante fecha/hora inválida, se considera empezado. */
+export function hasClassStarted(
+  fechaYmd: string,
+  horaInicio: string,
+  now: Date = new Date()
+): boolean {
+  const hhmm = normalizeTimeHhMm(horaInicio);
+  if (!fechaYmd || !hhmm) return true;
+  const start = new Date(`${fechaYmd}T${hhmm}:00-03:00`);
+  if (Number.isNaN(start.getTime())) return true;
+  return start.getTime() <= now.getTime();
+}

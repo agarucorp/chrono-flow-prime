@@ -244,6 +244,7 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
   // Limpiar errores cuando se empiece a escribir
   const handleFieldChange = (field: string, value: string) => {
     setRegisterData(prev => ({ ...prev, [field]: value }));
+    setError(null);
     if (fieldErrors[field as keyof typeof fieldErrors]) {
       setFieldErrors(prev => ({ ...prev, [field]: "" }));
     }
@@ -384,11 +385,10 @@ export const LoginFormSimple = ({ onLogin }: LoginFormProps) => {
               'No pudimos enviar el email',
               'Tu cuenta puede haberse creado. Revisá tu correo (y spam) o pedí ayuda al entrenador.'
             );
-          } else if (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('existe')) {
-            showError(
-              'Este email ya está registrado',
-              'Probá iniciar sesión o recuperá tu contraseña.'
-            );
+          } else if (errorMsg.toLowerCase().includes('already') || errorMsg.toLowerCase().includes('registered') || errorMsg.toLowerCase().includes('existe') || errorMsg.toLowerCase().includes('ya está registrado')) {
+            setError('Este correo ya está registrado');
+            setFieldErrors(prev => ({ ...prev, email: 'Este correo ya está registrado' }));
+            return;
           } else if (errorMsg.toLowerCase().includes('500') || errorMsg.toLowerCase().includes('servidor')) {
             showError(
               'Algo salió mal',

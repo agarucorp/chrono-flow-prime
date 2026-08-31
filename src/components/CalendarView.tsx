@@ -16,7 +16,7 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
 import { format } from 'date-fns';
 import { formatClockRangeAmPm, normalizeTimeToHhMm } from '@/lib/timeFormat';
-import { formatMonthEs, formatMonthYearEs, lowercaseSpanishMonths } from '@/lib/dateLocal';
+import { formatMonthEs, formatMonthYearEs, hasClassStarted, lowercaseSpanishMonths } from '@/lib/dateLocal';
 
 interface Turno {
   id: string;
@@ -749,9 +749,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       return;
     }
 
-    // Verificar si la clase es futura
     if (!esClaseFutura(selectedAlumno.fecha || formatLocalDate(currentDate), selectedAlumno.hora_inicio)) {
-      showError('Error', 'Solo se pueden cancelar clases futuras');
+      showError('La clase ya comenzó', 'No es posible quitar al alumno de una clase en curso.');
       return;
     }
 
@@ -790,24 +789,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
     }
   };
 
-  // Función para verificar si una clase es futura
   const esClaseFutura = (fecha: string, horaInicio: string) => {
-    try {
-      // Asegurar que la hora tenga formato completo HH:MM:SS
-      const horaCompleta = horaInicio.includes(':') && horaInicio.split(':').length === 2
-        ? horaInicio + ':00'
-        : horaInicio;
-
-      // Crear fecha de la clase con timezone local
-      const fechaClase = new Date(fecha + 'T' + horaCompleta);
-      const ahora = new Date();
-
-
-      return fechaClase > ahora;
-    } catch (error) {
-      console.error('Error validando fecha:', error);
-      return false;
-    }
+    return !hasClassStarted(fecha, horaInicio);
   };
 
   // Función para manejar el clic en el botón +
