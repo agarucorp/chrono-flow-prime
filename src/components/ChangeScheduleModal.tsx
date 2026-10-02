@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { flushSync } from 'react-dom';
 import { Check, AlertCircle, ArrowLeft, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
 import { addDaysLocal, formatLocalDate, formatMonthEs, todayLocal } from '@/lib/dateLocal';
@@ -29,14 +30,6 @@ interface ChangeScheduleModalProps {
   currentPlan: number | null;
 }
 
-const PAQUETES_PRECIOS = [
-  { dias: 1, precioPorClase: 12500 },
-  { dias: 2, precioPorClase: 11250 },
-  { dias: 3, precioPorClase: 10000 },
-  { dias: 4, precioPorClase: 8750 },
-  { dias: 5, precioPorClase: 7500 }
-];
-
 export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
   isOpen,
   onClose,
@@ -44,6 +37,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
   currentSchedules,
   currentPlan
 }) => {
+  const { paquetes: paquetesPrecios } = useTarifasPlanes();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
 
   const [horariosClase, setHorariosClase] = useState<HorarioClase[]>([]);
@@ -324,7 +318,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-                {PAQUETES_PRECIOS.map((paquete) => {
+                {paquetesPrecios.map((paquete) => {
                   const isSelected = paqueteSeleccionado === paquete.dias;
                   return (
                     <Card
@@ -599,7 +593,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-lg font-semibold text-foreground sm:text-2xl">
-                  {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
+                  {formatPrecio(paquetesPrecios.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
                   <span className="ml-2 text-xs uppercase tracking-[0.25em] text-muted-foreground sm:text-sm">/ clase</span>
                 </div>
               </div>
