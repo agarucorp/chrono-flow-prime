@@ -19,9 +19,10 @@ interface OnboardingTutorialProps {
   open: boolean
   slides: TutorialSlide[]
   onClose: () => void
+  onAbandon?: () => void
 }
 
-export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorialProps) => {
+export const OnboardingTutorial = ({ open, slides, onClose, onAbandon }: OnboardingTutorialProps) => {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [direction, setDirection] = useState<'forward' | 'backward'>('forward')
 
@@ -166,14 +167,24 @@ export const OnboardingTutorial = ({ open, slides, onClose }: OnboardingTutorial
           </div>
         </div>
         <div className="flex justify-between items-center px-4 py-6 sm:px-10 sm:py-6 border-t border-white/10">
-          <button
-            type="button"
-            onClick={handleBack}
-            disabled={isFirstSlide}
-            className={`text-[12px] sm:text-[10px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            Volver
-          </button>
+          {isFirstSlide && onAbandon ? (
+            <button
+              type="button"
+              onClick={onAbandon}
+              className="text-[12px] sm:text-[10px] uppercase tracking-[0.3em] text-white/70 hover:text-white transition-colors"
+            >
+              Cerrar sesión
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleBack}
+              disabled={isFirstSlide}
+              className={`text-[12px] sm:text-[10px] uppercase tracking-[0.3em] text-white/80 hover:text-white transition-colors ${isFirstSlide ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              Volver
+            </button>
+          )}
           <div className="hidden sm:flex sm:justify-center sm:flex-1">
             <div className="text-white/70">{renderDots()}</div>
           </div>

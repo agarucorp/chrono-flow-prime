@@ -1046,7 +1046,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const hastaMes = format(endOfMonth(monthToUse), 'yyyy-MM-dd');
         const { data: cancelacionesMes, error: errorCancelacionesMes } = await supabase
           .from('turnos_cancelados')
-          .select('turno_fecha, turno_hora_inicio, turno_hora_fin, tipo_cancelacion')
+          .select('turno_fecha, turno_hora_inicio, turno_hora_fin, clase_numero, tipo_cancelacion')
           .eq('cliente_id', user.id)
           .gte('turno_fecha', desdeMes)
           .lte('turno_fecha', hastaMes);
@@ -1057,8 +1057,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
         const cancelacionesPorFecha = (cancelacionesMes || []).reduce<Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>>((acc, c: any) => {
           if (!acc[c.turno_fecha]) acc[c.turno_fecha] = new Map<string, 'usuario' | 'admin' | 'sistema'>();
-          const clave = `${normalizeTimeToHhMm(c.turno_hora_inicio)}-${normalizeTimeToHhMm(c.turno_hora_fin)}`;
-          acc[c.turno_fecha].set(clave, (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema');
+          const tipo = (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema';
+          const horaInicio = normalizeTimeToHhMm(c.turno_hora_inicio);
+          const horaFin = normalizeTimeToHhMm(c.turno_hora_fin);
+          acc[c.turno_fecha].set(`${horaInicio}-${horaFin}`, tipo);
+          acc[c.turno_fecha].set(horaInicio, tipo);
+          if (c.clase_numero != null) {
+            acc[c.turno_fecha].set(`clase:${c.clase_numero}`, tipo);
+          }
           return acc;
         }, {});
 
@@ -1296,8 +1302,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         const horaInicioNorm = normalizeTimeToHhMm(horario.hora_inicio);
         const horaFinNorm = normalizeTimeToHhMm(horario.hora_fin);
         const claveCancelacion = `${horaInicioNorm}-${horaFinNorm}`;
-        const estaCancelada = cancelacionesMap.has(claveCancelacion);
-        let tipoCancelacion = estaCancelada ? cancelacionesMap.get(claveCancelacion) : undefined;
+        const tipoDesdeMap =
+          cancelacionesMap.get(`clase:${horario.clase_numero}`) ||
+          cancelacionesMap.get(claveCancelacion) ||
+          cancelacionesMap.get(horaInicioNorm);
+        const estaCancelada = Boolean(tipoDesdeMap);
+        let tipoCancelacion = estaCancelada ? tipoDesdeMap : undefined;
         
         // Si es feriado sin horarios personalizados, marcar como cancelado con tipo 'sistema'
         if (esFeriado && !estaCancelada) {
@@ -2266,6 +2276,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   return (
                     <div className="space-y-2">
                       <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
+                      <span className="block font-medium text-foreground">
+                        {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
+                      </span>
                       <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                         <span className="block text-yellow-800 dark:text-yellow-200 font-medium">
                           ⚠️ Cancelación tardía
@@ -2286,6 +2299,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 return (
                   <div className="space-y-2">
                     <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
+                    <span className="block font-medium text-foreground">
+                      {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
+                    </span>
                     <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
                       <span className="block text-green-800 dark:text-green-200 font-medium">
                         ✅ Cancelación con anticipación
