@@ -206,6 +206,14 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
       setSaving(true);
       const loadingToast = showLoading('Guardando horarios...');
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        dismissToast(loadingToast);
+        showError('Tu sesión se cerró', 'Iniciá sesión de nuevo para guardar tus horarios.');
+        onAbandon?.();
+        return;
+      }
+
       const { data, error } = await supabase.rpc('fn_seleccionar_plan', {
         p_horario_ids: Array.from(horariosSeleccionados)
       });

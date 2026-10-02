@@ -52,6 +52,14 @@ export const useAuth = () => {
               setAuthState({ user: null, loading: false, error: null })
               return
             }
+            // Mientras se leía el perfil la sesión pudo cerrarse o cambiar (al volver
+            // del link de confirmación se hace signOut): no pisar ese estado.
+            const { data: { session: current } } = await supabase.auth.getSession()
+            if (!mounted) return
+            if (current?.user?.id !== confirmedUser.id) {
+              setAuthState(prev => ({ ...prev, loading: false }))
+              return
+            }
           }
           setAuthState({
             user: confirmedUser,
