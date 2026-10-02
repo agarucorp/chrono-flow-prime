@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { formatPrecioPlan, useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import {
   Carousel,
   CarouselContent,
@@ -268,6 +269,9 @@ function HeroDeviceMockup({
 }
 
 const LandingPage = () => {
+  const { paquetes: paquetesPrecios } = useTarifasPlanes();
+  const precioPlan = (dias: number) =>
+    formatPrecioPlan(paquetesPrecios.find((p) => p.dias === dias)?.precioPorClase);
   const navigate = useNavigate();
   /** Solo mobile: alterna qué columna del cuadro «¿Por qué MALDA?» se muestra */
   const [porQueMaldaVista, setPorQueMaldaVista] = useState<'propuesta' | 'diferencia'>('propuesta');
@@ -711,7 +715,7 @@ const LandingPage = () => {
               </div>
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-white">$12.500</span>
+                  <span className="text-3xl font-bold text-white">{precioPlan(1)}</span>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">por clase</p>
               </div>
@@ -733,7 +737,7 @@ const LandingPage = () => {
               </div>
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-white">$11.250</span>
+                  <span className="text-3xl font-bold text-white">{precioPlan(2)}</span>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">por clase</p>
               </div>
@@ -758,7 +762,7 @@ const LandingPage = () => {
               </div>
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-white">$10.000</span>
+                  <span className="text-3xl font-bold text-white">{precioPlan(3)}</span>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">por clase</p>
               </div>
@@ -780,7 +784,7 @@ const LandingPage = () => {
               </div>
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-white">$8.750</span>
+                  <span className="text-3xl font-bold text-white">{precioPlan(4)}</span>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">por clase</p>
               </div>
@@ -802,7 +806,7 @@ const LandingPage = () => {
               </div>
               <div className="mb-6">
                 <div className="flex items-baseline">
-                  <span className="text-3xl font-bold text-white">$7.500</span>
+                  <span className="text-3xl font-bold text-white">{precioPlan(5)}</span>
                 </div>
                 <p className="text-sm text-gray-400 mt-1">por clase</p>
               </div>

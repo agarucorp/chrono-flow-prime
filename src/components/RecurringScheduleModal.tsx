@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { flushSync } from 'react-dom';
 import { Check, AlertCircle, ArrowLeft } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { formatPrecioPlan, useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useSystemConfig } from '@/hooks/useSystemConfig';
@@ -33,21 +34,13 @@ interface RecurringScheduleModalProps {
 
 // ⚡ VERSION: 2025-01-12T16:00:00Z - CRITICAL FIX
 // Fixed: Removed horario_clase_id and created_at from insert
-// Paquetes de precios - valor por clase según cantidad de días
-const PAQUETES_PRECIOS = [
-  { dias: 1, precioPorClase: 12500 },
-  { dias: 2, precioPorClase: 11250 },
-  { dias: 3, precioPorClase: 10000 },
-  { dias: 4, precioPorClase: 8750 },
-  { dias: 5, precioPorClase: 7500 }
-];
-
 export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
   isOpen,
   onClose,
   onComplete,
   onAbandon,
 }) => {
+  const { paquetes: paquetesPrecios } = useTarifasPlanes();
   const { user } = useAuthContext();
   const { showSuccess, showError, showLoading, dismissToast } = useNotifications();
   const { obtenerCapacidadActual } = useSystemConfig();
@@ -199,14 +192,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
     setIsReview(true);
   };
 
-  const formatPrecio = (precio: number): string => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(precio);
-  };
+  const formatPrecio = formatPrecioPlan;
 
   // Alta del plan.
   //
@@ -378,7 +364,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
               </div>
 
               <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3">
-                {PAQUETES_PRECIOS.map((paquete) => {
+                {paquetesPrecios.map((paquete) => {
                   const isSelected = paqueteSeleccionado === paquete.dias;
                   return (
                     <Card
@@ -633,7 +619,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-lg font-semibold text-foreground sm:text-2xl">
-                  {formatPrecio(PAQUETES_PRECIOS.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
+                  {formatPrecio(paquetesPrecios.find(p => p.dias === paqueteSeleccionado)?.precioPorClase)}
                   <span className="ml-2 text-xs uppercase tracking-[0.25em] text-muted-foreground sm:text-sm">/ clase</span>
                 </div>
               </div>
