@@ -10,7 +10,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy, Ticket } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -27,6 +27,7 @@ import { ProtectedAdminRouteWithAuth } from "./components/ProtectedAdminRoute";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { useUserBalance } from "./hooks/useUserBalance";
+import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR } from "./hooks/useClasesAFavor";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { supabase } from "./lib/supabase";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose, DialogDescription } from "@/components/ui/dialog";
@@ -382,7 +383,7 @@ const Dashboard = () => {
           <p className="text-[10px] uppercase tracking-wide text-red-600 md:text-[9px]">Clase cancelada</p>
           <p className="mt-1 text-red-600 line-through">18:00 - 19:00</p>
           <p className="mt-2 text-[10px] text-red-700 dark:text-red-200 md:text-[9px]">
-            Cuando canceles una clase aparecerá tachada en rojo y se generará una nueva clase disponible en Vacantes.
+            Cuando canceles una clase aparecerá tachada en rojo y se generará una nueva clase disponible en Vacantes. Si cancelás con más de 72hs de anticipación te queda una clase a favor para reservar una vacante sin cargo dentro de los {DIAS_CLASE_A_FAVOR} días.
           </p>
         </div>
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] dark:border-emerald-900/40 dark:bg-emerald-950/25 md:text-[10px]">
@@ -423,10 +424,6 @@ const Dashboard = () => {
             <div className="flex items-center justify-between text-emerald-600">
               <span>Vacantes reservadas</span>
               <span className="font-medium">+$12.000</span>
-            </div>
-            <div className="flex items-center justify-between text-red-500">
-              <span>Clases canceladas</span>
-              <span className="font-medium">-$12.000</span>
             </div>
           </div>
           <div className="mt-3 flex justify-end">
@@ -471,6 +468,7 @@ const Dashboard = () => {
     loading: balanceLoading,
     error: balanceError,
   } = useUserBalance();
+  const clasesAFavor = useClasesAFavor();
   const sortByDateDesc = useMemo(
     () => (a: { anio: number; mesNumero: number }, b: { anio: number; mesNumero: number }) => {
       if (a.anio === b.anio) {
@@ -856,13 +854,21 @@ const Dashboard = () => {
                       </button>
                       <button
                         onClick={() => goToTab('vacantes')}
-                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                           activeTab === 'vacantes'
                             ? 'bg-secondary text-foreground'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
                         Vacantes
+                        {clasesAFavor.cantidad > 0 && (
+                          <span
+                            className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-green-600 px-1 text-[10px] font-semibold leading-none text-white"
+                            title={clasesAFavor.cantidad === 1 ? '1 clase a favor' : `${clasesAFavor.cantidad} clases a favor`}
+                          >
+                            {clasesAFavor.cantidad}
+                          </span>
+                        )}
                       </button>
                       <button
                         onClick={() => {
@@ -893,6 +899,36 @@ const Dashboard = () => {
                   {/* Contenido de balance (solo cuando balanceSubView === 'balance') */}
                   {activeTab === 'balance' && balanceSubView === 'balance' && (
                     <div className="space-y-4">
+                      {clasesAFavor.cantidad > 0 && (
+                        <Card className="border-green-200 dark:border-green-800">
+                          <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-3">
+                            <Ticket className="h-5 w-5 text-green-600 dark:text-green-400" />
+                            <CardTitle className="text-heading">
+                              {clasesAFavor.cantidad === 1 ? 'Clase a favor' : `${clasesAFavor.cantidad} clases a favor`}
+                            </CardTitle>
+                          </CardHeader>
+                          <CardContent className="space-y-3 text-sm">
+                            <p className="text-muted-foreground">
+                              Por cada clase cancelada con anticipación podés reservar una vacante sin cargo antes de que venza.
+                            </p>
+                            {clasesAFavor.clases.map((c) => (
+                              <div key={c.cancelacionId} className="flex items-center justify-between">
+                                <span className="text-muted-foreground">
+                                  Clase del {formatFechaCorta(c.turnoFecha)}
+                                </span>
+                                <span className="font-medium text-green-600 dark:text-green-400">
+                                  Vence el {formatFechaCorta(c.vence)}
+                                </span>
+                              </div>
+                            ))}
+                            <div className="flex justify-end pt-1">
+                              <Button size="sm" onClick={() => goToTab('vacantes')}>
+                                Ver vacantes
+                              </Button>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
                       {balanceLoading ? (
                         <div className="flex items-center justify-center py-8">
                           <div className="text-center">
@@ -1083,6 +1119,14 @@ const Dashboard = () => {
                 >
                   <span className="relative">
                     <Zap className="h-5 w-5" />
+                    {clasesAFavor.cantidad > 0 && (
+                      <span
+                        className="absolute -right-2 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-green-600 px-1 text-[10px] font-semibold leading-none text-white"
+                        aria-label={clasesAFavor.cantidad === 1 ? '1 clase a favor' : `${clasesAFavor.cantidad} clases a favor`}
+                      >
+                        {clasesAFavor.cantidad}
+                      </span>
+                    )}
                   </span>
                   <span className="text-caption font-medium">Vacantes</span>
                 </button>
