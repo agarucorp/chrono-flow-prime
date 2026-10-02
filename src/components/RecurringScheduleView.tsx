@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info } from 'lucide-react';
+import { Calendar, Clock, ChevronLeft, ChevronRight, X, Dumbbell, Zap, User as UserIcon, User, Wallet, Info, Ticket } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,8 @@ import { es } from 'date-fns/locale';
 import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 import { normalizeTimeToHhMm, formatClockAmPm, formatClockRangeAmPm } from '@/lib/timeFormat';
-import { todayLocal, formatMonthYearEs, lowercaseSpanishMonths } from '@/lib/dateLocal';
+import { todayLocal, formatMonthYearEs, lowercaseSpanishMonths, addDaysLocal, formatLocalDate } from '@/lib/dateLocal';
+import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR } from '@/hooks/useClasesAFavor';
 
 interface HorarioRecurrente {
   id: string;
@@ -36,6 +37,7 @@ interface HorarioRecurrente {
   bloqueada?: boolean;
   nombre_clase?: string;
   esVariable?: boolean; // Para identificar turnos variables
+  conClaseAFavor?: boolean; // Vacante pagada con una clase a favor
   tipoCancelacion?: 'usuario' | 'admin' | 'sistema'; // Tipo de cancelación para mostrar correctamente
   fecha_inicio?: string; // Fecha desde la cual aplica este horario
   fecha_fin?: string; // Fecha hasta la cual aplica este horario
@@ -61,6 +63,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   const navigate = useNavigate();
   const { isAdmin } = useAdmin();
   const { toast } = useToast();
+  const clasesAFavor = useClasesAFavor();
   const [profileData, setProfileData] = useState<any>(null);
   const [horariosRecurrentes, setHorariosRecurrentes] = useState<HorarioRecurrente[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1105,7 +1108,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               hora_fin: turno.turno_hora_fin,
               activo: true,
               cancelada: false,
-              esVariable: true // Marcar como turno variable
+              esVariable: true, // Marcar como turno variable
+              conClaseAFavor: Boolean(turno.credito_cancelacion_id)
             }
           };
           })
@@ -1391,12 +1395,32 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       setShowModal(false);
       setConfirmOpen(false);
 
-      const resultado = data as { tardia?: boolean; horas_penalidad?: number } | null;
+      const resultado = data as {
+        tardia?: boolean;
+        horas_penalidad?: number;
+        origen?: 'recurrente' | 'variable';
+        clase_a_favor?: boolean;
+        clase_a_favor_vence?: string | null;
+        vacante_con_clase_a_favor?: boolean;
+      } | null;
+      const horas = resultado?.horas_penalidad ?? 72;
+      let descripcion: string;
+      if (resultado?.tardia) {
+        descripcion = resultado.vacante_con_clase_a_favor
+          ? `Cancelaste con menos de ${horas}hs de anticipación, así que perdés la clase a favor que usaste.`
+          : `Cancelaste con menos de ${horas}hs de anticipación, así que la clase se cobra igual.`;
+      } else if (resultado?.clase_a_favor && resultado.clase_a_favor_vence) {
+        descripcion = resultado.vacante_con_clase_a_favor
+          ? `Te devolvimos la clase a favor. Podés usarla en otra vacante hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}.`
+          : `Te queda una clase a favor para reservar una vacante sin cargo hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}.`;
+      } else if (resultado?.origen === 'variable') {
+        descripcion = "El cupo quedó disponible para otro alumno y la vacante no se te cobra.";
+      } else {
+        descripcion = "El cupo quedó disponible para otro alumno.";
+      }
       toast({
         title: "Turno cancelado",
-        description: resultado?.tardia
-          ? `Cancelaste con menos de ${resultado.horas_penalidad ?? 72}hs de anticipación, así que la clase se cobra igual.`
-          : "El cupo quedó disponible para otro alumno y no se te cobra.",
+        description: descripcion,
       });
     } catch (error) {
       console.error('Error al cancelar turno:', error);
@@ -1448,6 +1472,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       return;
     }
 
+    // La base decide si la paga una clase a favor; acá solo se anticipa para
+    // el mensaje, con la misma regla (la que vence primero y sigue vigente).
+    // Retomar la propia clase cancelada no es una vacante: deshace la
+    // cancelación y con ella su clase a favor.
+    const recuperaPropia = clasesAFavor.clases.some(
+      (c) => c.turnoFecha === turnoToReserve.turno_fecha && c.claseNumero === turnoToReserve.clase_numero
+    );
+    const claseAFavorUsada = recuperaPropia ? null : clasesAFavor.paraFecha(turnoToReserve.turno_fecha);
+
     setConfirmingReserva(true);
     try {
       const { error } = await supabase.rpc('reservar_vacante', {
@@ -1469,7 +1502,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       toast({
         title: "Turno reservado",
-        description: "El turno se reservó exitosamente",
+        description: recuperaPropia
+          ? "Recuperaste tu clase del plan."
+          : claseAFavorUsada
+            ? "Usaste tu clase a favor: esta vacante no se cobra."
+            : "El turno se reservó exitosamente",
       });
       setShowReservaModal(false);
       setTurnoToReserve(null);
@@ -1706,7 +1743,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                               </span>
                               {clase.horario.esVariable && !clase.horario.cancelada && (
                                 <div className="text-xs text-green-600 dark:text-green-400 font-medium">
-                                  Nueva clase
+                                  {clase.horario.conClaseAFavor ? 'Clase a favor' : 'Nueva clase'}
                                 </div>
                               )}
                             </td>
@@ -1966,6 +2003,23 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <h2 className="text-title">Vacantes disponibles</h2>
               <p className="text-body-muted mt-1">Seleccioná un día para ver las clases disponibles</p>
             </div>
+            {clasesAFavor.cantidad > 0 && clasesAFavor.proxima && (
+              <div className="mb-4 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/20">
+                <Ticket className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+                <div className="text-sm">
+                  <p className="font-medium text-green-800 dark:text-green-200">
+                    {clasesAFavor.cantidad === 1
+                      ? 'Tenés 1 clase a favor'
+                      : `Tenés ${clasesAFavor.cantidad} clases a favor`}
+                  </p>
+                  <p className="text-green-700 dark:text-green-300">
+                    {clasesAFavor.cantidad === 1
+                      ? `Reservá una vacante sin cargo hasta el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`
+                      : `Cada una paga una vacante sin cargo. La próxima vence el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`}
+                  </p>
+                </div>
+              </div>
+            )}
             {loadingTurnosCancelados ? (
               <div className="p-8 text-center">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white/80 mx-auto mb-4"></div>
@@ -2166,6 +2220,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <div className="bg-muted/40 border border-border rounded-lg p-3">
                 <p className="text-sm text-muted-foreground">
                   <strong>Importante:</strong> si no cancelás la clase antes de las 72hs del comienzo de la misma, se te cobrará el 100% del valor.
+                  {!selectedClase.horario.esVariable &&
+                    ` Si cancelás antes, te queda una clase a favor para reservar una vacante sin cargo dentro de los ${DIAS_CLASE_A_FAVOR} días.`}
                 </p>
               </div>
 
@@ -2211,8 +2267,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 
                 const ahora = new Date();
                 const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
-                const esCancelacionTardia = diferenciaHoras < 24;
-                
+                // Mismo umbral que usa fn_cancelar_clase.
+                const esCancelacionTardia = diferenciaHoras < 72;
+                const esVacante = Boolean(selectedClase.horario.esVariable);
+                const conClaseAFavor = Boolean(selectedClase.horario.conClaseAFavor);
+
                 if (esCancelacionTardia) {
                   return (
                     <div className="space-y-2">
@@ -2225,29 +2284,38 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                           ⚠️ Cancelación tardía
                         </span>
                         <span className="block text-yellow-700 dark:text-yellow-300 text-sm">
-                          Al cancelar dentro de las 72hs previas al inicio de la clase, se te cobrará el valor completo de la misma.
-                        </span>
-                      </div>
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div className="space-y-2">
-                      <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
-                      <span className="block font-medium text-foreground">
-                        {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
-                      </span>
-                      <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
-                        <span className="block text-green-800 dark:text-green-200 font-medium">
-                          ✅ Cancelación con anticipación
-                        </span>
-                        <span className="block text-green-700 dark:text-green-300 text-sm">
-                          Al cancelar con más de 72hs de anticipación, no se te cobrará por esta clase.
+                          {esVacante && conClaseAFavor
+                            ? 'Al cancelar dentro de las 72hs previas al inicio de la clase, perdés la clase a favor que usaste para reservarla.'
+                            : esVacante
+                              ? 'Al cancelar dentro de las 72hs previas al inicio de la clase, se te cobrará el valor completo de la misma.'
+                              : 'Al cancelar dentro de las 72hs previas al inicio de la clase, se te cobrará el valor completo de la misma y no te queda clase a favor.'}
                         </span>
                       </div>
                     </div>
                   );
                 }
+
+                const venceNueva = formatFechaCorta(formatLocalDate(addDaysLocal(ahora, DIAS_CLASE_A_FAVOR)));
+                return (
+                  <div className="space-y-2">
+                    <span className="block">¿Estás seguro de que quieres cancelar esta clase?</span>
+                    <span className="block font-medium text-foreground">
+                      {format(selectedClase.dia, "EEEE d 'de' MMMM", { locale: es })} · {formatClockRangeAmPm(selectedClase.horario.hora_inicio, selectedClase.horario.hora_fin)}
+                    </span>
+                    <div className="bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-md p-3">
+                      <span className="block text-green-800 dark:text-green-200 font-medium">
+                        ✅ Cancelación con anticipación
+                      </span>
+                      <span className="block text-green-700 dark:text-green-300 text-sm">
+                        {esVacante && conClaseAFavor
+                          ? 'La clase a favor que usaste para reservarla vuelve a quedar disponible.'
+                          : esVacante
+                            ? 'Al cancelar con más de 72hs de anticipación, no se te cobrará esta vacante.'
+                            : `Te queda una clase a favor para reservar una vacante sin cargo hasta el ${venceNueva}.`}
+                      </span>
+                    </div>
+                  </div>
+                );
               })()}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -2283,11 +2351,44 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 </div>
               </div>
 
-              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                <p className="text-sm text-blue-800 dark:text-blue-200">
-                  <strong>Confirmación:</strong> ¿Estás seguro de que quieres reservar este horario?
-                </p>
-              </div>
+              {(() => {
+                const recuperaPropia = clasesAFavor.clases.some(
+                  (c) => c.turnoFecha === turnoToReserve.turno_fecha && c.claseNumero === turnoToReserve.clase_numero
+                );
+                if (recuperaPropia) {
+                  return (
+                    <div className="flex items-start gap-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                      <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        <strong>Es tu clase del plan:</strong> la recuperás sin cargo extra y se descuenta la clase a favor que te dejó la cancelación.
+                      </p>
+                    </div>
+                  );
+                }
+                const claseAFavor = clasesAFavor.paraFecha(turnoToReserve.turno_fecha);
+                if (claseAFavor) {
+                  return (
+                    <div className="flex items-start gap-3 bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                      <Ticket className="mt-0.5 h-4 w-4 shrink-0 text-green-600 dark:text-green-400" />
+                      <p className="text-sm text-green-800 dark:text-green-200">
+                        <strong>Sin cargo:</strong> esta vacante se paga con tu clase a favor (vence el {formatFechaCorta(claseAFavor.vence)}).
+                      </p>
+                    </div>
+                  );
+                }
+                return (
+                  <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3 space-y-1">
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      <strong>Confirmación:</strong> ¿Estás seguro de que quieres reservar este horario?
+                    </p>
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      {clasesAFavor.proxima
+                        ? `Tu clase a favor vence el ${formatFechaCorta(clasesAFavor.proxima.vence)}, antes de esta fecha, así que esta vacante se cobra.`
+                        : 'La vacante se suma a tu cuota.'}
+                    </p>
+                  </div>
+                );
+              })()}
 
               <div className="flex space-x-2 pt-4">
                 <Button
