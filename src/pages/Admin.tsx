@@ -17,7 +17,8 @@ import {
   LogOut,
   X,
   Wallet,
-  Download
+  Download,
+  Ticket
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { monthNameEs } from '@/lib/dateLocal';
@@ -41,6 +42,9 @@ import { FeriadosConfigModal } from '@/components/FeriadosConfigModal';
 import { FinSemanaConfigModal } from '@/components/FinSemanaConfigModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAdminNavigation } from '@/hooks/useAdminNavigation';
+import { useAdminClasesAFavor } from '@/hooks/useAdminClasesAFavor';
+import { formatFechaCorta } from '@/hooks/useClasesAFavor';
+import { ClasesAFavorBell } from '@/components/ClasesAFavorBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -75,6 +79,7 @@ export default function Admin() {
     fetchCuotasMensuales, ensureCuotasMensuales, updateCuotaEstadoPago, updateCuotaDescuento,
     fetchHorariosConHoras
   } = useAdmin();
+  const clasesAFavor = useAdminClasesAFavor(isAdmin);
   
   const [horariosConHoras, setHorariosConHoras] = useState<Record<string, Array<{ dia: string; hora_inicio: string }>>>({});
   
@@ -827,8 +832,17 @@ export default function Admin() {
             {/* Espacio vacío en mobile para empujar el botón a la derecha */}
             <div className="md:hidden flex-1" />
             
-            {/* Botón de cerrar sesión - visible en desktop y mobile */}
-            <div className="flex flex-1 items-center justify-end flex-shrink-0">
+            {/* Clases a favor (solo si hay) y cerrar sesión - visible en desktop y mobile */}
+            <div className="flex flex-1 items-center justify-end gap-1 flex-shrink-0">
+              <ClasesAFavorBell
+                alumnos={clasesAFavor.alumnos}
+                total={clasesAFavor.total}
+                onSelectAlumno={(alumno) => {
+                  const u = allUsers.find((x) => x.id === alumno.usuarioId);
+                  setSearchTerm(u?.full_name || u?.email || alumno.nombre);
+                  handleTabChange('usuarios');
+                }}
+              />
               <Button
                 variant="ghost"
                 className="relative h-9 w-9 p-0 flex-shrink-0"
@@ -926,6 +940,16 @@ export default function Admin() {
                                   {user.is_active === false && (
                                     <Badge variant="secondary" className="text-xs">
                                       Inactivo
+                                    </Badge>
+                                  )}
+                                  {clasesAFavor.porUsuario[user.id] && (
+                                    <Badge
+                                      variant="outline"
+                                      className="text-xs gap-1 border-green-500/50 text-green-600 dark:text-green-400"
+                                      title={`Vence el ${formatFechaCorta(clasesAFavor.porUsuario[user.id].proximoVencimiento)}`}
+                                    >
+                                      <Ticket className="h-3 w-3" />
+                                      {clasesAFavor.porUsuario[user.id].cantidad} a favor
                                     </Badge>
                                   )}
                                   {user.fecha_desactivacion && user.fecha_desactivacion > new Date().toISOString().split('T')[0] && (
@@ -1033,8 +1057,17 @@ export default function Admin() {
                               setShowUserDetails(true);
                             }}
                           >
-                            <div className="min-w-0 flex-1 min-w-[160px]">
+                            <div className="min-w-0 flex-1 min-w-[160px] flex items-center gap-1.5">
                               <p className="truncate text-xs text-muted-foreground">{getDisplayFullName(user)}</p>
+                              {clasesAFavor.porUsuario[user.id] && (
+                                <span
+                                  className="inline-flex shrink-0 items-center gap-0.5 rounded-full border border-green-500/50 px-1.5 py-px text-[9px] font-medium text-green-600 dark:text-green-400"
+                                  title={`Vence el ${formatFechaCorta(clasesAFavor.porUsuario[user.id].proximoVencimiento)}`}
+                                >
+                                  <Ticket className="h-2.5 w-2.5" />
+                                  {clasesAFavor.porUsuario[user.id].cantidad}
+                                </span>
+                              )}
                             </div>
                             <div className="w-[80px] text-center shrink-0">
                               <p className="text-[10px] tabular-nums text-foreground">
