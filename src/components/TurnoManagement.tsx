@@ -13,7 +13,7 @@ import { Clock, Calendar, Edit3, X, Plus, Users } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAdmin } from '@/hooks/useAdmin';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
-import { formatLocalDate } from '@/lib/dateLocal';
+import { formatLocalDate, formatMonthEs } from '@/lib/dateLocal';
 
 interface HorarioClase {
   id: number;
@@ -121,11 +121,12 @@ export const TurnoManagement = () => {
 
     if (error) {
       console.error('Error recalculando cuotas:', error);
-      return;
+      return false;
     }
 
     window.dispatchEvent(new Event('clasesDelMes:updated'));
     window.dispatchEvent(new Event('balance:refresh'));
+    return true;
   }, []);
 
   // Cargar tarifas escalonadas al montar
@@ -508,10 +509,24 @@ export const TurnoManagement = () => {
 
       window.dispatchEvent(new Event('capacidad:updated'));
 
+      // La cuota del mes en curso ya está emitida (cobro adelantado) y no se
+      // toca: las tarifas nuevas entran en la del mes siguiente. Si este
+      // recálculo no corre, esa cuota se congela con el precio viejo el día 1.
+      const recalculado = await recalcularCuotasAfectadas();
       dismissToast(loadingToast);
-      showSuccess('Configuración guardada', 'Cupos, tarifas y horarios sincronizados');
+      if (!recalculado) {
+        showError(
+          'Configuración guardada, pero no se recalcularon las cuotas',
+          'Volvé a guardar para aplicar los cambios a las cuotas de los alumnos'
+        );
+        return;
+      }
+      const mesSiguiente = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1);
+      showSuccess(
+        'Configuración guardada',
+        `Las tarifas se aplican desde la cuota de ${formatMonthEs(mesSiguiente)}; la de ${formatMonthEs(new Date())} ya está emitida`
+      );
       setIsDialogOpen(false);
-      void recalcularCuotasAfectadas();
     } catch (error) {
       console.error('Error guardando configuración:', error);
       dismissToast(loadingToast);
