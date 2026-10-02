@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { flushSync } from 'react-dom';
 import { Check, AlertCircle, ArrowLeft, X } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { useTarifasPlanes } from '@/hooks/useTarifasPlanes';
+import { formatPrecioPlan, useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
 import { addDaysLocal, formatLocalDate, formatMonthEs, todayLocal } from '@/lib/dateLocal';
@@ -230,14 +230,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
     setIsReview(true);
   };
 
-  const formatPrecio = (precio: number): string => {
-    return new Intl.NumberFormat('es-AR', {
-      style: 'currency',
-      currency: 'ARS',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(precio);
-  };
+  const formatPrecio = formatPrecioPlan;
 
   // Cambio de plan y de horarios.
   //
@@ -593,7 +586,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                   </div>
                 </div>
                 <div className="mt-3 text-lg font-semibold text-foreground sm:text-2xl">
-                  {formatPrecio(paquetesPrecios.find(p => p.dias === paqueteSeleccionado)?.precioPorClase || 0)}
+                  {formatPrecio(paquetesPrecios.find(p => p.dias === paqueteSeleccionado)?.precioPorClase)}
                   <span className="ml-2 text-xs uppercase tracking-[0.25em] text-muted-foreground sm:text-sm">/ clase</span>
                 </div>
               </div>

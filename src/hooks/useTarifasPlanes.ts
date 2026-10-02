@@ -3,23 +3,21 @@ import { supabase } from '@/lib/supabase';
 
 export interface PaquetePrecio {
   dias: number;
-  precioPorClase: number;
+  /** null mientras carga o si no se pudo leer: nunca se muestra un precio inventado. */
+  precioPorClase: number | null;
 }
 
-// Solo se usan mientras carga o si la consulta falla: el precio real es el que
-// el admin configura en Configuración (configuracion_admin.combo_N_tarifa).
-const PAQUETES_PRECIOS_RESPALDO: PaquetePrecio[] = [
-  { dias: 1, precioPorClase: 12500 },
-  { dias: 2, precioPorClase: 11250 },
-  { dias: 3, precioPorClase: 10000 },
-  { dias: 4, precioPorClase: 8750 },
-  { dias: 5, precioPorClase: 7500 },
-];
+// El precio real es el que el admin configura en Configuración
+// (configuracion_admin.combo_N_tarifa). Hasta tenerlo, los planes se listan sin precio.
+const PAQUETES_SIN_PRECIO: PaquetePrecio[] = [1, 2, 3, 4, 5].map((dias) => ({
+  dias,
+  precioPorClase: null,
+}));
 
 type FilaTarifas = Record<`combo_${1 | 2 | 3 | 4 | 5}_tarifa`, number | string | null>;
 
 export const useTarifasPlanes = () => {
-  const [paquetes, setPaquetes] = useState<PaquetePrecio[]>(PAQUETES_PRECIOS_RESPALDO);
+  const [paquetes, setPaquetes] = useState<PaquetePrecio[]>(PAQUETES_SIN_PRECIO);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,7 +35,7 @@ export const useTarifasPlanes = () => {
       }
 
       setPaquetes(
-        PAQUETES_PRECIOS_RESPALDO.map((p) => {
+        PAQUETES_SIN_PRECIO.map((p) => {
           const valor = Number(fila[`combo_${p.dias}_tarifa` as keyof FilaTarifas]);
           return valor > 0 ? { ...p, precioPorClase: valor } : p;
         })
@@ -53,3 +51,14 @@ export const useTarifasPlanes = () => {
 
   return { paquetes, loading };
 };
+
+/** Precio en pesos, o "—" si todavía no se conoce. */
+export const formatPrecioPlan = (precio: number | null | undefined): string =>
+  precio == null
+    ? '—'
+    : new Intl.NumberFormat('es-AR', {
+        style: 'currency',
+        currency: 'ARS',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0,
+      }).format(precio);

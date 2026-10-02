@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { MessageCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useTarifasPlanes } from '@/hooks/useTarifasPlanes';
+import { formatPrecioPlan, useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import {
   Carousel,
   CarouselContent,
@@ -268,7 +268,7 @@ function HeroDeviceMockup({
 const LandingPage = () => {
   const { paquetes: paquetesPrecios } = useTarifasPlanes();
   const precioPlan = (dias: number) =>
-    `$${(paquetesPrecios.find((p) => p.dias === dias)?.precioPorClase ?? 0).toLocaleString('es-AR', { maximumFractionDigits: 0 })}`;
+    formatPrecioPlan(paquetesPrecios.find((p) => p.dias === dias)?.precioPorClase);
   const navigate = useNavigate();
   /** Solo mobile: alterna qué columna del cuadro «¿Por qué MALDA?» se muestra */
   const [porQueMaldaVista, setPorQueMaldaVista] = useState<'propuesta' | 'diferencia'>('propuesta');
