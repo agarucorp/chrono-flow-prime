@@ -104,8 +104,8 @@ function scoresTied(a: number | null, b: number | null): boolean {
 
 /**
  * Puesto 1-based sobre una lista ya ordenada.
- * Mismo peso o mismo tiempo → el mismo número; el siguiente salta
- * (1, 2, 2, 4). El orden entre empatados no cambia el puesto.
+ * Mismo peso o mismo tiempo → el mismo puesto (y la misma medalla).
+ * El siguiente resultado distinto no salta: 1, 2, 2, 3.
  */
 export function getRecordPlaceNumbers(
   entries: RecordEntry[],
@@ -113,6 +113,7 @@ export function getRecordPlaceNumbers(
 ): number[] {
   const places = new Array<number>(entries.length);
   let i = 0;
+  let place = 1;
   while (i < entries.length) {
     const score = parseRecordValorScore(entries[i].valor, unidad);
     let j = i + 1;
@@ -122,8 +123,8 @@ export function getRecordPlaceNumbers(
     ) {
       j++;
     }
-    const place = i + 1;
     for (let k = i; k < j; k++) places[k] = place;
+    place += 1;
     i = j;
   }
   return places;

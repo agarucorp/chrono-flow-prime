@@ -1634,9 +1634,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             >
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h3 className="text-heading min-w-[200px] text-center">
-              {formatMonthYearEs(currentMonth, true)}
-            </h3>
+            <div className="min-w-[200px] text-center">
+              <h3 className="text-heading">
+                {formatMonthYearEs(currentMonth, true)}
+              </h3>
+              <div className="mx-auto mt-1 h-px w-10 bg-[hsl(var(--medal-gold)/0.7)]" />
+            </div>
             <Button
               variant="outline"
               size="sm"
@@ -1650,7 +1653,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
           {/* Calendario de Mis Clases */}
           <div className="w-full md:w-[55%] mx-auto">
-          <Card>
+          <Card className="overflow-hidden border-white/15">
             <CardContent className="p-0">
               {horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
@@ -1661,7 +1664,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 <div>
                   <table className="w-full table-fixed">
                     <thead>
-                      <tr className="border-b bg-muted/50">
+                      <tr className="border-b bg-[hsl(var(--medal-gold)/0.07)]">
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Fecha</th>
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Día</th>
                         <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Horario</th>
@@ -1688,18 +1691,18 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         return clasesDelDia.map((clase, claseIndex) => (
                           <tr 
                             key={`${dia.getTime()}-${claseIndex}`} 
-                            className={`border-b last:border-b-0 transition-colors ${
+                            className={`border-b border-l-2 last:border-b-0 transition-colors ${
                               clase.horario.cancelada 
-                                ? 'bg-red-50 dark:bg-red-950/20 opacity-60 cursor-default' 
+                                ? 'border-l-transparent bg-red-50 dark:bg-red-950/20 opacity-60 cursor-default' 
                                 : clase.horario.bloqueada
-                                  ? 'bg-yellow-50 dark:bg-yellow-950/20 opacity-70 cursor-default'
+                                  ? 'border-l-transparent bg-yellow-50 dark:bg-yellow-950/20 opacity-70 cursor-default'
                                   : clase.horario.esVariable
-                                    ? 'bg-green-50 dark:bg-green-950/20'
+                                    ? 'border-l-[hsl(var(--success))] bg-green-50 dark:bg-green-950/20'
                                     : esHoy
-                                      ? 'bg-primary/10 ring-1 ring-inset ring-primary/25 cursor-pointer'
+                                      ? 'cursor-pointer border-l-[hsl(var(--medal-gold))] bg-[hsl(var(--medal-gold)/0.08)]'
                                       : isFechaPasada(clase.dia)
-                                      ? 'bg-gray-50 dark:bg-gray-900/20 opacity-50 cursor-default'
-                                      : 'hover:bg-muted/30 cursor-pointer'
+                                      ? 'cursor-default border-l-[hsl(34_24%_58%/0.45)] bg-[hsl(32_14%_14%)] opacity-60'
+                                      : 'cursor-pointer border-l-[hsl(34_38%_66%)] bg-[hsl(32_18%_17%)] hover:bg-[hsl(32_18%_20%)]'
                             }`}
                             onClick={() => clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia) ? null : handleClaseClick(clase)}
                           >
@@ -1707,6 +1710,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                               <div className={`text-xs sm:text-sm font-medium ${esHoy ? 'text-foreground' : ''}`}>
                                 {lowercaseSpanishMonths(format(dia, "dd 'de' MMMM", { locale: es }))}
                               </div>
+                              {esHoy && !clase.horario.cancelada && (
+                                <div className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-[hsl(var(--medal-gold))]">
+                                  Hoy
+                                </div>
+                              )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <div className="text-xs sm:text-sm text-muted-foreground">

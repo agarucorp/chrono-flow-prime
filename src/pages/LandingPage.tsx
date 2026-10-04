@@ -517,7 +517,7 @@ const LandingPage = () => {
             <div className="group border border-white/50 rounded-xl p-8 bg-black transition-all duration-300 ease-out hover:bg-white hover:border-white hover:shadow-xl hover:shadow-black/25">
               <h3 className="text-xl font-bold mb-4 text-white transition-colors duration-300 group-hover:text-black">Pagás lo que entrenás</h3>
               <p className="text-gray-300 text-sm leading-relaxed transition-colors duration-300 group-hover:text-gray-700">
-                Nuestro sistema de pagos premia la constancia. Si por algún motivo tenés que cancelar una clase, lo hacés desde la App. Ese crédito no se pierde y se computa automáticamente como un descuento para tu cuota del mes siguiente. El sistema gestiona tu saldo con transparencia total.
+                Pagás las clases de tu plan. Si no podés venir, cancelás desde la App con anticipación y esa clase te queda a favor: la usás para reservar otra vacante, sin cargo, por un tiempo limitado.
               </p>
             </div>
           </div>
@@ -651,7 +651,7 @@ const LandingPage = () => {
                     <div className={cn('relative', porQueMaldaVista === 'propuesta' && 'hidden md:block')}>
                       <div className="absolute left-0 top-2 h-2 w-2 rounded-full bg-white/40 transition-all duration-300 group-hover:bg-white/60"></div>
                       <p className="pl-4 text-sm font-light leading-relaxed text-gray-300 sm:text-base">
-                        Cancelás y reprogramás desde la App. Tu saldo se ajusta solo.
+                        Cancelás desde la App y, con anticipación, esa clase te queda a favor.
                       </p>
                     </div>
                   </div>
@@ -948,7 +948,7 @@ const LandingPage = () => {
               </div>
               <h3 className="mb-2 text-lg font-bold text-black">Cancelación fácil</h3>
               <p className="mt-auto text-sm leading-relaxed text-black/70">
-                Cancelá tus clases desde la app y tu crédito se ajusta automáticamente.
+                Cancelá con anticipación desde la App y esa clase te queda a favor para usar en otra vacante.
               </p>
             </div>
 

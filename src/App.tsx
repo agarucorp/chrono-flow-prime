@@ -10,7 +10,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy, Ticket } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy, Ticket, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -483,6 +483,7 @@ const Dashboard = () => {
   const [viewEpoch, setViewEpoch] = useState(0);
   const [balanceSubView, setBalanceSubView] = useState<'mis-clases' | 'vacantes' | 'balance'>('balance');
   const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [aliasOpen, setAliasOpen] = useState(false);
   const {
     history: balanceHistory,
     loading: balanceLoading,
@@ -924,6 +925,59 @@ const Dashboard = () => {
                   {/* Contenido de balance (solo cuando balanceSubView === 'balance') */}
                   {activeTab === 'balance' && balanceSubView === 'balance' && (
                     <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="border-white/30 text-white hover:bg-white/10"
+                          onClick={() => setAliasOpen(true)}
+                        >
+                          Alias
+                        </Button>
+                      </div>
+                      <Dialog open={aliasOpen} onOpenChange={setAliasOpen}>
+                        <DialogContent className="w-[min(92vw,24rem)]">
+                          <DialogHeader>
+                            <DialogTitle>Alias para transferir</DialogTitle>
+                            <DialogDescription>
+                              Copiá el alias y usalo en la transferencia de tu cuota.
+                            </DialogDescription>
+                          </DialogHeader>
+                          <div className="space-y-3">
+                            {[
+                              { nombre: 'Lucas', alias: 'lucas.malda.gym' },
+                              { nombre: 'Nacho', alias: 'nacho.malda' },
+                            ].map((item) => (
+                              <div
+                                key={item.alias}
+                                className="flex items-center justify-between gap-3 rounded-lg border border-border bg-background px-3 py-3"
+                              >
+                                <div className="min-w-0">
+                                  <p className="text-caption text-muted-foreground">{item.nombre}</p>
+                                  <p className="truncate font-medium">{item.alias}</p>
+                                </div>
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  className="shrink-0"
+                                  onClick={async () => {
+                                    try {
+                                      await navigator.clipboard.writeText(item.alias);
+                                      toast.success('Alias copiado');
+                                    } catch {
+                                      toast.error('No se pudo copiar el alias');
+                                    }
+                                  }}
+                                >
+                                  <Copy className="mr-1.5 h-3.5 w-3.5" />
+                                  Copiar
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        </DialogContent>
+                      </Dialog>
                       {clasesAFavor.cantidad > 0 && (
                         <Card className="border-green-200 dark:border-green-800">
                           <CardHeader className="flex flex-row items-center gap-2 space-y-0 pb-3">
@@ -1041,8 +1095,7 @@ const Dashboard = () => {
                               </div>
                               {entry.isCurrent && (
                                 <p className="text-[11px] text-muted-foreground">
-                                  Esta cuota ya está emitida. Los cambios que hagas ahora impactan el
-                                  próximo mes.
+                                  Esta cuota ya está emitida. Los cambios que hagas en este mes impactarán en el siguiente.
                                 </p>
                               )}
                               {entry.descuentoPorcentaje > 0 && (
