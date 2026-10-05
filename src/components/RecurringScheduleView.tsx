@@ -753,7 +753,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
       const { data, error } = await supabase
         .from('profiles')
-        .select('full_name, first_name, last_name, phone, is_active, fecha_desactivacion')
+        .select('full_name, first_name, last_name, phone, dni, is_active, fecha_desactivacion')
         .eq('id', user.id)
         .maybeSingle();
       
@@ -765,6 +765,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           first_name: user?.user_metadata?.first_name,
           last_name: user?.user_metadata?.last_name,
           phone: user?.user_metadata?.phone,
+          dni: user?.user_metadata?.dni,
         });
         return;
       }
@@ -778,6 +779,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         setProfileData({
           ...data,
           phone: (data as any).phone ?? metaPhone,
+          dni: (data as any).dni ?? authUserResp?.user?.user_metadata?.dni ?? null,
         });
       } else {
         // Si no hay datos en la tabla, usar user_metadata
@@ -786,6 +788,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           first_name: user?.user_metadata?.first_name,
           last_name: user?.user_metadata?.last_name,
           phone: metaPhone,
+          dni: authUserResp?.user?.user_metadata?.dni ?? user?.user_metadata?.dni ?? null,
         });
       }
     } catch (error) {
@@ -796,6 +799,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         first_name: user?.user_metadata?.first_name,
         last_name: user?.user_metadata?.last_name,
         phone: user?.user_metadata?.phone,
+        dni: user?.user_metadata?.dni,
       });
     }
   };
@@ -1809,6 +1813,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                     <p className="text-xs text-muted-foreground">Teléfono</p>
                     <p className="text-sm font-medium">
                       {getDisplayPhone()}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">DNI (Información necesaria para el seguro de salud)</p>
+                    <p className="text-sm font-medium">
+                      {(profileData?.dni || user?.user_metadata?.dni || '').toString().trim() || 'No configurado'}
                     </p>
                   </div>
                 </div>

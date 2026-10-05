@@ -10,6 +10,7 @@ export interface AdminUser {
   first_name?: string;
   last_name?: string;
   phone?: string;
+  dni?: string | null;
   role: 'client' | 'admin';
   created_at: string;
   is_active?: boolean;
@@ -239,7 +240,7 @@ export const useAdmin = () => {
       const [{ data, error }, horariosMap, configRes] = await Promise.all([
         supabase
         .from('profiles')
-        .select('id, email, role, created_at, full_name, first_name, last_name, phone, is_active, fecha_desactivacion, tarifa_personalizada, combo_asignado')
+        .select('id, email, role, created_at, full_name, first_name, last_name, phone, dni, is_active, fecha_desactivacion, tarifa_personalizada, combo_asignado')
         .order('created_at', { ascending: false }),
         fetchHorariosRecurrentes(),
         supabase

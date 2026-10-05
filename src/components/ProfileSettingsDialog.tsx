@@ -19,6 +19,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
+  const [dni, setDni] = useState('');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -31,7 +32,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
         // Intentar cargar desde profiles; si no existe la tabla, continuar silenciosamente
         const { data, error } = await supabase
           .from('profiles')
-          .select('first_name, last_name, phone')
+          .select('first_name, last_name, phone, dni')
           .eq('id', userId)
           .single();
 
@@ -45,11 +46,13 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           // Fallback al teléfono del user_metadata si profiles.phone está vacío
           const mergedPhone = (data.phone ?? meta.phone ?? '') as string;
           setPhone(mergedPhone);
+          setDni((data.dni ?? meta.dni ?? '') as string);
         } else {
           // Si no hay fila en profiles o hubo error, usar metadata
           setFirstName(meta.first_name || '');
           setLastName(meta.last_name || '');
           setPhone(meta.phone || '');
+          setDni(meta.dni || '');
         }
       } catch (_) {
         // Ignorar errores (p. ej. tabla inexistente)
@@ -62,6 +65,11 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
 
   const handleSave = async () => {
     if (!userId) return;
+    const dniLimpio = dni.replace(/\D/g, '').slice(0, 8);
+    if (dniLimpio && !/^\d{1,8}$/.test(dniLimpio)) {
+      toast.error('El DNI puede tener hasta 8 números');
+      return;
+    }
     try {
       setSaving(true);
       // Actualizar metadata del usuario (seguro aunque no exista profiles)
@@ -70,6 +78,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           first_name: firstName || null,
           last_name: lastName || null,
           phone: phone || null,
+          dni: dniLimpio || null,
         },
       });
 
@@ -81,6 +90,7 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
           first_name: firstName || null,
           last_name: lastName || null,
           phone: phone || null,
+          dni: dniLimpio || null,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'id' });
 
@@ -145,6 +155,18 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
               <Label htmlFor="phone-mobile" className="text-xs">Teléfono</Label>
               <Input id="phone-mobile" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-xs h-9" placeholder="+54 9 11 1234-5678" />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="dni-mobile" className="text-xs">DNI (Información necesaria para el seguro de salud)</Label>
+              <Input
+                id="dni-mobile"
+                inputMode="numeric"
+                value={dni}
+                onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                disabled={loading}
+                className="text-xs h-9"
+                placeholder="12345678"
+              />
+            </div>
 
             {/* CTA Cambiar Contraseña */}
             <Button
@@ -191,6 +213,18 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
             <div className="space-y-2">
               <Label htmlFor="phone-desktop" className="text-sm">Teléfono</Label>
               <Input id="phone-desktop" value={phone} onChange={(e) => setPhone(e.target.value)} disabled={loading} className="text-sm" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dni-desktop" className="text-sm">DNI (Información necesaria para el seguro de salud)</Label>
+              <Input
+                id="dni-desktop"
+                inputMode="numeric"
+                value={dni}
+                onChange={(e) => setDni(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                disabled={loading}
+                className="text-sm"
+                placeholder="12345678"
+              />
             </div>
 
             <div className="space-y-2">

@@ -918,6 +918,7 @@ export default function Admin() {
                     <thead>
                       <tr className="border-b">
                         <th className="text-left p-3 font-medium min-w-[180px]">Usuario</th>
+                        <th className="text-left p-3 font-medium min-w-[110px]">DNI</th>
                         <th className="text-left p-3 font-medium min-w-[100px]">Plan</th>
                         <th className="text-left p-3 font-medium min-w-[200px]">Horarios</th>
                         <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
@@ -959,6 +960,11 @@ export default function Admin() {
                                   )}
                                 </div>
                               </div>
+                            </td>
+                            <td className="p-3">
+                              <p className="text-sm tabular-nums text-foreground">
+                                {(user.dni || '').toString().trim() || '—'}
+                              </p>
                             </td>
                             <td className="p-3">
                               <p className="text-sm tabular-nums text-foreground">
@@ -1026,11 +1032,14 @@ export default function Admin() {
 
                 {/* Vista móvil - Lista con scroll horizontal */}
                 <div className="md:hidden overflow-x-auto w-full">
-                  <div className="min-w-[520px]">
+                  <div className="min-w-[620px]">
                     {/* Encabezados de columna */}
                     <div className="flex items-center px-4 py-2 border-b bg-muted/30 gap-4">
                       <div className="flex-1 min-w-[160px]">
                         <p className="text-xs font-medium text-foreground/80 uppercase">Nombre</p>
+                      </div>
+                      <div className="w-[90px] shrink-0">
+                        <p className="text-xs font-medium text-foreground/80 uppercase">DNI</p>
                       </div>
                       <div className="w-[80px] text-center shrink-0">
                         <p className="text-xs font-medium text-foreground/80 uppercase">Plan</p>
@@ -1068,6 +1077,11 @@ export default function Admin() {
                                   {clasesAFavor.porUsuario[user.id].cantidad}
                                 </span>
                               )}
+                            </div>
+                            <div className="w-[90px] shrink-0">
+                              <p className="text-[10px] tabular-nums text-foreground">
+                                {(user.dni || '').toString().trim() || '—'}
+                              </p>
                             </div>
                             <div className="w-[80px] text-center shrink-0">
                               <p className="text-[10px] tabular-nums text-foreground">
@@ -1578,6 +1592,12 @@ export default function Admin() {
                 <label className="text-sm font-medium">Teléfono</label>
                 <p className="text-sm text-muted-foreground">
                   {(selectedUser.phone || '').toString().trim() || 'No especificado'}
+                </p>
+              </div>
+              <div>
+                <label className="text-sm font-medium">DNI</label>
+                <p className="text-sm text-muted-foreground">
+                  {(selectedUser.dni || '').toString().trim() || 'No especificado'}
                 </p>
               </div>
               
