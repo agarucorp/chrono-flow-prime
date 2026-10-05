@@ -1638,7 +1638,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <h3 className="text-heading">
                 {formatMonthYearEs(currentMonth, true)}
               </h3>
-              <div className="mx-auto mt-1 h-px w-10 bg-[hsl(var(--medal-gold)/0.7)]" />
+              <div className="mx-auto mt-1 h-[3px] w-14 bg-white" />
             </div>
             <Button
               variant="outline"
@@ -1653,7 +1653,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
           {/* Calendario de Mis Clases */}
           <div className="w-full md:w-[55%] mx-auto">
-          <Card className="overflow-hidden border-white/15">
+          <Card className="overflow-hidden border-0 bg-transparent shadow-none">
             <CardContent className="p-0">
               {horariosRecurrentes.length === 0 ? (
                 <div className="p-8 text-center">
@@ -1664,11 +1664,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 <div>
                   <table className="w-full table-fixed">
                     <thead>
-                      <tr className="border-b bg-[hsl(var(--medal-gold)/0.07)]">
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Fecha</th>
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Día</th>
-                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left font-medium text-xs sm:text-sm text-muted-foreground">Horario</th>
-                        <th className="px-4 py-3 text-center font-medium text-xs sm:text-sm text-muted-foreground hidden md:table-cell">Acciones</th>
+                      <tr className="border-b-[3px] border-white">
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left text-xs font-semibold uppercase tracking-wide text-white sm:text-sm">Fecha</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left text-xs font-semibold uppercase tracking-wide text-white sm:text-sm">Día</th>
+                        <th className="px-2 sm:px-4 py-3 text-center sm:text-left text-xs font-semibold uppercase tracking-wide text-white sm:text-sm">Horario</th>
+                        <th className="px-4 py-3 text-center text-xs font-semibold uppercase tracking-wide text-white sm:text-sm hidden md:table-cell">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1691,18 +1691,16 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         return clasesDelDia.map((clase, claseIndex) => (
                           <tr 
                             key={`${dia.getTime()}-${claseIndex}`} 
-                            className={`border-b border-l-2 last:border-b-0 transition-colors ${
+                            className={`border-b-2 border-white last:border-b-0 transition-colors ${
                               clase.horario.cancelada 
-                                ? 'border-l-transparent bg-red-50 dark:bg-red-950/20 opacity-60 cursor-default' 
+                                ? 'cursor-default bg-[rgba(92,24,24,0.58)]' 
                                 : clase.horario.bloqueada
-                                  ? 'border-l-transparent bg-yellow-50 dark:bg-yellow-950/20 opacity-70 cursor-default'
-                                  : clase.horario.esVariable
-                                    ? 'border-l-[hsl(var(--success))] bg-green-50 dark:bg-green-950/20'
-                                    : esHoy
-                                      ? 'cursor-pointer border-l-[hsl(var(--medal-gold))] bg-[hsl(var(--medal-gold)/0.08)]'
-                                      : isFechaPasada(clase.dia)
-                                      ? 'cursor-default border-l-[hsl(34_24%_58%/0.45)] bg-[hsl(32_14%_14%)] opacity-60'
-                                      : 'cursor-pointer border-l-[hsl(34_38%_66%)] bg-[hsl(32_18%_17%)] hover:bg-[hsl(32_18%_20%)]'
+                                  ? 'cursor-default bg-yellow-950/35'
+                                  : esHoy
+                                    ? 'cursor-pointer bg-white/20 shadow-[inset_4px_0_0_#fff]'
+                                    : isFechaPasada(clase.dia)
+                                    ? 'cursor-default opacity-45'
+                                    : 'cursor-pointer hover:bg-white/10'
                             }`}
                             onClick={() => clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia) ? null : handleClaseClick(clase)}
                           >
@@ -1711,7 +1709,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                 {lowercaseSpanishMonths(format(dia, "dd 'de' MMMM", { locale: es }))}
                               </div>
                               {esHoy && !clase.horario.cancelada && (
-                                <div className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-[hsl(var(--medal-gold))]">
+                                <div className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
                                   Hoy
                                 </div>
                               )}
@@ -1739,18 +1737,16 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                               <span className={`text-xs sm:text-sm font-medium ${
                                 clase.horario.cancelada 
                                   ? clase.horario.tipoCancelacion === 'sistema'
-                                    ? 'text-amber-600 dark:text-amber-400 line-through'
-                                    : 'text-red-600 dark:text-red-400 line-through'
+                                    ? 'text-amber-200 line-through'
+                                    : 'text-[#f0b4b0] line-through'
                                   : clase.horario.bloqueada
-                                    ? 'text-yellow-600 dark:text-yellow-400'
-                                    : clase.horario.esVariable
-                                      ? 'text-green-600 dark:text-green-400'
-                                      : ''
+                                    ? 'text-yellow-200'
+                                    : ''
                               }`}>
                                 {formatClockRangeAmPm(clase.horario.hora_inicio, clase.horario.hora_fin)}
                               </span>
                               {clase.horario.esVariable && !clase.horario.cancelada && (
-                                <div className="text-xs text-green-600 dark:text-green-400 font-medium">
+                                <div className="text-xs font-medium text-white">
                                   {clase.horario.conClaseAFavor ? 'Clase a favor' : 'Nueva clase'}
                                 </div>
                               )}
@@ -1959,8 +1955,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         relative min-h-[48px] p-2 rounded-lg text-sm
                         transition-colors
                         ${!isCurrentMonth ? 'opacity-0 cursor-default' : ''}
-                        ${isPast || estadoDia === 'feriado' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-muted/50'}
-                        ${isToday ? 'ring-2 ring-primary' : ''}
+                        ${isPast || estadoDia === 'feriado' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-white/10'}
+                        ${isToday ? 'ring-2 ring-white' : ''}
                         ${estadoDia === 'sin-clases' ? 'cursor-default' : ''}
                         ${estadoDia === 'feriado' ? 'bg-amber-500/20 border-2 border-amber-500/50' : ''}
                         ${estadoDia === 'feriado-habilitado' ? 'bg-green-500/20 border-2 border-green-500/50' : ''}
@@ -1970,7 +1966,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                       {isCurrentMonth && !isPast && (estadoDia === 'verde' || estadoDia === 'rojo') && (
                         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
                           {estadoDia === 'verde' && (
-                            <div className="w-2 h-2 bg-green-500 rounded-full" />
+                            <div className="w-2 h-2 bg-white rounded-full" />
                           )}
                           {estadoDia === 'rojo' && (
                             <div className="w-2 h-2 bg-red-500 rounded-full" />
@@ -1985,7 +1981,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               {/* Leyenda */}
               <div className="flex items-center justify-center gap-4 mt-4 text-xs text-muted-foreground flex-wrap">
                 <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-green-500 rounded-full" />
+                  <div className="w-2 h-2 rounded-full bg-white" />
                   <span>Con cupos disponibles</span>
                 </div>
                 <div className="flex items-center gap-2">
@@ -2012,15 +2008,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               <p className="text-body-muted mt-1">Seleccioná un día para ver las clases disponibles</p>
             </div>
             {clasesAFavor.cantidad > 0 && clasesAFavor.proxima && (
-              <div className="mb-4 flex items-start gap-3 rounded-lg border border-green-200 bg-green-50 p-3 dark:border-green-800 dark:bg-green-950/20">
-                <Ticket className="mt-0.5 h-5 w-5 shrink-0 text-green-600 dark:text-green-400" />
+              <div className="mb-4 flex items-start gap-3 rounded-sm bg-black/10 p-3 shadow-[inset_0_0_0_3px_#fff]">
+                <Ticket className="mt-0.5 h-5 w-5 shrink-0 text-white" />
                 <div className="text-sm">
-                  <p className="font-medium text-green-800 dark:text-green-200">
+                  <p className="font-medium text-white">
                     {clasesAFavor.cantidad === 1
                       ? 'Tenés 1 clase a favor'
                       : `Tenés ${clasesAFavor.cantidad} clases a favor`}
                   </p>
-                  <p className="text-green-700 dark:text-green-300">
+                  <p className="text-white/80">
                     {clasesAFavor.cantidad === 1
                       ? `Reservá una vacante sin cargo hasta el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`
                       : `Cada una paga una vacante sin cargo. La próxima vence el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`}

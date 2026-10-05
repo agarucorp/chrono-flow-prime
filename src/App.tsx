@@ -679,9 +679,7 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="min-h-screen bg-black sm:bg-[url('/gymdesktop-background.png')] sm:bg-cover sm:bg-center sm:bg-no-repeat relative">
-      {/* Overlay oscuro sobre la imagen (desktop) */}
-      <div className="hidden sm:block absolute inset-0 bg-black/70 pointer-events-none" aria-hidden />
+    <div className="panel-alumno relative min-h-screen">
       {previewAlumno && (
         <div className="relative z-20 flex items-center justify-between gap-3 border-b border-white/10 bg-white px-4 py-2 text-sm text-black">
           <span className="min-w-0 truncate font-medium">
@@ -701,7 +699,7 @@ const Dashboard = () => {
         </div>
       )}
       {/* Header restaurado */}
-      <header className="relative z-10 border-b border-border bg-black/95 backdrop-blur-sm">
+      <header className="relative z-10 bg-[#0c2414]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-14 sm:h-16">
             <div className="flex-1 flex items-center min-w-0 py-2">
@@ -867,12 +865,12 @@ const Dashboard = () => {
                 <>
                   {/* Subnavbar desktop fija (misma posición en todas las tabs) */}
                   <div className="hidden sm:flex justify-center mb-4 pt-2">
-                    <div className="flex space-x-1 bg-muted p-1 rounded-lg w-fit">
+                    <div className="flex space-x-1 rounded-lg bg-[#0c2414] p-1 w-fit">
                       <button
                         onClick={() => goToTab('clases')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                           activeTab === 'clases'
-                            ? 'bg-secondary text-foreground'
+                            ? 'bg-white/15 text-white'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
@@ -882,7 +880,7 @@ const Dashboard = () => {
                         onClick={() => goToTab('vacantes')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors flex items-center gap-1.5 ${
                           activeTab === 'vacantes'
-                            ? 'bg-secondary text-foreground'
+                            ? 'bg-white/15 text-white'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
@@ -903,7 +901,7 @@ const Dashboard = () => {
                         }}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                           activeTab === 'balance'
-                            ? 'bg-secondary text-foreground'
+                            ? 'bg-white/15 text-white'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
@@ -913,7 +911,7 @@ const Dashboard = () => {
                         onClick={() => goToTab('records')}
                         className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                           activeTab === 'records'
-                            ? 'bg-secondary text-foreground'
+                            ? 'bg-white/15 text-white'
                             : 'text-muted-foreground hover:text-foreground'
                         }`}
                       >
@@ -1176,7 +1174,7 @@ const Dashboard = () => {
             })()}
 
             {/* Navbar móvil (fija en bottom, solo visible en mobile) */}
-            <nav className="block sm:hidden fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-black/95 backdrop-blur-sm">
+            <nav className="block sm:hidden fixed bottom-0 left-0 right-0 z-50 bg-[#0c2414]">
               <div className="grid grid-cols-4 h-14">
                 <button
                   onClick={() => goToTab('clases')}
