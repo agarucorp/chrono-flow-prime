@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Pencil, Plus, Trash2, Trophy } from 'lucide-react';
+import { ChevronDown, Pencil, Plus, Search, Trash2, Trophy } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,9 +44,38 @@ import {
 } from '@/lib/records';
 import { toast } from 'sonner';
 
+function normalizeName(value: string) {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 export function RecordsAdminPanel() {
   const { disciplinas, entries, loading, error, reload } = useRecords();
   const [saving, setSaving] = useState(false);
+  const [query, setQuery] = useState('');
+  const [openId, setOpenId] = useState<string | null>(null);
+
+  const needle = normalizeName(query);
+  const searching = needle.length > 0;
+
+  const grouped = useMemo(() => {
+    return disciplinas.map((disc) => {
+      const ranked = sortRecordsByRanking(
+        entries.filter((e) => e.disciplina_id === disc.id),
+        disc.unidad
+      );
+      const places = getRecordPlaceNumbers(ranked, disc.unidad);
+      const matched = searching
+        ? ranked
+            .map((row, index) => ({ row, place: places[index] }))
+            .filter(({ row }) => normalizeName(row.alumno_nombre).includes(needle))
+        : [];
+      return { disc, ranked, places, matched };
+    });
+  }, [disciplinas, entries, needle, searching]);
 
   const [discDialogOpen, setDiscDialogOpen] = useState(false);
   const [editingDisc, setEditingDisc] = useState<RecordDisciplina | null>(null);
@@ -261,12 +290,38 @@ export function RecordsAdminPanel() {
         ) : disciplinas.length === 0 ? (
           <p className="text-body-muted">No hay disciplinas. Creá la primera para empezar.</p>
         ) : (
-          disciplinas.map((disc) => {
-            const rows = sortRecordsByRanking(
-              entries.filter((e) => e.disciplina_id === disc.id),
-              disc.unidad
-            );
-            const places = getRecordPlaceNumbers(rows, disc.unidad);
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                type="search"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Buscar por nombre"
+                aria-label="Buscar records por nombre"
+                className="pl-9"
+              />
+            </div>
+            {searching && grouped.every((g) => g.matched.length === 0) && (
+              <p className="text-sm text-muted-foreground">
+                Ningún record coincide con «{query.trim()}».
+              </p>
+            )}
+            {(searching ? grouped.filter((g) => g.matched.length > 0) : grouped).map(({ disc, ranked, places, matched }) => {
+            const podiumCount = places.findIndex((place) => place > 3);
+            const visibleCount = podiumCount === -1 ? ranked.length : podiumCount;
+            const isOpen = openId === disc.id;
+            const shown = searching
+              ? matched.map((m) => m.row)
+              : isOpen
+                ? ranked
+                : ranked.slice(0, visibleCount);
+            const shownPlaces = searching
+              ? matched.map((m) => m.place)
+              : isOpen
+                ? places
+                : places.slice(0, visibleCount);
+            const hiddenCount = Math.max(0, ranked.length - visibleCount);
             return (
               <div key={disc.id} className="surface-inset p-3 sm:p-4">
                 <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
@@ -274,6 +329,15 @@ export function RecordsAdminPanel() {
                     <p className="text-heading">{disc.nombre}</p>
                     <p className="text-label mt-0.5">
                       {disc.unidad === 'kg' ? 'Unidad: kg · mayor primero' : 'Unidad: tiempo · menor primero'}
+                      {ranked.length > 0 && (
+                        <span className="ml-2">
+                          {searching
+                            ? `· ${matched.length} ${matched.length === 1 ? 'resultado' : 'resultados'}`
+                            : hiddenCount > 0 && !isOpen
+                              ? `· Podio de ${ranked.length}`
+                              : `· ${ranked.length} ${ranked.length === 1 ? 'record' : 'records'}`}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <div className="flex gap-1">
@@ -295,12 +359,12 @@ export function RecordsAdminPanel() {
                   </div>
                 </div>
 
-                {rows.length === 0 ? (
+                {ranked.length === 0 ? (
                   <p className="text-caption">Sin records.</p>
                 ) : (
                   <div className="space-y-1.5">
-                    {rows.map((row, index) => {
-                      const place = places[index];
+                    {shown.map((row, index) => {
+                      const place = shownPlaces[index];
                       const medal = getRecordMedal(place);
                       const medalStyle = medal ? RECORD_MEDAL_STYLES[medal] : null;
                       return (
@@ -344,11 +408,25 @@ export function RecordsAdminPanel() {
                         </div>
                       );
                     })}
+                    {!searching && hiddenCount > 0 && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setOpenId((current) => (current === disc.id ? null : disc.id))
+                        }
+                        className="mt-1 flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-sm text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
+                        aria-expanded={isOpen}
+                      >
+                        <ChevronDown className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+                        {isOpen ? 'Mostrar menos' : `Ver todos (${ranked.length})`}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>
             );
-          })
+          })}
+          </>
         )}
       </CardContent>
 
