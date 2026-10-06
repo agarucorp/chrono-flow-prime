@@ -27,7 +27,7 @@ import { ProtectedAdminRouteWithAuth } from "./components/ProtectedAdminRoute";
 import NotFound from "./pages/NotFound";
 import LandingPage from "./pages/LandingPage";
 import { useUserBalance } from "./hooks/useUserBalance";
-import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR } from "./hooks/useClasesAFavor";
+import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR, HORAS_CANCELACION_SEGURA } from "./hooks/useClasesAFavor";
 import { OnboardingTutorial } from "./components/OnboardingTutorial";
 import { StayLoggedInDialog } from "./components/StayLoggedInDialog";
 import { supabase } from "./lib/supabase";
@@ -403,7 +403,7 @@ const Dashboard = () => {
           <p className="text-[10px] uppercase tracking-wide text-red-600 md:text-[9px]">Clase cancelada</p>
           <p className="mt-1 text-red-600 line-through">18:00 - 19:00</p>
           <p className="mt-2 text-[10px] text-red-700 dark:text-red-200 md:text-[9px]">
-            Cuando canceles una clase aparecerá tachada en rojo y se generará una nueva clase disponible en Vacantes. Si cancelás con más de 72hs de anticipación te queda una clase a favor para reservar una vacante sin cargo dentro de los {DIAS_CLASE_A_FAVOR} días.
+            Cuando canceles una clase aparecerá tachada en rojo y se generará una nueva clase disponible en Vacantes. Si cancelás con más de {HORAS_CANCELACION_SEGURA}hs de anticipación te queda una clase a favor para reservar una vacante sin cargo dentro de los {DIAS_CLASE_A_FAVOR} días.
           </p>
         </div>
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] dark:border-emerald-900/40 dark:bg-emerald-950/25 md:text-[10px]">
@@ -1063,7 +1063,7 @@ const Dashboard = () => {
                               {entry.desglose.canceladasTardias > 0 && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">
-                                    Canceladas con menos de 72hs
+                                    Canceladas con menos de {HORAS_CANCELACION_SEGURA}hs
                                   </span>
                                   <span className="font-medium text-muted-foreground">
                                     {entry.desglose.canceladasTardias} (se cobran)

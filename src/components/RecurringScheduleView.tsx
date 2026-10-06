@@ -24,7 +24,7 @@ import { useAdmin } from '@/hooks/useAdmin';
 import { ProfileSettingsDialog } from './ProfileSettingsDialog';
 import { normalizeTimeToHhMm, formatClockAmPm, formatClockRangeAmPm } from '@/lib/timeFormat';
 import { todayLocal, formatMonthYearEs, lowercaseSpanishMonths, addDaysLocal, formatLocalDate } from '@/lib/dateLocal';
-import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR } from '@/hooks/useClasesAFavor';
+import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR, HORAS_CANCELACION_SEGURA } from '@/hooks/useClasesAFavor';
 
 interface HorarioRecurrente {
   id: string;
@@ -1355,7 +1355,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // Cancelar una clase propia, sea del plan o una vacante reservada.
   //
   // fn_cancelar_clase resuelve en una sola transacción qué se está cancelando,
-  // si aplica penalidad por hacerlo con menos de 72hs y el recálculo de la cuota.
+  // si aplica penalidad por hacerlo con menos de 48hs y el recálculo de la cuota.
   // El cupo vuelve a vacantes solo, porque la disponibilidad es derivada.
   const handleCancelarClase = async (clase: ClaseDelDia) => {
     if (readOnly) {
@@ -1407,7 +1407,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         clase_a_favor_vence?: string | null;
         vacante_con_clase_a_favor?: boolean;
       } | null;
-      const horas = resultado?.horas_penalidad ?? 72;
+      const horas = resultado?.horas_penalidad ?? HORAS_CANCELACION_SEGURA;
       let descripcion: string;
       if (resultado?.tardia) {
         descripcion = resultado.vacante_con_clase_a_favor
@@ -2233,7 +2233,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               {/* Aviso de política de cancelación */}
               <div className="bg-muted/40 border border-border rounded-lg p-3">
                 <p className="text-sm text-muted-foreground">
-                  <strong>Importante:</strong> si no cancelás la clase antes de las 72hs del comienzo de la misma, se te cobrará el 100% del valor.
+                  <strong>Importante:</strong> si no cancelás la clase antes de las {HORAS_CANCELACION_SEGURA}hs del comienzo de la misma, se te cobrará el 100% del valor.
                   {!selectedClase.horario.esVariable &&
                     ` Si cancelás antes, te queda una clase a favor para reservar una vacante sin cargo dentro de los ${DIAS_CLASE_A_FAVOR} días.`}
                 </p>
@@ -2282,7 +2282,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 const ahora = new Date();
                 const diferenciaHoras = (fechaHoraTurno.getTime() - ahora.getTime()) / (1000 * 60 * 60);
                 // Mismo umbral que usa fn_cancelar_clase.
-                const esCancelacionTardia = diferenciaHoras < 72;
+                const esCancelacionTardia = diferenciaHoras < HORAS_CANCELACION_SEGURA;
                 const esVacante = Boolean(selectedClase.horario.esVariable);
                 const conClaseAFavor = Boolean(selectedClase.horario.conClaseAFavor);
 
@@ -2299,10 +2299,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         </span>
                         <span className="block text-yellow-700 dark:text-yellow-300 text-sm">
                           {esVacante && conClaseAFavor
-                            ? 'Al cancelar dentro de las 72hs previas al inicio de la clase, perdés la clase a favor que usaste para reservarla.'
+                            ? `Al cancelar dentro de las ${HORAS_CANCELACION_SEGURA}hs previas al inicio de la clase, perdés la clase a favor que usaste para reservarla.`
                             : esVacante
-                              ? 'Al cancelar dentro de las 72hs previas al inicio de la clase, se te cobrará el valor completo de la misma.'
-                              : 'Al cancelar dentro de las 72hs previas al inicio de la clase, se te cobrará el valor completo de la misma y no te queda clase a favor.'}
+                              ? `Al cancelar dentro de las ${HORAS_CANCELACION_SEGURA}hs previas al inicio de la clase, se te cobrará el valor completo de la misma.`
+                              : `Al cancelar dentro de las ${HORAS_CANCELACION_SEGURA}hs previas al inicio de la clase, se te cobrará el valor completo de la misma y no te queda clase a favor.`}
                         </span>
                       </div>
                     </div>
@@ -2324,7 +2324,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         {esVacante && conClaseAFavor
                           ? 'La clase a favor que usaste para reservarla vuelve a quedar disponible.'
                           : esVacante
-                            ? 'Al cancelar con más de 72hs de anticipación, no se te cobrará esta vacante.'
+                            ? `Al cancelar con más de ${HORAS_CANCELACION_SEGURA}hs de anticipación, no se te cobrará esta vacante.`
                             : `Te queda una clase a favor para reservar una vacante sin cargo hasta el ${venceNueva}.`}
                       </span>
                     </div>

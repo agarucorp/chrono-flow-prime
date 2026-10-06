@@ -7,6 +7,9 @@ import { useAuthContext } from '@/contexts/AuthContext';
 /** Días que dura una clase a favor desde la cancelación (fn_credito_vence). */
 export const DIAS_CLASE_A_FAVOR = 10;
 
+/** Horas de anticipación para cancelar sin cargo (configuracion_admin.cancelacion_penalidad_horas). */
+export const HORAS_CANCELACION_SEGURA = 48;
+
 /** "sábado 11/10" a partir de 'YYYY-MM-DD', sin correrse de día por zona horaria. */
 export const formatFechaCorta = (fecha: string) => {
   const [y, m, d] = fecha.split('-').map(Number);
