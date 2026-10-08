@@ -26,6 +26,7 @@ export interface BalanceEntry {
     canceladasTardias: number;
     clasesMes: number;
     ajusteMesAnterior: number;
+    ajustePlan: number;
   };
 }
 
@@ -91,7 +92,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const { data, error: cuotasError } = await supabase
           .from('cuotas_mensuales')
-          .select('anio, mes, clases_previstas, clases_reservadas, clases_canceladas_anticipacion, clases_canceladas_tardia, clases_mes, ajuste_clases, clases_a_cobrar, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, combo_aplicado, estado_pago')
+          .select('anio, mes, clases_previstas, clases_reservadas, clases_canceladas_anticipacion, clases_canceladas_tardia, clases_mes, ajuste_clases, clases_a_cobrar, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, combo_aplicado, estado_pago, ajuste_aplicado')
           .eq('usuario_id', user.id)
           .order('anio', { ascending: false })
           .order('mes', { ascending: false });
@@ -130,6 +131,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
                 canceladasTardias: Number(cuota.clases_canceladas_tardia ?? 0),
                 clasesMes: Number(cuota.clases_mes ?? 0),
                 ajusteMesAnterior: Number(cuota.ajuste_clases ?? 0),
+                ajustePlan: Number(cuota.ajuste_aplicado ?? 0),
               },
             };
           });

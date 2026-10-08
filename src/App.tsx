@@ -1087,6 +1087,19 @@ const Dashboard = () => {
                                   </span>
                                 </div>
                               )}
+                              {entry.desglose.ajustePlan !== 0 && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-muted-foreground">Ajuste por cambio de plan</span>
+                                  <span
+                                    className={`font-medium ${
+                                      entry.desglose.ajustePlan > 0 ? 'text-amber-400' : 'text-green-500'
+                                    }`}
+                                  >
+                                    {entry.desglose.ajustePlan > 0 ? '+' : '-'}$
+                                    {formatCurrency(Math.abs(entry.desglose.ajustePlan))}
+                                  </span>
+                                </div>
+                              )}
                               <div className="flex items-center justify-between border-t pt-2">
                                 <span className="text-muted-foreground">Clases a cobrar</span>
                                 <span className="font-medium">{entry.clases}</span>
@@ -1366,6 +1379,19 @@ const Dashboard = () => {
                       >
                         {entry.desglose.ajusteMesAnterior > 0 ? '+' : ''}
                         {entry.desglose.ajusteMesAnterior}
+                      </span>
+                    </div>
+                  )}
+                  {entry.desglose.ajustePlan !== 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Ajuste por cambio de plan</span>
+                      <span
+                        className={`font-medium ${
+                          entry.desglose.ajustePlan > 0 ? 'text-amber-400' : 'text-green-500'
+                        }`}
+                      >
+                        {entry.desglose.ajustePlan > 0 ? '+' : '-'}$
+                        {formatCurrency(Math.abs(entry.desglose.ajustePlan))}
                       </span>
                     </div>
                   )}

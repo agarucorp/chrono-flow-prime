@@ -8,7 +8,6 @@ import { supabase } from '@/lib/supabase';
 import { formatPrecioPlan, useTarifasPlanes } from '@/hooks/useTarifasPlanes';
 import { useNotifications } from '@/hooks/useNotifications';
 import { formatClockRangeAmPm } from '@/lib/timeFormat';
-import { addDaysLocal, formatLocalDate, formatMonthEs, todayLocal } from '@/lib/dateLocal';
 
 interface HorarioClase {
   id: string;
@@ -234,14 +233,13 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
 
   // Cambio de plan y de horarios.
   //
-  // Siempre aplica desde el 1° del mes siguiente, incluso si el alumno mantiene
-  // la misma cantidad de días. El mes en curso ya está cobrado, así que mover una
-  // clase de lunes a miércoles hoy cambiaría clases que el alumno ya pagó y
-  // liberaría o pisaría cupos de una grilla cerrada.
+  // Aplica desde mañana. La clase de hoy sigue en el plan anterior.
+  // La cuota de este mes no se toca: el pago es por adelantado. La diferencia
+  // entre esa cuota y lo que va a cursar con el plan nuevo se suma o se resta
+  // en el mes siguiente.
   //
-  // fn_cambiar_plan cierra los horarios viejos a fin de mes, abre los nuevos el
-  // 1°, libera las vacantes que el alumno tenía reservadas para meses futuros y
-  // recalcula la cuota, todo en una transacción.
+  // fn_cambiar_plan cierra el plan viejo hoy, abre el nuevo mañana y deja
+  // el ajuste en la cuota siguiente, todo en una transacción.
   const handleConfirm = async () => {
     try {
       setSaving(true);
@@ -259,11 +257,22 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
         return;
       }
 
-      const resultado = data as { combo?: number; desde?: string } | null;
-      const desde = resultado?.desde ? new Date(`${resultado.desde}T00:00:00`) : new Date();
+      const resultado = data as {
+        combo?: number;
+        desde?: string;
+        diferencia?: number;
+      } | null;
+      const combo = resultado?.combo ?? horariosSeleccionados.size;
+      const diferencia = Number(resultado?.diferencia ?? 0);
+      const ajuste =
+        diferencia < 0
+          ? ` En el mes siguiente se descuentan ${formatPrecioPlan(Math.abs(diferencia))}.`
+          : diferencia > 0
+            ? ` En el mes siguiente se suman ${formatPrecioPlan(diferencia)}.`
+            : '';
       showSuccess(
         '¡Cambio programado!',
-        `Tu plan de ${resultado?.combo ?? horariosSeleccionados.size} día(s) aplica desde el 1 de ${formatMonthEs(desde, false)}. Hasta entonces mantenés los horarios actuales.`
+        `Tu plan de ${combo} día(s) aplica desde mañana. La cuota de este mes no cambia.${ajuste}`
       );
 
       window.dispatchEvent(new CustomEvent('horariosRecurrentes:updated'));
