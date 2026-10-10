@@ -329,7 +329,6 @@ export const FeriadosConfigModal = ({
       let feriadoId: string | undefined;
       let error;
       if (editandoFeriado?.id) {
-        // Actualizar
         const { error: updateError } = await supabase
           .from('feriados')
           .update(datosFeriado)
@@ -337,10 +336,10 @@ export const FeriadosConfigModal = ({
         error = updateError;
         feriadoId = editandoFeriado.id;
       } else {
-        // Crear - obtener el ID del feriado creado
+        // Si ese día ya estaba cargado, se actualiza y se vuelve a aplicar.
         const { data: insertData, error: insertError } = await supabase
           .from('feriados')
-          .insert(datosFeriado)
+          .upsert(datosFeriado, { onConflict: 'fecha,tipo' })
           .select('id')
           .single();
         error = insertError;
@@ -349,15 +348,16 @@ export const FeriadosConfigModal = ({
 
       if (error) throw error;
 
-      // Las clases del plan de ese día quedan dadas de baja por el feriado en sí,
-      // pero las vacantes ya reservadas hay que liberarlas para que la grilla nueva
-      // arranque vacía.
+      // El día cerrado sale de la fila. Esta llamada descuenta la clase en el
+      // mes siguiente y libera las vacantes de esa fecha.
       if (feriadoId) {
         const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
           p_feriado_id: feriadoId,
         });
         if (aplicarError) {
-          showError('El feriado se guardó, pero no se pudieron liberar las reservas del día.');
+          showError('El día quedó cerrado, pero no se pudo descontar la clase en el mes siguiente. Guardá de nuevo.');
+          dismissToast(loadingToast);
+          return;
         }
       }
 

@@ -96,6 +96,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const longPressTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const longPressTactilRef = useRef(false);
 
   // Formatear fecha local a YYYY-MM-DD para evitar TZ
   const formatLocalDate = (d: Date) => {
@@ -1137,17 +1138,27 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           fechaComparar.setHours(0, 0, 0, 0);
           const esFechaFutura = fechaComparar > hoy;
 
-          // Handlers para long press y click derecho (solo para fechas futuras)
-          const handleLongPressStart = () => {
+          // En el celular, después del toque el navegador dispara mouseleave y
+          // eso cancelaba el guardado antes de que se abriera el feriado.
+          const handleLongPressStart = (desdeToque: boolean) => {
             if (!isAdminView || !onDateLongPress || !esFechaFutura) return;
+            if (desdeToque) longPressTactilRef.current = true;
+            if (!desdeToque && longPressTactilRef.current) return;
+            if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
             longPressTimerRef.current = setTimeout(() => {
               onDateLongPress(date);
-            }, 2000); // 2 segundos
+            }, 600);
           };
-          const handleLongPressEnd = () => {
+          const handleLongPressEnd = (desdeToque: boolean) => {
+            if (!desdeToque && longPressTactilRef.current) return;
             if (longPressTimerRef.current) {
               clearTimeout(longPressTimerRef.current);
               longPressTimerRef.current = null;
+            }
+            if (desdeToque) {
+              window.setTimeout(() => {
+                longPressTactilRef.current = false;
+              }, 700);
             }
           };
           const handleContextMenu = (e: React.MouseEvent) => {
@@ -1170,11 +1181,12 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                 // Los feriados siempre son accesibles (admin puede verlos y gestionarlos)
                 handleDateSelect(date);
               }}
-              onMouseDown={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressStart : undefined}
-              onMouseUp={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
-              onMouseLeave={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
-              onTouchStart={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressStart : undefined}
-              onTouchEnd={isAdminView && onDateLongPress && esFechaFutura ? handleLongPressEnd : undefined}
+              onMouseDown={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressStart(false) : undefined}
+              onMouseUp={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressEnd(false) : undefined}
+              onMouseLeave={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressEnd(false) : undefined}
+              onTouchStart={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressStart(true) : undefined}
+              onTouchEnd={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressEnd(true) : undefined}
+              onTouchCancel={isAdminView && onDateLongPress && esFechaFutura ? () => handleLongPressEnd(true) : undefined}
               onContextMenu={isAdminView && onDateLongPress && esFechaFutura ? handleContextMenu : undefined}
             >
               <SelectedDayMarker isSelected={isSelected} />
@@ -1639,6 +1651,25 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                     })
                   )}
                 </h3>
+                {isAdminView && onDateLongPress && (() => {
+                  const hoy = new Date();
+                  hoy.setHours(0, 0, 0, 0);
+                  const elegido = new Date(currentDate);
+                  elegido.setHours(0, 0, 0, 0);
+                  if (elegido <= hoy) return null;
+                  const finDeSemana = currentDate.getDay() === 0 || currentDate.getDay() === 6;
+                  return (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mb-2"
+                      onClick={() => onDateLongPress(currentDate)}
+                    >
+                      {finDeSemana ? 'Configurar fin de semana' : 'Marcar feriado'}
+                    </Button>
+                  );
+                })()}
               </div>
 
               <div className="w-full max-w-full overflow-x-auto">
