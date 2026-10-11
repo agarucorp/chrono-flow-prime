@@ -8,7 +8,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 export const DIAS_CLASE_A_FAVOR = 10;
 
 /** Horas de anticipación para cancelar sin cargo (configuracion_admin.cancelacion_penalidad_horas). */
-export const HORAS_CANCELACION_SEGURA = 48;
+export const HORAS_CANCELACION_SEGURA = 36;
 
 /** "sábado 11/10" a partir de 'YYYY-MM-DD', sin correrse de día por zona horaria. */
 export const formatFechaCorta = (fecha: string) => {

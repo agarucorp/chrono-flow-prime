@@ -1355,7 +1355,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
   // Cancelar una clase propia, sea del plan o una vacante reservada.
   //
   // fn_cancelar_clase resuelve en una sola transacción qué se está cancelando,
-  // si aplica penalidad por hacerlo con menos de 48hs y el recálculo de la cuota.
+  // si aplica penalidad por hacerlo dentro del margen configurado y el recálculo de la cuota.
   // El cupo vuelve a vacantes solo, porque la disponibilidad es derivada.
   const handleCancelarClase = async (clase: ClaseDelDia) => {
     if (readOnly) {
