@@ -1451,7 +1451,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Reservar una vacante.
   //
-  // reservar_vacante valida cuenta activa, plan, día cerrado, anticipación y cupo
+  // reservar_vacante valida cuenta activa, plan, día cerrado y cupo
   // real bajo un lock, y recalcula la cuota. No hace falta validar nada acá: si el
   // cliente valida por su cuenta, dos pestañas abiertas alcanzan para pasar por
   // encima de la capacidad.
