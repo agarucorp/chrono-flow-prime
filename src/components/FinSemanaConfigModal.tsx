@@ -269,14 +269,14 @@ export const FinSemanaConfigModal = ({
         finSemanaId = insertData?.id;
       }
 
-      // Los cupos del día salen de horarios_personalizados, no hay que
-      // materializarlos. Sólo hay que liberar reservas previas de esa fecha.
+      // Los cupos salen de horarios_personalizados. El recálculo no toca
+      // las reservas que ya estaban confirmadas.
       if (finSemanaId) {
         const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
           p_feriado_id: finSemanaId,
         });
         if (aplicarError) {
-          showError('El fin de semana se guardó, pero no se pudieron liberar las reservas del día.');
+          showError('El fin de semana se guardó, pero no se pudo actualizar el balance.');
         }
       }
 

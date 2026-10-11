@@ -1237,8 +1237,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         (!f.horarios_personalizados || f.horarios_personalizados.length === 0)
       );
       
-      // Si es feriado y la clase no está cancelada, marcarla como cancelada con tipo 'sistema'
-      if (esFeriado && !clase.horario.cancelada) {
+      // El día cerrado anula la clase del plan. Una reserva ya hecha sigue.
+      if (esFeriado && !clase.horario.cancelada && !clase.horario.esVariable) {
         return {
           ...clase,
           horario: {

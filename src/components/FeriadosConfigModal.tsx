@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Calendar, X, Plus, Trash2, Clock, AlertCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -86,6 +86,8 @@ export const FeriadosConfigModal = ({
   const [horariosPersonalizados, setHorariosPersonalizados] = useState<HorarioPersonalizado[]>([]);
   const [mostrarFormulario, setMostrarFormulario] = useState(false);
   const [clasesDisponibles, setClasesDisponibles] = useState<ClaseDisponible[]>([]);
+  const feriadoPrecargadoRef = useRef<string | null>(null);
+  const feriadoCargoRef = useRef(false);
 
   useEffect(() => {
     if (open) {
@@ -348,14 +350,13 @@ export const FeriadosConfigModal = ({
 
       if (error) throw error;
 
-      // El día cerrado sale de la fila. Esta llamada descuenta la clase en el
-      // mes siguiente y libera las vacantes de esa fecha.
+      // Recalcula la cuota del plan. No cancela reservas ya confirmadas.
       if (feriadoId) {
         const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
           p_feriado_id: feriadoId,
         });
         if (aplicarError) {
-          showError('El día quedó cerrado, pero no se pudo descontar la clase en el mes siguiente. Guardá de nuevo.');
+          showError('El feriado se guardó, pero no se pudo actualizar el balance del mes siguiente. Guardá de nuevo.');
           dismissToast(loadingToast);
           return;
         }
@@ -446,6 +447,26 @@ export const FeriadosConfigModal = ({
     setHorariosPersonalizados(horariosConClase);
     setMostrarFormulario(true);
   };
+
+  // Si el día ya es feriado, el formulario abre con sus horarios.
+  // Guardar no tiene que mandarlos vacíos y cerrar el día.
+  useEffect(() => {
+    if (!open) {
+      feriadoPrecargadoRef.current = null;
+      feriadoCargoRef.current = false;
+      return;
+    }
+    if (loading) {
+      feriadoCargoRef.current = true;
+      return;
+    }
+    if (!fechaSeleccionada || !feriadoCargoRef.current) return;
+    const fechaStr = format(fechaSeleccionada, 'yyyy-MM-dd');
+    if (feriadoPrecargadoRef.current === fechaStr) return;
+    feriadoPrecargadoRef.current = fechaStr;
+    const existente = feriados.find((f) => f.fecha === fechaStr);
+    if (existente) editarFeriado(existente);
+  }, [open, fechaSeleccionada, feriados, loading]);
 
   // Actualizar horarios con clase_numero cuando se cargan las clases disponibles
   useEffect(() => {
