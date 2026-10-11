@@ -1692,44 +1692,48 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         const clasesDelDia = clasesDelMes.filter(clase => 
                           isSameDay(clase.dia, dia)
                         );
-                        return clasesDelDia.map((clase, claseIndex) => (
+                        return clasesDelDia.map((clase, claseIndex) => {
+                          const cancelada = Boolean(clase.horario.cancelada);
+                          const esFeriado = cancelada && clase.horario.tipoCancelacion === 'sistema';
+                          const nueva = Boolean(clase.horario.esVariable && !cancelada);
+                          const pasada = isFechaPasada(clase.dia);
+                          const tachado = 'line-through decoration-2 decoration-white text-[#f7f8f2]';
+                          return (
                           <tr 
                             key={`${dia.getTime()}-${claseIndex}`} 
                             className={`border-b-2 border-white last:border-b-0 transition-colors ${
-                              clase.horario.cancelada 
-                                ? 'cursor-default bg-[rgba(92,24,24,0.58)]' 
+                              cancelada
+                                ? 'cursor-default shadow-[inset_4px_0_0_#f0b4b0]'
                                 : clase.horario.bloqueada
                                   ? 'cursor-default bg-yellow-950/35'
-                                  : esHoy
+                                  : nueva
+                                    ? `cursor-pointer bg-white/15 shadow-[inset_0_0_0_2px_#fff] hover:bg-white/25 ${pasada ? 'opacity-45' : ''}`
+                                    : esHoy
                                     ? 'cursor-pointer bg-white/20 shadow-[inset_4px_0_0_#fff]'
-                                    : isFechaPasada(clase.dia)
+                                    : pasada
                                     ? 'cursor-default opacity-45'
                                     : 'cursor-pointer hover:bg-white/10'
                             }`}
-                            onClick={() => clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia) ? null : handleClaseClick(clase)}
+                            onClick={() => cancelada || clase.horario.bloqueada || pasada ? null : handleClaseClick(clase)}
                           >
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
-                              <div className={`text-xs sm:text-sm font-medium ${esHoy ? 'text-foreground' : ''}`}>
+                              <div className={`text-xs sm:text-sm font-medium ${cancelada ? tachado : esHoy ? 'text-foreground' : ''}`}>
                                 {lowercaseSpanishMonths(format(dia, "dd 'de' MMMM", { locale: es }))}
                               </div>
-                              {esHoy && !clase.horario.cancelada && (
+                              {esHoy && !cancelada && (
                                 <div className="mt-0.5 text-[10px] font-medium uppercase tracking-wide text-white">
                                   Hoy
                                 </div>
                               )}
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
-                              <div className="text-xs sm:text-sm text-muted-foreground">
+                              <div className={`text-xs sm:text-sm ${cancelada ? tachado : 'text-muted-foreground'}`}>
                                 {format(dia, 'EEEE', { locale: es })}
                               </div>
-                              {clase.horario.cancelada && (
-                                <div className={`text-[10px] sm:text-xs font-medium ${
-                                  clase.horario.tipoCancelacion === 'sistema'
-                                    ? 'text-amber-600 dark:text-amber-400'
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}>
-                                  {clase.horario.tipoCancelacion === 'sistema' ? 'FERIADO' : 'CANCELADA'}
-                                </div>
+                              {cancelada && (
+                                <span className="mt-1 inline-block rounded-full border border-[#f0b4b0] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[#f0b4b0]">
+                                  {esFeriado ? 'Feriado' : 'Cancelada'}
+                                </span>
                               )}
                               {clase.horario.bloqueada && (
                                 <div className="text-[8px] sm:text-xs text-yellow-600 dark:text-yellow-400 font-light sm:font-medium">
@@ -1739,20 +1743,18 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                             </td>
                             <td className="px-2 sm:px-4 py-3 text-center sm:text-left">
                               <span className={`text-xs sm:text-sm font-medium ${
-                                clase.horario.cancelada 
-                                  ? clase.horario.tipoCancelacion === 'sistema'
-                                    ? 'text-amber-200 line-through'
-                                    : 'text-[#f0b4b0] line-through'
+                                cancelada
+                                  ? tachado
                                   : clase.horario.bloqueada
                                     ? 'text-yellow-200'
                                     : ''
                               }`}>
                                 {formatClockRangeAmPm(clase.horario.hora_inicio, clase.horario.hora_fin)}
                               </span>
-                              {clase.horario.esVariable && !clase.horario.cancelada && (
-                                <div className="text-xs font-medium text-white">
+                              {nueva && (
+                                <span className="mt-1 inline-block rounded-full bg-[#f7f8f2] px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-[#0c2414]">
                                   {clase.horario.conClaseAFavor ? 'Clase a favor' : 'Nueva clase'}
-                                </div>
+                                </span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-center hidden md:table-cell">
@@ -1764,13 +1766,14 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                                   handleClaseClick(clase);
                                 }}
                                 className="h-8 px-3 text-xs sm:text-sm"
-                                disabled={clase.horario.cancelada || clase.horario.bloqueada || isFechaPasada(clase.dia)}
+                                disabled={cancelada || clase.horario.bloqueada || pasada}
                               >
-                                {clase.horario.cancelada ? 'Cancelada' : clase.horario.bloqueada ? 'Bloqueada' : isFechaPasada(clase.dia) ? 'No disponible' : 'Ver Detalles'}
+                                {cancelada ? (esFeriado ? 'Feriado' : 'Cancelada') : clase.horario.bloqueada ? 'Bloqueada' : pasada ? 'No disponible' : 'Ver Detalles'}
                               </Button>
                             </td>
                           </tr>
-                        ));
+                          );
+                        });
                       })}
                     </tbody>
                   </table>

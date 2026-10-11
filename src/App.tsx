@@ -403,14 +403,14 @@ const Dashboard = () => {
           <p className="text-[10px] uppercase tracking-wide text-red-600 md:text-[9px]">Clase cancelada</p>
           <p className="mt-1 text-red-600 line-through">18:00 - 19:00</p>
           <p className="mt-2 text-[10px] text-red-700 dark:text-red-200 md:text-[9px]">
-            Cuando canceles una clase aparecerá tachada en rojo y se generará una nueva clase disponible en Vacantes. Si cancelás con más de {HORAS_CANCELACION_SEGURA}hs de anticipación te queda una clase a favor para reservar una vacante sin cargo dentro de los {DIAS_CLASE_A_FAVOR} días.
+            Cuando canceles una clase aparecerá tachada, con la etiqueta Cancelada. Si el día queda anulado por feriado, la misma clase aparece tachada con la etiqueta Feriado. Si cancelás con más de {HORAS_CANCELACION_SEGURA}hs de anticipación te queda una clase a favor para reservar una vacante sin cargo dentro de los {DIAS_CLASE_A_FAVOR} días.
           </p>
         </div>
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] dark:border-emerald-900/40 dark:bg-emerald-950/25 md:text-[10px]">
           <p className="text-[10px] uppercase tracking-wide text-emerald-600 md:text-[9px]">Clase adicional</p>
           <p className="mt-1 text-emerald-600">Turno Variable · 20:00 - 21:00</p>
           <p className="mt-2 text-[10px] text-emerald-700 dark:text-emerald-200 md:text-[9px]">
-            Al reservar una clase desde Vacantes se mostrará en tu panel como Turno Variable en color verde.
+            Al reservar una clase desde Vacantes se mostrará en tu panel recuadrada, con la etiqueta Nueva clase.
           </p>
         </div>
         <div className="rounded-lg border border-amber-200 bg-amber-50/80 p-3 text-[11px] dark:border-amber-900/40 dark:bg-amber-950/25 md:text-[10px]">
