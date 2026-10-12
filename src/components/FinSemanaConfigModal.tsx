@@ -412,7 +412,6 @@ export const FinSemanaConfigModal = ({
                             id={`capacidad_${index}`}
                             type="number"
                             min="1"
-                            max="50"
                             value={horario.capacidad || ''}
                             onChange={(e) => actualizarCapacidad(index, parseInt(e.target.value) || 0)}
                             className={`mt-1 w-24 ${!horario.capacidad || horario.capacidad < 1 ? 'border-destructive' : ''}`}

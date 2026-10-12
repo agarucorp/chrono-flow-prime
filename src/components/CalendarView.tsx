@@ -36,7 +36,7 @@ interface AlumnoHorario {
   nombre: string;
   email: string;
   telefono?: string;
-  tipo: 'recurrente' | 'variable' | 'cancelado';
+  tipo: 'recurrente' | 'variable' | 'cancelado' | 'feriado';
   clase_numero?: number | null;
   hora_inicio: string;
   hora_fin: string;
@@ -377,7 +377,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         const slots = feriadoInfo.horarios.map((h: any) => ({
           horaInicio: (h.hora_inicio || '').substring(0, 5),
           horaFin: (h.hora_fin || '').substring(0, 5),
-          capacidad: h.capacidad || 4, // Usar capacidad personalizada del feriado (OBLIGATORIA)
+          capacidad: Number(h.capacidad) > 0 ? Number(h.capacidad) : 0,
         }));
         setAdminSlots(slots);
         return;
@@ -642,12 +642,17 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           const canceladoPorHora = canceladosPorHora.has(`${horario.usuario_id}-${horaInicioNorm}`);
 
           if (!canceladoPorClase && !canceladoPorHora) {
+            const planAnulado = feriados.some(f =>
+              f.fecha === fechaActual &&
+              f.activo &&
+              f.tipo === 'dia_habil_feriado'
+            );
             todosAlumnos.push({
               id: horario.id,
               nombre: getProfileFullName(profile),
               email: profile.email || '',
               telefono: profile.phone,
-              tipo: 'recurrente',
+              tipo: planAnulado ? 'feriado' : 'recurrente',
               clase_numero: horario.clase_numero,
               hora_inicio: horaInicioNorm,
               hora_fin: horaFinNorm,
@@ -671,7 +676,15 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
 
             const estaCancelado = canceladosPorHora.has(`${turno.cliente_id}-${horaInicio}`);
 
-            // Verificar si ya existe este usuario para esta hora (evitar duplicados)
+            const idxPlanAnulado = todosAlumnos.findIndex(alumno =>
+              alumno.usuario_id === turno.cliente_id &&
+              alumno.hora_inicio === horaInicio &&
+              alumno.tipo === 'feriado'
+            );
+            if (idxPlanAnulado >= 0) {
+              todosAlumnos.splice(idxPlanAnulado, 1);
+            }
+
             const yaExiste = todosAlumnos.some(alumno =>
               alumno.usuario_id === turno.cliente_id &&
               alumno.hora_inicio === horaInicio
@@ -731,7 +744,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
       fecha: fechaTurno,
       hora_inicio: alumno.hora_inicio || '',
       hora_fin: alumno.hora_fin || '',
-      estado: alumno.tipo === 'cancelado' ? 'cancelado' : 'ocupado',
+      estado: alumno.tipo === 'cancelado' || alumno.tipo === 'feriado' ? 'cancelado' : 'ocupado',
       cliente_id: alumno.usuario_id,
       cliente_nombre: alumno.nombre,
       profesional_id: null,
@@ -1263,10 +1276,10 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
         }, [] as AlumnoHorario[]);
 
       // Contar solo alumnos activos para el cupo disponible
-      const alumnosActivos = alumnosEnHorario.filter(a => a.tipo !== 'cancelado');
+      const alumnosActivos = alumnosEnHorario.filter(a => a.tipo !== 'cancelado' && a.tipo !== 'feriado');
       
       // Usar la capacidad del slot (ya viene correcta: de feriados con capacidad personalizada o de horarios_semanales)
-      const capacidadSlot = slot.capacidad || 4;
+      const capacidadSlot = Number(slot.capacidad) > 0 ? Number(slot.capacidad) : 0;
       
       // Detectar si hay exceso de usuarios (más que la capacidad máxima)
       const tieneExceso = alumnosActivos.length > capacidadSlot;
@@ -1398,7 +1411,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                                 className={`flex items-center justify-between rounded-lg border px-3 py-2 transition-all ${
                                   estaBloqueado
                                     ? 'border-yellow-400/50 bg-yellow-900/30 text-yellow-200 opacity-60'
-                                    : alumno.tipo === 'cancelado'
+                                    : alumno.tipo === 'cancelado' || alumno.tipo === 'feriado'
                                       ? 'border-red-500/50 bg-red-500/10 text-red-300'
                                       : alumno.tipo === 'recurrente'
                                         ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-300'
@@ -1407,6 +1420,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                               >
                                 <div className="text-[10px] font-medium sm:text-xs">
                                   {nombre} {apellido}
+                                  {alumno.tipo === 'feriado' && <span className="ml-2 text-[8px]">(FERIADO)</span>}
                                   {estaBloqueado && <span className="ml-2 text-[8px] text-yellow-400">(BLOQUEADA)</span>}
                                 </div>
                               </div>
@@ -1755,7 +1769,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
                         selectedAlumno.tipo === 'variable' ? 'text-blue-600 border-blue-300' :
                           'text-red-600 border-red-300'
                       }`}>
-                      {selectedAlumno.tipo === 'recurrente' ? 'Clase Recurrente' :
+                      {selectedAlumno.tipo === 'feriado' ? 'Feriado' :
+                        selectedAlumno.tipo === 'recurrente' ? 'Clase Recurrente' :
                         selectedAlumno.tipo === 'variable' ? 'Clase Variable' : 'Cancelada'}
                     </Badge>
                   </div>

@@ -493,11 +493,10 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Cargar vacantes disponibles.
   //
-  // La disponibilidad la calcula fn_slots_disponibilidad en la base: capacidad
-  // del horario (o la que declaró el admin para un feriado o fin de semana
-  // habilitado) menos los planes recurrentes vigentes no cancelados y las
-  // reservas variables confirmadas. Acá solo se expande cada cupo libre en una
-  // fila para la lista.
+  // La disponibilidad la calcula fn_slots_disponibilidad. En un día normal
+  // resta el plan y las reservas. En un feriado o fin de semana abierto, el
+  // cupo es el que cargó el admin y solo cuentan las reservas de ese día.
+  // Un horario sin lugar se lista igual, marcado para mostrar "Completo".
   const cargarTurnosCancelados = async (forceReload = false, showLoading = false) => {
     if (!user?.id) return;
 
@@ -542,8 +541,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           creado_desde_feriado_id: slot.feriado_id
         };
 
-        // Un horario completo se lista una sola vez y marcado como no reservable:
-        // el calendario lo necesita para pintar el día en rojo.
+        // Un horario completo se lista una sola vez: el día se puede abrir
+        // y la clase figura como Completo, sin botón de reserva.
         if (slot.disponibles <= 0) {
           return [{ ...base, id: `${base.turno_fecha}_${slot.clase_numero}_lleno`, reservado: true }];
         }
@@ -1231,10 +1230,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       const fechaFormateada = format(clase.dia, 'yyyy-MM-dd');
       
       // Verificar si el día es feriado (día hábil feriado sin horarios personalizados)
-      const esFeriado = feriados.some(f => 
-        f.fecha === fechaFormateada && 
-        f.tipo === 'dia_habil_feriado' && 
-        (!f.horarios_personalizados || f.horarios_personalizados.length === 0)
+      const esFeriado = feriados.some(f =>
+        f.fecha === fechaFormateada &&
+        f.tipo === 'dia_habil_feriado'
       );
       
       // El día cerrado anula la clase del plan. Una reserva ya hecha sigue.
@@ -1294,10 +1292,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const cancelacionesMap = cancelacionesPorFecha?.[fechaFormateada] || new Map<string, 'usuario' | 'admin' | 'sistema'>();
 
     // Verificar si el día es feriado (día hábil feriado sin horarios personalizados)
-    const esFeriado = feriados.some(f => 
-      f.fecha === fechaFormateada && 
-      f.tipo === 'dia_habil_feriado' && 
-      (!f.horarios_personalizados || f.horarios_personalizados.length === 0)
+    const esFeriado = feriados.some(f =>
+      f.fecha === fechaFormateada &&
+      f.tipo === 'dia_habil_feriado'
     );
 
     // Mapear horarios con su estado de cancelación y bloqueo por ausencias del admin
@@ -1493,9 +1490,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       });
 
       if (error) {
+        const mensaje = error.message || '';
         toast({
           title: "No se pudo reservar",
-          description: error.message,
+          description: mensaje.toLowerCase().includes('cupo completo')
+            ? 'Esa clase está completa'
+            : mensaje,
           variant: "destructive",
         });
         return;
@@ -1976,12 +1976,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                       `}
                     >
                       <span className={isCurrentMonth ? '' : 'invisible'}>{getDate(date)}</span>
-                      {isCurrentMonth && !isPast && (estadoDia === 'verde' || estadoDia === 'rojo') && (
+                      {isCurrentMonth && !isPast && (estadoDia === 'verde' || estadoDia === 'rojo' || estadoDia === 'feriado-habilitado') && (
                         <div className="absolute bottom-1 left-1/2 transform -translate-x-1/2">
-                          {estadoDia === 'verde' && (
+                          {(estadoDia === 'verde' || (estadoDia === 'feriado-habilitado' && diaTieneCupos(date))) && (
                             <div className="w-2 h-2 bg-white rounded-full" />
                           )}
-                          {estadoDia === 'rojo' && (
+                          {(estadoDia === 'rojo' || (estadoDia === 'feriado-habilitado' && !diaTieneCupos(date))) && (
                             <div className="w-2 h-2 bg-red-500 rounded-full" />
                           )}
                         </div>
@@ -2061,7 +2061,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
               {selectedVacantesDate && lowercaseSpanishMonths(format(selectedVacantesDate, "dd 'de' MMMM 'de' yyyy", { locale: es }))}
             </DialogTitle>
             <DialogDescription>
-              Clases disponibles para este día
+              Clases de este día
             </DialogDescription>
           </DialogHeader>
           
@@ -2069,7 +2069,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
             try {
               const fechaStr = format(selectedVacantesDate, 'yyyy-MM-dd');
               const turnosDia = (turnosCancelados || [])
-                .filter(turno => turno && !turno.reservado && turno.turno_fecha === fechaStr)
+                .filter(turno => turno && turno.turno_fecha === fechaStr)
                 .map(turno => {
                   try {
                     const fecha = new Date(turno.turno_fecha);
