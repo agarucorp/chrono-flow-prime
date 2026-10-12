@@ -10,7 +10,7 @@ import { RecurringScheduleModal } from "./components/RecurringScheduleModal";
 import { RecurringScheduleView } from "./components/RecurringScheduleView";
 import { useAuthContext } from "./contexts/AuthContext";
 import { useFirstTimeUser } from "./hooks/useFirstTimeUser";
-import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy, Ticket, Copy } from "lucide-react";
+import { Calendar, Clock, User, Settings, LogOut, ChevronDown, HelpCircle, Dumbbell, Zap, Wallet, X, Info, Trophy, Ticket, Copy, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -712,6 +712,17 @@ const Dashboard = () => {
               )}
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
+              {(!isAdmin || previewAlumno) && (
+                <button
+                  type="button"
+                  aria-label="Actualizar"
+                  title="Actualizar"
+                  className="inline-flex items-center justify-center h-14 w-14 sm:h-9 sm:w-9 rounded-lg text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground active:scale-95"
+                  onClick={() => window.location.reload()}
+                >
+                  <RefreshCw className="h-6 w-6 sm:h-5 sm:w-5" />
+                </button>
+              )}
               <button
                 type="button"
                 aria-label="Soporte"
