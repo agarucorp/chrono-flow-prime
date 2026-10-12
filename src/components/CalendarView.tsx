@@ -539,6 +539,7 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
           turno_fecha,
           turno_hora_inicio,
           turno_hora_fin,
+          clase_numero,
           estado,
           cliente_id,
           profiles(full_name, first_name, last_name, email, phone, role)
@@ -674,7 +675,8 @@ export const CalendarView = ({ onTurnoReservado, isAdminView = false, onDateLong
             const horaInicio = normalizeHora(turno.turno_hora_inicio || '');
             const horaFin = normalizeHora(turno.turno_hora_fin || '');
 
-            const estaCancelado = canceladosPorHora.has(`${turno.cliente_id}-${horaInicio}`);
+            const estaCancelado = turno.clase_numero != null
+              && canceladosPorClase.has(`${turno.cliente_id}-${turno.clase_numero}`);
 
             const idxPlanAnulado = todosAlumnos.findIndex(alumno =>
               alumno.usuario_id === turno.cliente_id &&
