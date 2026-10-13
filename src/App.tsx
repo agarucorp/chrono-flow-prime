@@ -1120,21 +1120,24 @@ const Dashboard = () => {
                                   Esta cuota ya está emitida. Los cambios que hagas en este mes impactarán en el siguiente.
                                 </p>
                               )}
-                              {entry.descuentoPorcentaje > 0 && (
+                              {(entry.descuentoPorcentaje > 0 || entry.descuentoMonto > 0) && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-muted-foreground">Descuento</span>
                                   <span className="font-medium text-green-500">
-                                    {entry.descuentoPorcentaje.toLocaleString('es-AR', {
+                                    {entry.descuentoPorcentaje > 0 && `${entry.descuentoPorcentaje.toLocaleString('es-AR', {
                                       minimumFractionDigits: 0,
                                       maximumFractionDigits: 2,
-                                    })}% (-${formatCurrency(entry.descuento)})
+                                    })}%`}
+                                    {entry.descuentoPorcentaje > 0 && entry.descuentoMonto > 0 && ' y '}
+                                    {entry.descuentoMonto > 0 && `$${formatCurrency(entry.descuentoMonto)}`}
+                                    {` (-$${formatCurrency(entry.descuento)})`}
                                   </span>
                                 </div>
                               )}
                               <div className="border-t pt-2 flex items-center justify-between font-semibold">
                                 <span>Total</span>
                                 <div className="text-right">
-                                  {entry.descuentoPorcentaje > 0 && entry.total > entry.totalConDescuento ? (
+                                  {entry.total > entry.totalConDescuento ? (
                                     <>
                                       <span className="text-muted-foreground line-through block text-sm">
                                         ${formatCurrency(entry.total)}
@@ -1410,14 +1413,17 @@ const Dashboard = () => {
                     <span className="text-muted-foreground">Clases a cobrar</span>
                     <span className="font-medium">{entry.clases}</span>
                   </div>
-                  {entry.descuentoPorcentaje > 0 && (
+                  {(entry.descuentoPorcentaje > 0 || entry.descuentoMonto > 0) && (
                     <div className="flex items-center justify-between">
                       <span className="text-muted-foreground">Descuento</span>
                       <span className="font-medium text-green-500">
-                        {entry.descuentoPorcentaje.toLocaleString('es-AR', {
+                        {entry.descuentoPorcentaje > 0 && `${entry.descuentoPorcentaje.toLocaleString('es-AR', {
                           minimumFractionDigits: 0,
                           maximumFractionDigits: 2,
-                        })}% (-${formatCurrency(entry.descuento)})
+                        })}%`}
+                        {entry.descuentoPorcentaje > 0 && entry.descuentoMonto > 0 && ' y '}
+                        {entry.descuentoMonto > 0 && `$${formatCurrency(entry.descuentoMonto)}`}
+                        {` (-$${formatCurrency(entry.descuento)})`}
                       </span>
                     </div>
                   )}

@@ -328,7 +328,7 @@ export const useAdmin = () => {
     try {
       const { data, error } = await supabase
         .from('cuotas_mensuales')
-        .select('usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, estado_pago, descuento_porcentaje, monto_con_descuento')
+        .select('usuario_id, anio, mes, clases_previstas, tarifa_unitaria, monto_total, estado_pago, descuento_porcentaje, descuento_monto, monto_con_descuento')
         .eq('anio', anio)
         .eq('mes', mes);
       if (error) {
@@ -418,7 +418,7 @@ export const useAdmin = () => {
 
   // Actualizar descuento de una cuota mensual
   // Si el mes seleccionado es el mes actual, redirige automáticamente al mes siguiente
-  const updateCuotaDescuento = useCallback(async (usuarioId: string, anio: number, mes: number, descuentoPorcentaje: number) => {
+  const updateCuotaDescuento = useCallback(async (usuarioId: string, anio: number, mes: number, descuentoPorcentaje: number, descuentoMonto = 0) => {
     try {
       const now = new Date();
       const currentYear = now.getFullYear();
@@ -470,13 +470,16 @@ export const useAdmin = () => {
         montoTotal = Number(cuotaActual.monto_total) || 0;
       }
 
-      const montoConDescuento = montoTotal * (1 - descuentoPorcentaje / 100);
+      const montoConDescuento = Math.max(
+        0,
+        Math.round((montoTotal * (1 - descuentoPorcentaje / 100) - descuentoMonto) * 100) / 100
+      );
 
-      // Actualizamos el descuento y el monto con descuento
       const { error } = await supabase
         .from('cuotas_mensuales')
-        .update({ 
+        .update({
           descuento_porcentaje: descuentoPorcentaje,
+          descuento_monto: descuentoMonto,
           monto_con_descuento: montoConDescuento
         })
         .eq('usuario_id', usuarioId)

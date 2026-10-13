@@ -45,6 +45,7 @@ import { useAdminNavigation } from '@/hooks/useAdminNavigation';
 import { useAdminClasesAFavor } from '@/hooks/useAdminClasesAFavor';
 import { formatFechaCorta } from '@/hooks/useClasesAFavor';
 import { ClasesAFavorBell } from '@/components/ClasesAFavorBell';
+import { AdminActividadBell } from '@/components/AdminActividadBell';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -91,7 +92,7 @@ export default function Admin() {
   const [showUserDetails, setShowUserDetails] = useState(false);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'pendiente_first' | 'pagado_first'>('default');
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
-  const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }>>([]);
+  const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }>>([]);
   
   // Estado local para tipo de pago (solo indicador visual, no se persiste en BD)
   const [tipoPagoMap, setTipoPagoMap] = useState<Record<string, 'transferencia' | 'efectivo'>>(() => {
@@ -204,7 +205,11 @@ export default function Admin() {
     const detalleRows = balanceRows.map(row => {
       const estadoTexto = row.estado === 'abonada' ? 'Pagado' : row.estado === 'pendiente' ? 'Pendiente' : 'Vencida';
       const tipoPagoTexto = row.tipoPago === 'transferencia' ? 'Transferencia' : 'Efectivo';
-      const descuentoTexto = row.descuento > 0 ? `${row.descuento}%` : '-';
+      const partesDescuento = [
+        row.descuento > 0 ? `${row.descuento}%` : '',
+        row.descuentoMonto > 0 ? `$${row.descuentoMonto}` : '',
+      ].filter(Boolean);
+      const descuentoTexto = partesDescuento.length > 0 ? partesDescuento.join(' + ') : '-';
       
       return [
         row.nombre,
@@ -617,15 +622,16 @@ export default function Admin() {
   const resolveMontoCuota = (cuota: any) => {
     const montoOriginal = Number(cuota?.monto_total) || 0;
     const descuentoPorcentaje = Number(cuota?.descuento_porcentaje) || 0;
+    const descuentoMonto = Number(cuota?.descuento_monto) || 0;
+    const hayDescuento = descuentoPorcentaje > 0 || descuentoMonto > 0;
     // Si hay descuento, respetar monto_con_descuento (puede ser 0). Si no, usar monto_total.
     // Evita el bug de monto_con_descuento=0 sin descuento (default DB) que tapaba el total.
-    const montoConDescuento =
-      descuentoPorcentaje > 0
-        ? Number(cuota?.monto_con_descuento ?? 0)
-        : (Number(cuota?.monto_con_descuento) > 0
-            ? Number(cuota.monto_con_descuento)
-            : montoOriginal);
-    return { montoOriginal, descuentoPorcentaje, montoConDescuento };
+    const montoConDescuento = hayDescuento
+      ? Number(cuota?.monto_con_descuento ?? 0)
+      : (Number(cuota?.monto_con_descuento) > 0
+          ? Number(cuota.monto_con_descuento)
+          : montoOriginal);
+    return { montoOriginal, descuentoPorcentaje, descuentoMonto, montoConDescuento };
   };
 
   // Cargar cuotas del periodo seleccionado y mapear por usuario
@@ -656,7 +662,7 @@ export default function Admin() {
       const cuotas = await ensureCuotasMensuales(selectedYear, selectedMonth);
 
       // Construir filas para Balance mostrando SIEMPRE todos los clientes
-      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
+      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
       let totalAbonado = 0;
       let totalPendiente = 0;
 
@@ -672,7 +678,7 @@ export default function Admin() {
           : (usuario.full_name || usuario.email);
         const email = usuario.email || '';
 
-        const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(cuota);
+        const { montoOriginal, descuentoPorcentaje, descuentoMonto, montoConDescuento } = resolveMontoCuota(cuota);
         const estado = ((cuota?.estado_pago as any) || 'pendiente') as 'pendiente'|'abonada'|'vencida';
         const tipoPago = tipoPagoMap[usuario.id] || 'transferencia';
 
@@ -684,6 +690,7 @@ export default function Admin() {
           montoOriginal,
           estado,
           descuento: descuentoPorcentaje,
+          descuentoMonto,
           tipoPago
         });
 
@@ -832,8 +839,9 @@ export default function Admin() {
             {/* Espacio vacío en mobile para empujar el botón a la derecha */}
             <div className="md:hidden flex-1" />
             
-            {/* Clases a favor (solo si hay) y cerrar sesión - visible en desktop y mobile */}
+            {/* Actividad, clases a favor (solo si hay) y cerrar sesión */}
             <div className="flex flex-1 items-center justify-end gap-1 flex-shrink-0">
+              <AdminActividadBell />
               <ClasesAFavorBell
                 alumnos={clasesAFavor.alumnos}
                 total={clasesAFavor.total}
@@ -1214,7 +1222,7 @@ export default function Admin() {
                         <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[180px]">Usuario</th>
                         <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[120px]">Cuota</th>
                         <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[140px]">Estado de pago</th>
-                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[120px]">Descuento</th>
+                        <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[150px]">Descuento</th>
                         <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[140px]">Tipo de Pago</th>
                         <th className="text-left p-3 font-medium text-xs md:text-sm min-w-[100px]">Historial</th>
                       </tr>
@@ -1232,7 +1240,7 @@ export default function Admin() {
                             <p className="font-light md:font-medium truncate text-xs md:text-base">{row.nombre}</p>
                           </td>
                           <td className="p-3">
-                            {row.descuento > 0 ? (
+                            {row.descuento > 0 || row.descuentoMonto > 0 ? (
                               <div className="flex flex-col gap-1">
                                 <span className="text-xs md:text-sm text-muted-foreground line-through font-light md:font-normal">
                                   ${row.montoOriginal.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -1315,18 +1323,19 @@ export default function Admin() {
                             </Select>
                           </td>
                           <td className="p-3">
-                            {/* Input de Descuento editable */}
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-1">
                               <Input
-                                type="number"
-                                min="0"
-                                max="100"
-                                step="0.1"
+                                type="text"
+                                inputMode="numeric"
+                                pattern="[0-9]*"
+                                autoComplete="off"
+                                enterKeyHint="done"
+                                aria-label="Descuento en porcentaje"
                                 value={row.descuento}
-                                onChange={async (e) => {
-                                  const value = e.target.value;
-                                  // Permitir campo vacío mientras se escribe
-                                  if (value === '') {
+                                onChange={(e) => {
+                                  const limpio = e.target.value.replace(/\D/g, '');
+                                  if (limpio === '') {
                                     setBalanceRows(prevRows => 
                                       prevRows.map(r => 
                                         r.usuario_id === row.usuario_id 
@@ -1337,9 +1346,8 @@ export default function Admin() {
                                     return;
                                   }
                                   
-                                  const descuentoNumero = parseFloat(value);
-                                  // Validar que sea un número válido entre 0 y 100
-                                  if (isNaN(descuentoNumero) || descuentoNumero < 0 || descuentoNumero > 100) {
+                                  const descuentoNumero = parseInt(limpio, 10);
+                                  if (Number.isNaN(descuentoNumero) || descuentoNumero < 0 || descuentoNumero > 100) {
                                     return;
                                   }
                                   
@@ -1356,17 +1364,17 @@ export default function Admin() {
                                   const value = e.target.value;
                                   if (value === '') {
                                     // Si está vacío, establecer a 0
-                                    const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, 0);
+                                    const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, 0, row.descuentoMonto);
                                     if (res.success) {
                                       const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-                                      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
+                                      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
                                       let totalAbonado = 0;
                                       let totalPendiente = 0;
                                       for (const c of cuotas) {
                                         const u = allUsers.find(u => u.id === c.usuario_id);
                                         const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
                                         const email = u?.email || '';
-                                        const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(c);
+                                        const { montoOriginal, descuentoPorcentaje, descuentoMonto, montoConDescuento } = resolveMontoCuota(c);
                                         const estado = (c.estado_pago as any) || 'pendiente';
                                         const tipoPago = tipoPagoMap[c.usuario_id] || 'transferencia';
                                         rows.push({ 
@@ -1377,6 +1385,7 @@ export default function Admin() {
                                           montoOriginal,
                                           estado, 
                                           descuento: descuentoPorcentaje,
+                                          descuentoMonto,
                                           tipoPago
                                         });
                                         if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
@@ -1409,18 +1418,18 @@ export default function Admin() {
                                   }
                                   
                                   // Persistir en BD cuando se pierde el foco
-                                  const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, descuentoNumero);
+                                  const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, descuentoNumero, row.descuentoMonto);
                                   if (res.success) {
                                     // Recargar cuotas para reflejar los cambios
                                     const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
-                                    const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
+                                    const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
                                     let totalAbonado = 0;
                                     let totalPendiente = 0;
                                     for (const c of cuotas) {
                                       const u = allUsers.find(u => u.id === c.usuario_id);
                                       const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
                                       const email = u?.email || '';
-                                      const { montoOriginal, descuentoPorcentaje, montoConDescuento } = resolveMontoCuota(c);
+                                      const { montoOriginal, descuentoPorcentaje, descuentoMonto, montoConDescuento } = resolveMontoCuota(c);
                                       const estado = (c.estado_pago as any) || 'pendiente';
                                       const tipoPago = tipoPagoMap[c.usuario_id] || 'transferencia';
                                       rows.push({ 
@@ -1431,6 +1440,7 @@ export default function Admin() {
                                         montoOriginal,
                                         estado, 
                                         descuento: descuentoPorcentaje,
+                                        descuentoMonto,
                                         tipoPago
                                       });
                                       if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
@@ -1458,10 +1468,101 @@ export default function Admin() {
                                     );
                                   }
                                 }}
-                                className="w-[100px] h-8 text-center"
+                                className="w-[88px] h-8 text-center"
                                 placeholder="0"
                               />
-                              <span className="text-sm text-muted-foreground">%</span>
+                              <span className="w-4 text-xs text-muted-foreground">%</span>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Input
+                                  type="text"
+                                  inputMode="numeric"
+                                  pattern="[0-9]*"
+                                  autoComplete="off"
+                                  enterKeyHint="done"
+                                  aria-label="Descuento en pesos"
+                                  value={row.descuentoMonto}
+                                  onChange={(e) => {
+                                    const limpio = e.target.value.replace(/\D/g, '');
+                                    if (limpio === '') {
+                                      setBalanceRows(prevRows =>
+                                        prevRows.map(r =>
+                                          r.usuario_id === row.usuario_id
+                                            ? { ...r, descuentoMonto: 0 }
+                                            : r
+                                        )
+                                      );
+                                      return;
+                                    }
+                                    const monto = parseInt(limpio, 10);
+                                    if (Number.isNaN(monto) || monto < 0) return;
+                                    setBalanceRows(prevRows =>
+                                      prevRows.map(r =>
+                                        r.usuario_id === row.usuario_id
+                                          ? { ...r, descuentoMonto: monto }
+                                          : r
+                                      )
+                                    );
+                                  }}
+                                  onBlur={async (e) => {
+                                    const limpio = e.target.value.replace(/\D/g, '');
+                                    const monto = limpio === '' ? 0 : parseInt(limpio, 10);
+                                    if (Number.isNaN(monto) || monto < 0) {
+                                      setBalanceRows(prevRows =>
+                                        prevRows.map(r =>
+                                          r.usuario_id === row.usuario_id
+                                            ? { ...r, descuentoMonto: row.descuentoMonto }
+                                            : r
+                                        )
+                                      );
+                                      return;
+                                    }
+                                    const res = await updateCuotaDescuento(row.usuario_id, selectedYear, selectedMonth, row.descuento, monto);
+                                    if (res.success) {
+                                      const cuotas = await fetchCuotasMensuales(selectedYear, selectedMonth);
+                                      const rows: Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }> = [];
+                                      let totalAbonado = 0;
+                                      let totalPendiente = 0;
+                                      for (const c of cuotas) {
+                                        const u = allUsers.find(u => u.id === c.usuario_id);
+                                        const nombre = u ? (u.first_name || u.last_name ? `${u.first_name || ''} ${u.last_name || ''}`.trim() : (u.full_name || u.email)) : c.usuario_id;
+                                        const email = u?.email || '';
+                                        const { montoOriginal, descuentoPorcentaje, descuentoMonto, montoConDescuento } = resolveMontoCuota(c);
+                                        const estado = (c.estado_pago as any) || 'pendiente';
+                                        const tipoPago = tipoPagoMap[c.usuario_id] || 'transferencia';
+                                        rows.push({
+                                          usuario_id: c.usuario_id,
+                                          nombre,
+                                          email,
+                                          monto: montoConDescuento,
+                                          montoOriginal,
+                                          estado,
+                                          descuento: descuentoPorcentaje,
+                                          descuentoMonto,
+                                          tipoPago
+                                        });
+                                        if (estado === 'abonada') totalAbonado += montoConDescuento; else totalPendiente += montoConDescuento;
+                                      }
+                                      rows.sort((a, b) => a.nombre.toLowerCase().trim().localeCompare(b.nombre.toLowerCase().trim(), 'es', { sensitivity: 'base' }));
+                                      setBalanceRows(rows);
+                                      setBalanceTotals({ totalAbonado, totalPendiente });
+                                      showSuccess('Descuento aplicado', monto > 0 ? `Se descontaron $${monto.toLocaleString('es-AR')}` : 'Se quitó el descuento en pesos');
+                                    } else {
+                                      showError('Error', 'No se pudo aplicar el descuento');
+                                      setBalanceRows(prevRows =>
+                                        prevRows.map(r =>
+                                          r.usuario_id === row.usuario_id
+                                            ? { ...r, descuentoMonto: row.descuentoMonto }
+                                            : r
+                                        )
+                                      );
+                                    }
+                                  }}
+                                  className="w-[88px] h-8 text-center"
+                                  placeholder="0"
+                                />
+                                <span className="w-4 text-xs text-muted-foreground">$</span>
+                              </div>
                             </div>
                           </td>
                           <td className="p-3">

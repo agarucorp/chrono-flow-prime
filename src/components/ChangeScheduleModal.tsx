@@ -144,6 +144,22 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
     return horariosSeleccionados.has(horarioId);
   };
 
+  // El RPC no cuenta al alumno. Si la clase ya es suya, se suma su lugar
+  // para mostrar la ocupación real (5/5) y no un cupo libre que no existe.
+  const cupoDe = (horario: HorarioClase) => {
+    const capacidad = horario.capacidad_maxima ?? 0;
+    const otros = horario.usuariosActuales ?? 0;
+    const esMio = currentSchedules.some(
+      cs => cs.dia_semana === horario.dia_semana && cs.clase_numero === horario.clase_numero
+    );
+    const ocupados = otros + (esMio ? 1 : 0);
+    return {
+      ocupados,
+      capacidad,
+      texto: capacidad > 0 ? `${ocupados}/${capacidad}` : '',
+    };
+  };
+
   const puedeSeleccionarHorario = (horarioId: string) => {
     if (!paqueteSeleccionado) return false;
     const horario = horariosClase.find(h => h.id === horarioId);
@@ -168,7 +184,7 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
       
       // Si está lleno y no es un horario actual del usuario, no permitir seleccionarlo
       if (estaLleno && !horariosSeleccionados.has(horarioId)) {
-        showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+        showError('Cupo completo', `Este horario ya tiene ${horario.usuariosActuales ?? 0} de ${horario.capacidad_maxima ?? 0} lugares ocupados.`);
         return;
       }
     }
@@ -458,33 +474,36 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                                        horario.capacidad_maxima !== undefined && 
                                                        horario.usuariosActuales >= horario.capacidad_maxima);
                                     const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                                    const cupo = cupoDe(horario);
                                     return (
                                       <Button
                                         key={horario.id}
                                         variant="outline"
                                         size="sm"
-                                        className={`h-10 w-full justify-center text-[13px] font-light transition-colors relative ${
+                                        className={`h-10 w-full justify-between gap-2 px-2.5 text-[13px] font-light transition-colors ${
                                           estaSeleccionado
-                                            ? 'border-white bg-white text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.12)] pr-8'
+                                            ? 'border-white bg-white text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                             : puedeSeleccionar && !estaLleno
                                             ? 'border-border bg-secondary text-foreground hover:bg-secondary'
                                             : 'cursor-not-allowed border-border/50 bg-card text-muted-foreground opacity-50'
                                         }`}
                                         onClick={() => {
                                           if (estaLleno && !estaSeleccionado) {
-                                            showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                            showError('Cupo completo', `Este horario ya tiene ${cupo.ocupados} de ${cupo.capacidad} lugares ocupados.`);
                                             return;
                                           }
                                           toggleHorario(horario.id, dia.numero);
                                         }}
                                         disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
-                                        title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
+                                        title={estaLleno ? `Cupo completo (${cupo.texto})` : estaSeleccionado ? 'Clic para quitar' : cupo.texto}
                                       >
-                                        {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
-                                        {estaLleno && !estaSeleccionado && ' (Lleno)'}
-                                        {estaSeleccionado && (
-                                          <X className="absolute right-2 h-4 w-4 text-muted-foreground hover:text-foreground" />
-                                        )}
+                                        <span className="truncate">{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
+                                        <span className="flex shrink-0 items-center gap-1">
+                                          {cupo.texto && <span className="tabular-nums">{cupo.texto}</span>}
+                                          {estaSeleccionado && (
+                                            <X className="h-4 w-4 text-muted-foreground hover:text-foreground" />
+                                          )}
+                                        </span>
                                       </Button>
                                     );
                                   })}
@@ -522,12 +541,13 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                                      horario.capacidad_maxima !== undefined && 
                                                      horario.usuariosActuales >= horario.capacidad_maxima);
                                   const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                                  const cupo = cupoDe(horario);
                                   return (
                                     <Button
                                       key={horario.id}
                                       variant="outline"
                                       size="sm"
-                                      className={`h-8 w-full justify-between text-[10px] font-light transition-colors relative ${
+                                      className={`h-8 w-full justify-between gap-2 px-2 text-[10px] font-light transition-colors ${
                                         estaSeleccionado
                                           ? 'border-white bg-white text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                           : puedeSeleccionar && !estaLleno
@@ -536,19 +556,21 @@ export const ChangeScheduleModal: React.FC<ChangeScheduleModalProps> = ({
                                       }`}
                                       onClick={() => {
                                         if (estaLleno && !estaSeleccionado) {
-                                          showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                          showError('Cupo completo', `Este horario ya tiene ${cupo.ocupados} de ${cupo.capacidad} lugares ocupados.`);
                                           return;
                                         }
                                         toggleHorario(horario.id, dia.numero);
                                       }}
                                       disabled={!puedeSeleccionar || (estaLleno && !estaSeleccionado)}
-                                      title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : estaSeleccionado ? 'Clic para quitar' : ''}
+                                      title={estaLleno ? `Cupo completo (${cupo.texto})` : estaSeleccionado ? 'Clic para quitar' : cupo.texto}
                                     >
-                                      <span>{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
-                                      {estaLleno && !estaSeleccionado && ' (Lleno)'}
-                                      {estaSeleccionado && (
-                                        <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
-                                      )}
+                                      <span className="truncate">{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
+                                      <span className="flex shrink-0 items-center gap-1">
+                                        {cupo.texto && <span className="tabular-nums">{cupo.texto}</span>}
+                                        {estaSeleccionado && (
+                                          <X className="h-3.5 w-3.5 text-muted-foreground hover:text-foreground" />
+                                        )}
+                                      </span>
                                     </Button>
                                   );
                                 })

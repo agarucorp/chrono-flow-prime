@@ -130,7 +130,7 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                          horario.usuariosActuales >= horario.capacidad_maxima);
       
       if (estaLleno && !horariosSeleccionados.has(horarioId)) {
-        showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+        showError('Cupo completo', `Este horario ya tiene ${horario.usuariosActuales ?? 0} de ${horario.capacidad_maxima ?? 0} lugares ocupados.`);
         return;
       }
     }
@@ -497,12 +497,15 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                                    horario.capacidad_maxima !== undefined && 
                                                    horario.usuariosActuales >= horario.capacidad_maxima);
                                 const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                                const ocupados = horario.usuariosActuales ?? 0;
+                                const capacidad = horario.capacidad_maxima ?? 0;
+                                const cupoTexto = capacidad > 0 ? `${ocupados}/${capacidad}` : '';
                                 return (
                                   <Button
                                     key={horario.id}
                                     variant="outline"
                                     size="sm"
-                                    className={`h-10 w-full justify-center text-[13px] font-light transition-colors ${
+                                    className={`h-10 w-full justify-between gap-2 px-2.5 text-[13px] font-light transition-colors ${
                                       estaSeleccionado
                                         ? 'border-white bg-white text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                         : puedeSeleccionar && !estaLleno
@@ -511,16 +514,16 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                     }`}
                                     onClick={() => {
                                       if (estaLleno && !estaSeleccionado) {
-                                        showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                        showError('Cupo completo', `Este horario ya tiene ${ocupados} de ${capacidad} lugares ocupados.`);
                                         return;
                                       }
                                       toggleHorario(horario.id, dia.numero);
                                     }}
                                     disabled={!puedeSeleccionar || estaLleno}
-                                    title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
+                                    title={estaLleno ? `Cupo completo (${cupoTexto})` : cupoTexto}
                                   >
-                                    {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
-                                    {estaLleno && !estaSeleccionado && ' (Lleno)'}
+                                    <span className="truncate">{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
+                                    {cupoTexto && <span className="shrink-0 tabular-nums">{cupoTexto}</span>}
                                   </Button>
                                 );
                               })}
@@ -559,12 +562,15 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                                  horario.capacidad_maxima !== undefined && 
                                                  horario.usuariosActuales >= horario.capacidad_maxima);
                               const puedeSeleccionar = puedeSeleccionarHorario(horario.id);
+                              const ocupados = horario.usuariosActuales ?? 0;
+                              const capacidad = horario.capacidad_maxima ?? 0;
+                              const cupoTexto = capacidad > 0 ? `${ocupados}/${capacidad}` : '';
                               return (
                                 <Button
                                   key={horario.id}
                                   variant="outline"
                                   size="sm"
-                                  className={`h-8 w-full justify-start text-[10px] font-light transition-colors ${
+                                  className={`h-8 w-full justify-between gap-2 px-2 text-[10px] font-light transition-colors ${
                                     estaSeleccionado
                                       ? 'border-white bg-white text-primary-foreground shadow-[0_0_20px_rgba(255,255,255,0.12)]'
                                       : puedeSeleccionar && !estaLleno
@@ -573,16 +579,16 @@ export const RecurringScheduleModal: React.FC<RecurringScheduleModalProps> = ({
                                   }`}
                                   onClick={() => {
                                     if (estaLleno && !estaSeleccionado) {
-                                      showError('Cupo completo', `Este horario ya tiene ${horario.capacidad_maxima || 4} usuarios registrados. No hay más cupos disponibles.`);
+                                      showError('Cupo completo', `Este horario ya tiene ${ocupados} de ${capacidad} lugares ocupados.`);
                                       return;
                                     }
                                     toggleHorario(horario.id, dia.numero);
                                   }}
                                   disabled={!puedeSeleccionar || estaLleno}
-                                  title={estaLleno ? `Cupo completo (${horario.usuariosActuales || 0}/${horario.capacidad_maxima || 4})` : ''}
+                                  title={estaLleno ? `Cupo completo (${cupoTexto})` : cupoTexto}
                                 >
-                                  {formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}
-                                  {estaLleno && !estaSeleccionado && ' (Lleno)'}
+                                  <span className="truncate">{formatClockRangeAmPm(horario.hora_inicio, horario.hora_fin)}</span>
+                                  {cupoTexto && <span className="shrink-0 tabular-nums">{cupoTexto}</span>}
                                 </Button>
                               );
                             })

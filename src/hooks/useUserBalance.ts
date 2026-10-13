@@ -9,6 +9,7 @@ export interface BalanceEntry {
   precioUnitario: number;
   descuento: number;
   descuentoPorcentaje: number;
+  descuentoMonto: number;
   total: number;
   totalConDescuento: number;
   mesNombre: string;
@@ -92,7 +93,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
 
         const { data, error: cuotasError } = await supabase
           .from('cuotas_mensuales')
-          .select('anio, mes, clases_previstas, clases_reservadas, clases_canceladas_anticipacion, clases_canceladas_tardia, clases_mes, ajuste_clases, clases_a_cobrar, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, combo_aplicado, estado_pago, ajuste_aplicado')
+          .select('anio, mes, clases_previstas, clases_reservadas, clases_canceladas_anticipacion, clases_canceladas_tardia, clases_mes, ajuste_clases, clases_a_cobrar, tarifa_unitaria, monto_total, monto_con_descuento, descuento_porcentaje, descuento_monto, combo_aplicado, estado_pago, ajuste_aplicado')
           .eq('usuario_id', user.id)
           .order('anio', { ascending: false })
           .order('mes', { ascending: false });
@@ -115,6 +116,7 @@ export const useUserBalance = (): UseUserBalanceReturn => {
               precioUnitario: Number(cuota.tarifa_unitaria ?? 0),
               descuento: Math.max(0, total - totalConDescuento),
               descuentoPorcentaje: Number(cuota.descuento_porcentaje ?? 0),
+              descuentoMonto: Number(cuota.descuento_monto ?? 0),
               total,
               totalConDescuento,
               mesNombre: monthNames[Number(cuota.mes) - 1],
