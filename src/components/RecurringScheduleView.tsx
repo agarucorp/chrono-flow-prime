@@ -525,6 +525,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
         return;
       }
 
+      // ya_tomado es la clase que el alumno ya tiene ese día (plan vigente
+      // o vacante confirmada). Esas filas no se listan, pero marcan la fecha
+      // para que el resto de las horas no se pueda reservar.
+      const fechasConClase = new Set(
+        (slots || [])
+          .filter((slot: any) => slot.ya_tomado)
+          .map((slot: any) => normalizeDateKey(slot.fecha))
+      );
+
       const turnosExpandidos = (slots || []).flatMap((slot: any) => {
         if (slot.ya_tomado) return [];
 
@@ -538,12 +547,13 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           alumnos_reservados: slot.ocupados,
           cupos_disponibles: slot.disponibles,
           es_slot_feriado_habilitado: slot.origen !== 'regular',
-          creado_desde_feriado_id: slot.feriado_id
+          creado_desde_feriado_id: slot.feriado_id,
+          yaTieneClase: fechasConClase.has(normalizeDateKey(slot.fecha))
         };
 
-        // Un horario completo se lista una sola vez: el día se puede abrir
-        // y la clase figura como Completo, sin botón de reserva.
-        if (slot.disponibles <= 0) {
+        // Un horario completo, o un día en el que el alumno ya tiene clase,
+        // se lista una sola vez y sin botón de reserva.
+        if (slot.disponibles <= 0 || base.yaTieneClase) {
           return [{ ...base, id: `${base.turno_fecha}_${slot.clase_numero}_lleno`, reservado: true }];
         }
 
@@ -1490,12 +1500,15 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
       });
 
       if (error) {
-        const mensaje = error.message || '';
+        const mensaje = (error.message || '').split('\n')[0];
+        const enMinuscula = mensaje.toLowerCase();
         toast({
           title: "No se pudo reservar",
-          description: mensaje.toLowerCase().includes('cupo completo')
+          description: enMinuscula.includes('cupo completo')
             ? 'Esa clase está completa'
-            : mensaje,
+            : enMinuscula.includes('clase ese día')
+              ? 'Ya tenés una clase ese día'
+              : mensaje,
           variant: "destructive",
         });
         return;
@@ -2098,10 +2111,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 const primerTurno = turnosFiltrados[0];
                 const cuposDisponibles = primerTurno?.cupos_disponibles || 0;
                 const bloqueado = primerTurno?.bloqueadoPorAdmin || false;
+                const yaTieneClase = Boolean(primerTurno?.yaTieneClase);
                 return {
                   horario: key,
                   turnos: turnosFiltrados,
-                  tieneCupos: cuposDisponibles > 0 && !bloqueado,
+                  yaTieneClase,
+                  tieneCupos: cuposDisponibles > 0 && !bloqueado && !yaTieneClase,
                   cuposDisponibles
                 };
               }).filter(clase => clase.turnos.length > 0);
@@ -2125,14 +2140,16 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         key={idx}
                         className={`
                           flex items-center justify-between p-3 rounded-lg border
-                          ${clase.tieneCupos 
+                          ${clase.yaTieneClase
+                            ? 'border-border bg-muted/40 opacity-80 cursor-not-allowed'
+                            : clase.tieneCupos 
                             ? 'border-green-500/30 bg-green-500/10 hover:bg-green-500/20 cursor-pointer' 
                             : 'border-red-500/30 bg-red-500/10 opacity-60 cursor-not-allowed'
                           }
                           transition-colors
                         `}
                         onClick={() => {
-                          if (clase.tieneCupos && clase.turnos.length > 0) {
+                          if (clase.tieneCupos && !clase.yaTieneClase && clase.turnos.length > 0) {
                             handleReservarClick(clase.turnos[0]);
                             setShowVacantesDayModal(false);
                           }
@@ -2141,7 +2158,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                         <div className="flex items-center gap-3 flex-1">
                           <div className={`
                             w-3 h-3 rounded-full flex-shrink-0
-                            ${clase.tieneCupos ? 'bg-green-500' : 'bg-red-500'}
+                            ${clase.yaTieneClase ? 'bg-muted-foreground' : clase.tieneCupos ? 'bg-green-500' : 'bg-red-500'}
                           `} />
                           <div className="flex-1">
                             <div className="font-medium text-sm">
@@ -2150,7 +2167,9 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                             {/* En mobile el color del punto ya dice si hay lugar;
                                 el conteo exacto solo se muestra en desktop. */}
                             <div className="text-xs text-muted-foreground mt-1">
-                              {clase.tieneCupos ? (
+                              {clase.yaTieneClase ? (
+                                'Ya tenés clase este día'
+                              ) : clase.tieneCupos ? (
                                 <span className="hidden sm:inline">
                                   {clase.cuposDisponibles} cupo{clase.cuposDisponibles > 1 ? 's' : ''} disponible{clase.cuposDisponibles > 1 ? 's' : ''}
                                 </span>
