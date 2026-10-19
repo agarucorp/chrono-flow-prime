@@ -70,35 +70,53 @@ export const ProfileSettingsDialog: React.FC<ProfileSettingsDialogProps> = ({ op
       toast.error('El DNI puede tener hasta 8 números');
       return;
     }
+    const datos = {
+      first_name: firstName.trim() || null,
+      last_name: lastName.trim() || null,
+      full_name: [firstName.trim(), lastName.trim()].filter(Boolean).join(' ') || null,
+      phone: phone.trim() || null,
+      dni: dniLimpio || null,
+    };
+
     try {
       setSaving(true);
-      // Actualizar metadata del usuario (seguro aunque no exista profiles)
-      await supabase.auth.updateUser({
+      const { error: authError } = await supabase.auth.updateUser({
         data: {
-          first_name: firstName || null,
-          last_name: lastName || null,
-          phone: phone || null,
-          dni: dniLimpio || null,
+          first_name: datos.first_name,
+          last_name: datos.last_name,
+          phone: datos.phone,
+          dni: datos.dni,
         },
       });
+      if (authError) {
+        console.error('No se pudo actualizar la metadata del usuario:', authError);
+      }
 
-      // Intentar persistir también en profiles si la tabla existe
-      const { error } = await supabase
+      // Update, no upsert: el email es obligatorio y no viene en el formulario.
+      // Un insert sin email falla, y el aviso anterior lo tomaba como éxito.
+      const { data: actualizado, error } = await supabase
         .from('profiles')
-        .upsert({
-          id: userId,
-          first_name: firstName || null,
-          last_name: lastName || null,
-          phone: phone || null,
-          dni: dniLimpio || null,
-          updated_at: new Date().toISOString(),
-        }, { onConflict: 'id' });
+        .update(datos)
+        .eq('id', userId)
+        .select('id');
 
-      if (error && (error.code === 'PGRST116' || (error.message || '').includes('relation'))) {
-        // Tabla no existe: metadata ya actualizada
-      } else if (error) {
+      if (error) {
         toast.error('No se pudo guardar el perfil');
         return;
+      }
+
+      if (!actualizado || actualizado.length === 0) {
+        if (!email) {
+          toast.error('No se pudo guardar el perfil');
+          return;
+        }
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert({ id: userId, email, ...datos });
+        if (insertError) {
+          toast.error('No se pudo guardar el perfil');
+          return;
+        }
       }
 
       toast.success('Perfil actualizado');

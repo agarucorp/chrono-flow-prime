@@ -38,6 +38,7 @@ import { useNotifications } from '@/hooks/useNotifications';
 import { CalendarView } from '@/components/CalendarView';
 import { TurnoManagement } from '@/components/TurnoManagement';
 import { RecordsAdminPanel } from '@/components/RecordsAdminPanel';
+import { HistorialUsuarioDialog } from '@/components/HistorialUsuarioDialog';
 import { FeriadosConfigModal } from '@/components/FeriadosConfigModal';
 import { FinSemanaConfigModal } from '@/components/FinSemanaConfigModal';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -90,6 +91,7 @@ export default function Admin() {
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'client'>('all');
   const [selectedUser, setSelectedUser] = useState<AdminUser | null>(null);
   const [showUserDetails, setShowUserDetails] = useState(false);
+  const [historialUsuario, setHistorialUsuario] = useState<{ id: string; nombre: string } | null>(null);
   const [paymentSortOrder, setPaymentSortOrder] = useState<'default' | 'pendiente_first' | 'pagado_first'>('default');
   const [cuotasMap, setCuotasMap] = useState<Record<string, { monto: number; estado: 'pendiente'|'abonada'|'vencida' }>>({});
   const [balanceRows, setBalanceRows] = useState<Array<{ usuario_id: string; nombre: string; email: string; monto: number; montoOriginal: number; estado: 'pendiente'|'abonada'|'vencida'; descuento: number; descuentoMonto: number; tipoPago: 'transferencia' | 'efectivo' }>>([]);
@@ -887,6 +889,11 @@ export default function Admin() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <HistorialUsuarioDialog
+        usuario={historialUsuario}
+        onClose={() => setHistorialUsuario(null)}
+      />
+
       <div className="w-full max-w-full px-4 pb-4 md:pb-8 mx-auto">
         {/* Tabs principales */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full max-w-full">
@@ -929,7 +936,8 @@ export default function Admin() {
                         <th className="text-left p-3 font-medium min-w-[110px]">DNI</th>
                         <th className="text-left p-3 font-medium min-w-[100px]">Plan</th>
                         <th className="text-left p-3 font-medium min-w-[200px]">Horarios</th>
-                        <th className="text-left p-3 font-medium min-w-[140px]">Acciones</th>
+                        <th className="text-left p-3 font-medium min-w-[150px]">Cambios realizados</th>
+                        <th className="text-left p-3 font-medium min-w-[80px]">Acciones</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1001,6 +1009,16 @@ export default function Admin() {
                               })()}
                             </td>
                             <td className="p-3">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 text-xs"
+                                onClick={() => setHistorialUsuario({ id: user.id, nombre: getDisplayFullName(user) })}
+                              >
+                                Ver cambios
+                              </Button>
+                            </td>
+                            <td className="p-3">
                               <div className="flex items-center justify-start">
                                 <DropdownMenu>
                                   <DropdownMenuTrigger asChild>
@@ -1040,7 +1058,7 @@ export default function Admin() {
 
                 {/* Vista móvil - Lista con scroll horizontal */}
                 <div className="md:hidden overflow-x-auto w-full">
-                  <div className="min-w-[620px]">
+                  <div className="min-w-[760px]">
                     {/* Encabezados de columna */}
                     <div className="flex items-center px-4 py-2 border-b bg-muted/30 gap-4">
                       <div className="flex-1 min-w-[160px]">
@@ -1054,6 +1072,9 @@ export default function Admin() {
                       </div>
                       <div className="flex-1 text-center min-w-[150px]">
                         <p className="text-xs font-medium text-foreground/80 uppercase">Horarios</p>
+                      </div>
+                      <div className="w-[108px] shrink-0 text-center">
+                        <p className="text-xs font-medium text-foreground/80 uppercase">Cambios</p>
                       </div>
                     </div>
                     
@@ -1112,6 +1133,19 @@ export default function Admin() {
                                   ))}
                                 </div>
                               )}
+                            </div>
+                            <div className="w-[108px] shrink-0 text-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 px-2 text-[10px]"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setHistorialUsuario({ id: user.id, nombre: getDisplayFullName(user) });
+                                }}
+                              >
+                                Ver cambios
+                              </Button>
                             </div>
                           </div>
                         );
