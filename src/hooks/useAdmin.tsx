@@ -549,17 +549,18 @@ export const useAdmin = () => {
     }
   };
 
-  // Desactivar usuario (marcar como inactivo a partir del mes siguiente)
-  const deleteUser = async (userId: string) => {
+  // Desde esa fecha la persona deja de ocupar el cupo. No toca la cuota.
+  const deleteUser = async (userId: string, fechaDesactivacion: string) => {
     if (!isAdmin) return { success: false, error: 'No tienes permisos de administrador' };
 
-    try {
-      // Calcular el primer día del mes siguiente
-      const ahora = new Date();
-      const primerDiaMesSiguiente = new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1);
-      const fechaDesactivacion = formatLocalDate(primerDiaMesSiguiente);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(fechaDesactivacion)) {
+      return { success: false, error: 'Elegí una fecha válida' };
+    }
+    if (fechaDesactivacion < formatLocalDate(new Date())) {
+      return { success: false, error: 'La fecha no puede ser anterior a hoy' };
+    }
 
-      // Actualizar el perfil: establecer fecha de desactivación (el usuario seguirá activo hasta esa fecha)
+    try {
       const { error } = await supabase
         .from('profiles')
         .update({

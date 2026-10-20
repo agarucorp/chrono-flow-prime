@@ -21,7 +21,7 @@ import {
   Ticket
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
-import { monthNameEs } from '@/lib/dateLocal';
+import { formatLocalDate, monthNameEs } from '@/lib/dateLocal';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -61,6 +61,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 export default function Admin() {
   const { user, signOut } = useAuthContext();
@@ -717,25 +718,43 @@ export default function Admin() {
   // Estado popup confirmación eliminar usuario
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [fechaBaja, setFechaBaja] = useState('');
 
-  // Abrir confirmación
+  const primerDiaMesSiguiente = () => {
+    const ahora = new Date();
+    return formatLocalDate(new Date(ahora.getFullYear(), ahora.getMonth() + 1, 1));
+  };
+
+  const etiquetaFechaBaja = (iso: string) => {
+    const [anio, mes, dia] = iso.split('-').map(Number);
+    if (!anio || !mes || !dia) return iso;
+    return new Date(anio, mes - 1, dia).toLocaleDateString('es-AR', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
   const requestDeleteUser = (userId: string, userName: string) => {
     setDeleteTarget({ id: userId, name: userName });
+    setFechaBaja(primerDiaMesSiguiente());
     setConfirmDeleteOpen(true);
   };
 
-  // Confirmar eliminación
   const handleConfirmDeleteUser = async () => {
-    if (!deleteTarget) return;
-      const loadingToast = showLoading('Desactivando usuario...');
-    const result = await deleteUser(deleteTarget.id);
+    if (!deleteTarget || !fechaBaja) return;
+    const loadingToast = showLoading('Desactivando usuario...');
+    const result = await deleteUser(deleteTarget.id, fechaBaja);
     dismissToast(loadingToast);
     if (result.success) {
-      showSuccess('Usuario desactivado', 'El usuario quedará inactivo a partir del próximo mes');
+      showSuccess(
+        'Usuario desactivado',
+        `Deja de ocupar el cupo desde el ${etiquetaFechaBaja(fechaBaja)}. La cuota no se modificó.`
+      );
       setConfirmDeleteOpen(false);
       setDeleteTarget(null);
     } else {
-      showError('Error al eliminar usuario', result.error || 'No se pudo eliminar el usuario');
+      showError('No se pudo desactivar', result.error || 'No se pudo desactivar el usuario');
     }
   };
 
@@ -1785,23 +1804,43 @@ export default function Admin() {
       )}
 
       {/* Confirmación eliminar usuario */}
-      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
-        <AlertDialogContent className="w-[85vw] sm:w-[380px] max-w-sm">
-          <AlertDialogHeader>
-            <AlertDialogTitle>Desactivar usuario</AlertDialogTitle>
-            <AlertDialogDescription>
-              ¿Estás seguro de que deseas desactivar a {deleteTarget?.name || 'este usuario'}?
-              El usuario quedará inactivo a partir del mes siguiente. Sus datos históricos se mantendrán, pero no podrá realizar nuevas reservas.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:flex-1">Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmDeleteUser} className="w-full sm:flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90">
+      <Dialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <DialogContent className="w-[min(94vw,26rem)]">
+          <DialogHeader>
+            <DialogTitle>Desactivar a {deleteTarget?.name || 'este usuario'}</DialogTitle>
+            <DialogDescription>
+              Elegí desde qué día deja de ocupar el cupo. La cuota no se modifica.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 text-sm text-foreground/90">
+            <p>Desde esa fecha otro alumno puede anotarse en su lugar. Hasta el día anterior sigue en sus clases y puede reservar.</p>
+            <p>Los horarios quedan guardados. Si hay que restar clases de este mes, descontalo a mano en Balance.</p>
+            <div className="space-y-1.5">
+              <label htmlFor="fecha-baja" className="text-xs text-muted-foreground">Deja de ocupar el cupo desde</label>
+              <Input
+                id="fecha-baja"
+                type="date"
+                min={formatLocalDate(new Date())}
+                value={fechaBaja}
+                onChange={(event) => setFechaBaja(event.target.value)}
+                className="h-9 [color-scheme:dark]"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="w-full sm:flex-1" onClick={() => setConfirmDeleteOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              className="w-full sm:flex-1 bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={!fechaBaja}
+              onClick={handleConfirmDeleteUser}
+            >
               Desactivar
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Historial de Usuario */}
       {showHistoryModal && selectedUserForHistory && (
