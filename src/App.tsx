@@ -403,7 +403,7 @@ const Dashboard = () => {
           <p className="text-[10px] uppercase tracking-wide text-red-600 md:text-[9px]">Clase cancelada</p>
           <p className="mt-1 text-red-600 line-through">18:00 - 19:00</p>
           <p className="mt-2 text-[10px] text-red-700 dark:text-red-200 md:text-[9px]">
-            Cuando canceles una clase aparecerá tachada, con la etiqueta Cancelada. Si el día queda anulado por feriado, la misma clase aparece tachada con la etiqueta Feriado. Si cancelás con más de {HORAS_CANCELACION_SEGURA}hs de anticipación te queda una clase a favor: cubre una vacante sin cargo durante {DIAS_CLASE_A_FAVOR} días. Después de ese plazo podés reservar igual, y la clase se suma a la cuota.
+            Cuando canceles una clase aparecerá tachada, con la etiqueta Cancelada. Si el día queda anulado por feriado, la misma clase aparece tachada con la etiqueta Feriado. Si cancelás con más de {HORAS_CANCELACION_SEGURA}hs de anticipación te queda una clase a favor durante {DIAS_CLASE_A_FAVOR} días. En ese plazo podés elegir cualquier clase, aunque sea de más adelante, y sale sin cargo.
           </p>
         </div>
         <div className="rounded-lg border border-emerald-200 bg-emerald-50/80 p-3 text-[11px] dark:border-emerald-900/40 dark:bg-emerald-950/25 md:text-[10px]">
@@ -997,7 +997,7 @@ const Dashboard = () => {
                           </CardHeader>
                           <CardContent className="space-y-3 text-sm">
                             <p className="text-muted-foreground">
-                              Por cada clase cancelada con anticipación, la clase a favor cubre una vacante sin cargo hasta que venza. Después de esa fecha podés reservar igual, y la clase se suma a la cuota.
+                              Por cada clase cancelada con anticipación tenés una clase a favor hasta la fecha de vencimiento. Si la usás antes, la clase que elijas sale sin cargo aunque sea de otro mes.
                             </p>
                             {clasesAFavor.clases.map((c) => (
                               <div key={c.cancelacionId} className="flex items-center justify-between">

@@ -31,8 +31,8 @@ export interface ClaseAFavor {
  * Clases a favor vigentes del alumno logueado.
  *
  * Las calcula el servidor (fn_clases_a_favor): cada clase del plan cancelada a
- * tiempo deja una, que paga una vacante sin cargo hasta 10 días después de la
- * cancelación. Se recarga con 'balance:refresh', que ya se dispara ante
+ * tiempo deja una, vigente 10 días. En ese plazo paga cualquier clase que
+ * elija, aunque sea de más adelante. Se recarga con 'balance:refresh', que ya se dispara ante
  * cualquier cancelación o reserva.
  */
 export const useClasesAFavor = () => {
@@ -77,9 +77,10 @@ export const useClasesAFavor = () => {
     return () => window.removeEventListener('balance:refresh', reload);
   }, [load]);
 
-  /** La clase a favor que pagaría una vacante en esa fecha: la que vence primero. */
+  /** La clase a favor que pagaría la reserva: la que vence primero.
+   *  El plazo limita hasta cuándo se puede canjear, no la fecha de la clase. */
   const paraFecha = useCallback(
-    (fecha: string) => clases.find((c) => c.vence >= fecha) ?? null,
+    (_fecha: string) => clases[0] ?? null,
     [clases]
   );
 
