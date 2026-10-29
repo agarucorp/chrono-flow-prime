@@ -26,6 +26,11 @@ import { normalizeTimeToHhMm, formatClockAmPm, formatClockRangeAmPm } from '@/li
 import { todayLocal, formatMonthYearEs, lowercaseSpanishMonths, addDaysLocal, formatLocalDate } from '@/lib/dateLocal';
 import { useClasesAFavor, formatFechaCorta, DIAS_CLASE_A_FAVOR, HORAS_CANCELACION_SEGURA } from '@/hooks/useClasesAFavor';
 
+// Hasta dónde se puede mirar y reservar (mes en curso + este número).
+// Los 10 días de la clase a favor no entran acá: solo dicen hasta cuándo
+// esa vacante sale sin cargo. Una fecha posterior se reserva igual y se cobra.
+const MESES_PARA_RESERVAR = 2;
+
 interface HorarioRecurrente {
   id: string;
   dia_semana: number;
@@ -511,8 +516,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     try {
       const fechaHoy = new Date();
       const fechaDesde = format(fechaHoy, 'yyyy-MM-dd');
-      const ultimoDiaMesSiguiente = new Date(fechaHoy.getFullYear(), fechaHoy.getMonth() + 2, 0);
-      const fechaHasta = format(ultimoDiaMesSiguiente, 'yyyy-MM-dd');
+      const fechaHasta = format(endOfMonth(addMonths(fechaHoy, MESES_PARA_RESERVAR)), 'yyyy-MM-dd');
 
       const { data: slots, error } = await supabase.rpc('fn_slots_disponibilidad', {
         p_desde: fechaDesde,
@@ -1422,8 +1426,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           : `Cancelaste con menos de ${horas}hs de anticipación, así que la clase se cobra igual.`;
       } else if (resultado?.clase_a_favor && resultado.clase_a_favor_vence) {
         descripcion = resultado.vacante_con_clase_a_favor
-          ? `Te devolvimos la clase a favor. Podés usarla en otra vacante hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}.`
-          : `Te queda una clase a favor para reservar una vacante sin cargo hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}.`;
+          ? `Te devolvimos la clase a favor. Cubre una vacante sin cargo hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}. Después de esa fecha la reserva se cobra.`
+          : `Te queda una clase a favor hasta el ${formatFechaCorta(resultado.clase_a_favor_vence)}. Hasta ese día cubre una vacante sin cargo. Después podés reservar igual, y se cobra.`;
       } else if (resultado?.origen === 'variable') {
         descripcion = "El cupo quedó disponible para otro alumno y la vacante no se te cobra.";
       } else {
@@ -1568,11 +1572,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
   // Verificar si se puede navegar al mes siguiente
   const canNavigateNext = () => {
-    const today = new Date();
-    const nextMonth = addMonths(today, 1);
-    const currentMonthStart = startOfMonth(currentMonth);
-    const nextMonthStart = startOfMonth(nextMonth);
-    return currentMonthStart.getTime() < nextMonthStart.getTime();
+    const limite = startOfMonth(addMonths(new Date(), MESES_PARA_RESERVAR));
+    return startOfMonth(currentMonth).getTime() < limite.getTime();
   };
 
   if (loading) {
@@ -1908,13 +1909,12 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
           hoy.setHours(0, 0, 0, 0);
 
           // Verificar si podemos navegar hacia atrás/adelante
-          const mesActual = new Date();
-          mesActual.setDate(1);
-          mesActual.setHours(0, 0, 0, 0);
-          const mesSiguiente = addMonths(mesActual, 1);
-          
-          const puedeIrAtras = vacantesCalendarMonth > mesActual;
-          const puedeIrAdelante = vacantesCalendarMonth < mesSiguiente;
+          const mesActual = startOfMonth(new Date());
+          const mesLimite = startOfMonth(addMonths(mesActual, MESES_PARA_RESERVAR));
+          const mesVista = startOfMonth(vacantesCalendarMonth);
+
+          const puedeIrAtras = mesVista > mesActual;
+          const puedeIrAdelante = mesVista < mesLimite;
 
           return (
             <div className="w-full">
@@ -2044,8 +2044,8 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                   </p>
                   <p className="text-white/80">
                     {clasesAFavor.cantidad === 1
-                      ? `Reservá una vacante sin cargo hasta el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`
-                      : `Cada una paga una vacante sin cargo. La próxima vence el ${formatFechaCorta(clasesAFavor.proxima.vence)}.`}
+                      ? `Cubre una vacante sin cargo hasta el ${formatFechaCorta(clasesAFavor.proxima.vence)}. Después de esa fecha podés reservar igual, y la clase se suma a la cuota.`
+                      : `Cada una cubre una vacante sin cargo. La próxima vence el ${formatFechaCorta(clasesAFavor.proxima.vence)}. Después de esa fecha podés reservar igual, y la clase se suma a la cuota.`}
                   </p>
                 </div>
               </div>
@@ -2257,7 +2257,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                 <p className="text-sm text-muted-foreground">
                   <strong>Importante:</strong> si no cancelás la clase antes de las {HORAS_CANCELACION_SEGURA}hs del comienzo de la misma, se te cobrará el 100% del valor.
                   {!selectedClase.horario.esVariable &&
-                    ` Si cancelás antes, te queda una clase a favor para reservar una vacante sin cargo dentro de los ${DIAS_CLASE_A_FAVOR} días.`}
+                    ` Si cancelás antes, te queda una clase a favor: cubre una vacante sin cargo durante ${DIAS_CLASE_A_FAVOR} días. Pasado ese plazo podés reservar igual, y la clase se suma a la cuota.`}
                 </p>
               </div>
 
@@ -2347,7 +2347,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
                           ? 'La clase a favor que usaste para reservarla vuelve a quedar disponible.'
                           : esVacante
                             ? `Al cancelar con más de ${HORAS_CANCELACION_SEGURA}hs de anticipación, no se te cobrará esta vacante.`
-                            : `Te queda una clase a favor para reservar una vacante sin cargo hasta el ${venceNueva}.`}
+                            : `Te queda una clase a favor hasta el ${venceNueva}. Hasta ese día cubre una vacante sin cargo. Después podés reservar igual, y la clase se suma a la cuota.`}
                       </span>
                     </div>
                   </div>

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatLocalDate, monthNameEs } from '@/lib/dateLocal';
+import { formatClockAmPm, formatClockRangeAmPm } from '@/lib/timeFormat';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -84,7 +85,7 @@ export default function Admin() {
   } = useAdmin();
   const clasesAFavor = useAdminClasesAFavor(isAdmin);
   
-  const [horariosConHoras, setHorariosConHoras] = useState<Record<string, Array<{ dia: string; hora_inicio: string }>>>({});
+  const [horariosConHoras, setHorariosConHoras] = useState<Record<string, Array<{ dia: string; hora_inicio: string; hora_fin: string }>>>({});
   
   const { showSuccess, showError, showWarning, showLoading, dismissToast } = useNotifications();
   
@@ -334,18 +335,15 @@ export default function Admin() {
         'Viernes': 5, 'Sábado': 6, 'Domingo': 7
       };
 
-      const diasUnicos = Array.from(
-        new Set(
-          horarios
-            .map((h) => h?.dia)
-            .filter((d): d is string => Boolean(d && diaMap[d]))
-        )
-      );
-
-      return diasUnicos
-        .sort((a, b) => (diaMap[a] || 99) - (diaMap[b] || 99))
+      return horarios
+        .filter((h) => Boolean(h?.dia && diaMap[h.dia]))
+        .sort((a, b) => (diaMap[a.dia] || 99) - (diaMap[b.dia] || 99))
         .slice(0, 5)
-        .map((d) => getDiaCorto(diaMap[d]));
+        .map((h) => {
+          const corto = getDiaCorto(diaMap[h.dia]);
+          const hora = formatClockAmPm(h.hora_inicio);
+          return hora ? `${corto} ${hora}` : corto;
+        });
     } catch (error) {
       console.error('Error obteniendo horarios usuario:', error, userId);
       return [];
@@ -1758,42 +1756,29 @@ export default function Admin() {
 
               
               <div>
-                <label className="text-sm font-medium">Días de Asistencia</label>
+                <label className="text-sm font-medium">Horarios de asistencia</label>
                 {(() => {
-                    if (!selectedUser || !selectedUser.horarios_recurrentes || selectedUser.horarios_recurrentes.length === 0) {
-                      return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
-                    }
-                    
-                    // Extraer todos los días únicos de todos los horarios
-                    const diasSet = new Set<string>();
-                    for (const h of selectedUser.horarios_recurrentes) {
-                      if (h.dias_semana && Array.isArray(h.dias_semana)) {
-                        h.dias_semana.forEach(dia => diasSet.add(dia));
-                      }
-                    }
-                    
-                    if (diasSet.size === 0) {
-                      return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
-                    }
-                    
-                    // Mapear días de texto a números para ordenar
+                    const horarios = horariosConHoras[selectedUser.id] || [];
                     const diaMap: Record<string, number> = {
-                      'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4, 
+                      'Lunes': 1, 'Martes': 2, 'Miércoles': 3, 'Jueves': 4,
                       'Viernes': 5, 'Sábado': 6, 'Domingo': 7
                     };
-                    
-                    const dias = Array.from(diasSet)
-                      .map(dia => diaMap[dia] || 0)
-                      .filter(d => d !== 0)
-                      .sort((a, b) => a - b);
-                    
+                    const ordenados = horarios
+                      .filter((h) => h?.dia && diaMap[h.dia])
+                      .sort((a, b) => diaMap[a.dia] - diaMap[b.dia]);
+                    if (ordenados.length === 0) {
+                      return <p className="text-sm text-muted-foreground">Sin horarios recurrentes configurados</p>;
+                    }
                     return (
-                      <div className="flex flex-wrap gap-2">
-                        {dias.map(d => (
-                          <span key={d} className="px-2 py-1 rounded bg-muted text-sm">
-                            {getDiaCorto(d)}
-                          </span>
-                        ))}
+                      <div className="mt-1 space-y-1">
+                        {ordenados.map((h) => {
+                          const rango = formatClockRangeAmPm(h.hora_inicio, h.hora_fin);
+                          return (
+                            <p key={h.dia} className="text-sm text-muted-foreground">
+                              {h.dia}{rango ? ` · ${rango}` : ''}
+                            </p>
+                          );
+                        })}
                       </div>
                     );
                   })()}

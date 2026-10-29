@@ -183,14 +183,15 @@ export const useAdmin = () => {
     }
   }, []);
 
-  // Nueva función para obtener horarios con horas de inicio
-  const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string }>>> => {
+  // Horario vigente de cada alumno: un día con su hora. Si cambió de plan y
+  // quedan dos filas del mismo día, queda la que ya empezó y es la más nueva.
+  const fetchHorariosConHoras = useCallback(async (): Promise<Record<string, Array<{ dia: string; hora_inicio: string; hora_fin: string }>>> => {
     try {
       const { todayLocal } = await import('@/lib/dateLocal');
       const hoyISO = todayLocal();
       const { data, error } = await supabase
         .from('horarios_recurrentes_usuario')
-        .select('usuario_id, dia_semana, hora_inicio, activo, fecha_fin')
+        .select('usuario_id, dia_semana, hora_inicio, hora_fin, activo, fecha_fin, fecha_inicio')
         .or('activo.eq.true,activo.is.null');
 
       if (error) {
@@ -198,19 +199,39 @@ export const useAdmin = () => {
         return {};
       }
 
-      return (data || []).reduce<Record<string, Array<{ dia: string; hora_inicio: string }>>>((acc, row: any) => {
-        // No contar horarios cerrados en el pasado.
-        if (row?.fecha_fin && row.fecha_fin < hoyISO) return acc;
+      const porUsuario = new Map<string, Map<string, { dia: string; hora_inicio: string; hora_fin: string; fecha_inicio: string | null }>>();
+      for (const row of data || []) {
+        if (row?.fecha_fin && row.fecha_fin < hoyISO) continue;
         const diaNombre = DIA_SEMANA_MAP[row.dia_semana];
-        if (!diaNombre) return acc;
-        if (!acc[row.usuario_id]) {
-          acc[row.usuario_id] = [];
+        if (!diaNombre || !row.usuario_id) continue;
+        const inicio = row.fecha_inicio || null;
+        const vigente = !inicio || inicio <= hoyISO;
+        if (!porUsuario.has(row.usuario_id)) porUsuario.set(row.usuario_id, new Map());
+        const dias = porUsuario.get(row.usuario_id)!;
+        const previo = dias.get(diaNombre);
+        const previoVigente = previo ? !previo.fecha_inicio || previo.fecha_inicio <= hoyISO : false;
+        const reemplaza = !previo
+          || (vigente && !previoVigente)
+          || (vigente === previoVigente && (inicio || '') > (previo?.fecha_inicio || ''));
+        if (reemplaza) {
+          dias.set(diaNombre, {
+            dia: diaNombre,
+            hora_inicio: row.hora_inicio,
+            hora_fin: row.hora_fin,
+            fecha_inicio: inicio,
+          });
         }
-        // Deduplicar por día para evitar repetir badges en la tabla admin.
-        if (acc[row.usuario_id].some((item) => item.dia === diaNombre)) return acc;
-        acc[row.usuario_id].push({ dia: diaNombre, hora_inicio: row.hora_inicio });
-        return acc;
-      }, {});
+      }
+
+      const acc: Record<string, Array<{ dia: string; hora_inicio: string; hora_fin: string }>> = {};
+      porUsuario.forEach((dias, usuarioId) => {
+        acc[usuarioId] = Array.from(dias.values()).map(({ dia, hora_inicio, hora_fin }) => ({
+          dia,
+          hora_inicio,
+          hora_fin,
+        }));
+      });
+      return acc;
     } catch (err) {
       console.error('❌ Error inesperado obteniendo horarios con horas:', err);
       return {};
