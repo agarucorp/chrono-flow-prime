@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { BellRing } from 'lucide-react';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { activarAvisos, desactivarAvisos, estadoAvisos, recibeAvisos, type EstadoAvisos } from '@/lib/avisosCelular';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
@@ -73,6 +75,64 @@ function punto(tipo: TipoActividad): string {
   if (tipo === 'reservo') return 'bg-sky-400';
   return 'bg-amber-300';
 }
+
+const TEXTO_AVISOS: Record<Exclude<EstadoAvisos, 'cargando' | 'activos' | 'inactivos'>, string> = {
+  bloqueados: 'Los avisos están bloqueados. Activalos en Ajustes > Notificaciones > MALDA.',
+  instalar_ios: 'Para recibir avisos en el iPhone, abrí esta página en Safari, tocá Compartir > Agregar a inicio y entrá desde ese ícono.',
+  no_soportado: 'Este navegador no permite avisos en el celular.',
+};
+
+const AvisosCelular = () => {
+  const { user } = useAuthContext();
+  const habilitado = recibeAvisos(user?.email);
+  const [estado, setEstado] = useState<EstadoAvisos>('cargando');
+  const [ocupado, setOcupado] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (!user?.id || !habilitado) return;
+    estadoAvisos(user.id).then(setEstado).catch(() => setEstado('inactivos'));
+  }, [user?.id, habilitado]);
+
+  const cambiar = async () => {
+    if (!user?.id) return;
+    setOcupado(true);
+    setError('');
+    try {
+      setEstado(estado === 'activos' ? await desactivarAvisos() : await activarAvisos(user.id));
+    } catch (err) {
+      console.error('Error con los avisos al celular:', err);
+      setError('No se pudo cambiar. Probá de nuevo.');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  if (!habilitado || estado === 'cargando') return null;
+
+  return (
+    <div className="border-t px-4 py-2.5 text-xs">
+      {estado === 'activos' || estado === 'inactivos' ? (
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-muted-foreground">
+            {estado === 'activos' ? 'Avisos activados en este celular.' : 'Recibí estos movimientos como aviso en el celular.'}
+          </span>
+          <button
+            type="button"
+            onClick={cambiar}
+            disabled={ocupado}
+            className="shrink-0 rounded-full border border-border px-3 py-1 transition-colors hover:text-foreground disabled:opacity-50"
+          >
+            {ocupado ? '...' : estado === 'activos' ? 'Desactivar' : 'Activar'}
+          </button>
+        </div>
+      ) : (
+        <p className="text-muted-foreground">{TEXTO_AVISOS[estado]}</p>
+      )}
+      {error && <p className="mt-1 text-red-400">{error}</p>}
+    </div>
+  );
+};
 
 export const AdminActividadBell = () => {
   const { recientes, historial, cargandoHistorial, truncado, cargarHistorial } = useAdminActividad(true);
@@ -189,6 +249,7 @@ export const AdminActividadBell = () => {
           >
             Ver historial
           </button>
+          <AvisosCelular />
         </PopoverContent>
       </Popover>
 

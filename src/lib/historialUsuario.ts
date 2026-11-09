@@ -205,14 +205,29 @@ function armarCancelaciones(filas: Cancelacion[], reservas: Reserva[], porId: Ma
 
   return filas.flatMap((fila) => {
     const tipo = String(fila.tipo_cancelacion || '').toLowerCase();
-    if (tipo && tipo !== 'usuario' && tipo !== 'admin') return [];
+    if (tipo && tipo !== 'usuario' && tipo !== 'admin' && tipo !== 'feriado') return [];
     const cuando = fila.fecha_cancelacion || fila.created_at;
     if (!cuando) return [];
 
     const clase = etiquetaClase(fila.turno_fecha, fila.turno_hora_inicio, fila.turno_hora_fin);
     const desdeAdmin = tipo === 'admin';
+    const porFeriado = tipo === 'feriado';
     const tardia = Boolean(fila.cancelacion_tardia);
     const esPlan = (fila.origen || 'recurrente') !== 'variable';
+
+    if (esPlan && porFeriado) {
+      const vence = [sumarDias(fechaArgentina(cuando), DIAS_A_FAVOR), sumarDias(fila.turno_fecha, DIAS_A_FAVOR)].sort()[1];
+      return [{
+        id: `cancel-${fila.id}`,
+        tipo: 'cancelo' as const,
+        esFavor: true,
+        ocurridoEn: cuando,
+        lineas: [
+          `El feriado canceló la clase del ${clase}.`,
+          `Le quedó una clase a favor de esa clase, para usar hasta el ${etiquetaFecha(vence)}.`,
+        ],
+      }];
+    }
 
     if (esPlan) {
       return [{
@@ -238,7 +253,9 @@ function armarCancelaciones(filas: Cancelacion[], reservas: Reserva[], porId: Ma
       ? etiquetaClase(credito.turno_fecha, credito.turno_hora_inicio, credito.turno_hora_fin)
       : '';
     const lineas = [
-      `${desdeAdmin ? 'El admin le canceló' : 'Canceló'}${tardia ? ' tarde' : ''} la vacante del ${clase}.`,
+      porFeriado
+        ? `El feriado canceló la vacante del ${clase}.`
+        : `${desdeAdmin ? 'El admin le canceló' : 'Canceló'}${tardia ? ' tarde' : ''} la vacante del ${clase}.`,
     ];
     if (origen && tardia) lineas.push(`Perdió la clase a favor del ${origen}.`);
     if (origen && !tardia) lineas.push(`Le volvió la clase a favor del ${origen}.`);

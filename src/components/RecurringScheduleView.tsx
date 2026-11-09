@@ -134,6 +134,11 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
     const onVisibility = () => {
       const wasHidden = !pageVisibleRef.current;
       pageVisibleRef.current = document.visibilityState === 'visible';
+
+      // Un feriado cargado por el admin no llega por realtime.
+      if (pageVisibleRef.current && wasHidden) {
+        window.dispatchEvent(new CustomEvent('feriados:updated'));
+      }
       
       // Solo recargar si la página estaba oculta y vuelve a ser visible
       // Y si ha pasado más tiempo que el caché permite
@@ -1074,7 +1079,7 @@ export const RecurringScheduleView = ({ initialView = 'mis-clases', hideSubNav =
 
         const cancelacionesPorFecha = (cancelacionesMes || []).reduce<Record<string, Map<string, 'usuario' | 'admin' | 'sistema'>>>((acc, c: any) => {
           if (!acc[c.turno_fecha]) acc[c.turno_fecha] = new Map<string, 'usuario' | 'admin' | 'sistema'>();
-          const tipo = (c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema';
+          const tipo = (c.tipo_cancelacion === 'feriado' ? 'sistema' : c.tipo_cancelacion || 'usuario') as 'usuario' | 'admin' | 'sistema';
           const horaInicio = normalizeTimeToHhMm(c.turno_hora_inicio);
           const horaFin = normalizeTimeToHhMm(c.turno_hora_fin);
           acc[c.turno_fecha].set(`${horaInicio}-${horaFin}`, tipo);

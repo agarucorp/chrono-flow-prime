@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
@@ -57,19 +56,18 @@ const formatDate = (dateString: string) => {
   return `${day}/${month}/${year}`;
 };
 
-interface CapacidadClase {
-  clase_numero: number;
-  hora_inicio: string;
-  hora_fin: string;
-  capacidad: number;
-}
+const DIAS_CAPACIDAD = [1, 2, 3, 4, 5];
+
+const claveCapacidad = (dia: number, clase: number) => `${dia}-${clase}`;
 
 export const TurnoManagement = () => {
   const [cantidadAlumnos, setCantidadAlumnos] = useState('1');
   const [tarifaClase, setTarifaClase] = useState('');
   
-  // Capacidades por clase (9 clases)
-  const [capacidadesClases, setCapacidadesClases] = useState<Record<number, number>>({});
+  // Capacidad y alumnos con plan por día y clase, con clave `${dia}-${clase}`
+  const [capacidades, setCapacidades] = useState<Record<string, number>>({});
+  const [ocupacionPlan, setOcupacionPlan] = useState<Record<string, number>>({});
+  const [diaCapacidad, setDiaCapacidad] = useState<number | null>(null);
   
   // Tarifas escalonadas (valores se cargan desde BD)
   const [combo1Tarifa, setCombo1Tarifa] = useState('12500');
@@ -153,36 +151,50 @@ export const TurnoManagement = () => {
     cargarTarifas();
   }, []);
 
-  // Cargar capacidades de cada clase desde BD
   const cargarCapacidadesClases = async () => {
     try {
-      const { data, error } = await supabase
-        .from('horarios_semanales')
-        .select('clase_numero, capacidad, hora_inicio, hora_fin')
-        .eq('activo', true)
-        .eq('dia_semana', 1) // Usar lunes como referencia (todas las clases tienen la misma capacidad todos los días)
-        .order('clase_numero');
+      const [{ data, error }, { data: ocupacion, error: errorOcupacion }] = await Promise.all([
+        supabase
+          .from('horarios_semanales')
+          .select('dia_semana, clase_numero, capacidad, alumnos_agendados')
+          .eq('activo', true),
+        supabase.rpc('fn_ocupacion_plan_semanal'),
+      ]);
 
       if (error) {
         console.error('Error cargando capacidades de clases:', error);
         return;
       }
 
-      if (data && data.length > 0) {
-        const capacidades: Record<number, number> = {};
-        data.forEach((clase: any) => {
-          capacidades[clase.clase_numero] = clase.capacidad;
-        });
-        setCapacidadesClases(capacidades);
+      // La base exige alumnos_agendados <= capacidad, así que ese contador es
+      // el piso; la ocupación real de planes se suma por si van desfasados.
+      const porDia: Record<string, number> = {};
+      const anotados: Record<string, number> = {};
+      (data || []).forEach((fila: { dia_semana: number; clase_numero: number | null; capacidad: number; alumnos_agendados: number }) => {
+        if (fila.clase_numero == null) return;
+        const clave = claveCapacidad(fila.dia_semana, fila.clase_numero);
+        porDia[clave] = fila.capacidad;
+        anotados[clave] = Number(fila.alumnos_agendados) || 0;
+      });
+      setCapacidades(porDia);
+
+      if (errorOcupacion) {
+        console.error('Error cargando ocupación de planes:', errorOcupacion);
       }
+      (ocupacion || []).forEach((fila: { dia_semana: number; clase_numero: number | null; ocupados: number }) => {
+        if (fila.clase_numero == null) return;
+        const clave = claveCapacidad(fila.dia_semana, fila.clase_numero);
+        anotados[clave] = Math.max(anotados[clave] ?? 0, Number(fila.ocupados) || 0);
+      });
+      setOcupacionPlan(anotados);
     } catch (error) {
       console.error('Error inesperado cargando capacidades:', error);
     }
   };
 
-  // Cargar capacidades al abrir el dialog
   useEffect(() => {
     if (isDialogOpen) {
+      setDiaCapacidad(null);
       cargarCapacidadesClases();
     }
   }, [isDialogOpen]);
@@ -382,6 +394,33 @@ export const TurnoManagement = () => {
 
   const handleGuardarHorarios = async () => {
     if (guardando) return;
+
+    const sinCapacidad = DIAS_CAPACIDAD.flatMap((dia) =>
+      horariosFijos
+        .filter((h) => capacidades[claveCapacidad(dia, h.id)] === 0)
+        .map((h) => `${DIAS_SEMANA[dia - 1]} ${h.nombre}`)
+    );
+    if (sinCapacidad.length > 0) {
+      showError('Falta la capacidad', `Completá al menos 1 lugar en: ${sinCapacidad.join(', ')}`);
+      return;
+    }
+
+    const debajoDeAnotados = DIAS_CAPACIDAD.flatMap((dia) =>
+      horariosFijos
+        .filter((h) => {
+          const clave = claveCapacidad(dia, h.id);
+          return capacidades[clave] !== undefined && capacidades[clave] < (ocupacionPlan[clave] ?? 0);
+        })
+        .map((h) => `${DIAS_SEMANA[dia - 1]} ${h.nombre} (${ocupacionPlan[claveCapacidad(dia, h.id)]} con plan)`)
+    );
+    if (debajoDeAnotados.length > 0) {
+      showError(
+        'La capacidad no puede ser menor que los alumnos con plan',
+        debajoDeAnotados.join(', ')
+      );
+      return;
+    }
+
     setGuardando(true);
     const loadingToast = showLoading('Guardando configuración...');
 
@@ -425,19 +464,28 @@ export const TurnoManagement = () => {
         return;
       }
 
-      // La grilla se replica en los 7 días: sábado y domingo siguen a los hábiles
-      // para no quedar desfasados si después se habilita el fin de semana.
+      // Los horarios se replican en los 7 días: sábado y domingo siguen a los
+      // hábiles para no quedar desfasados si después se habilita el fin de semana.
+      // La capacidad es propia de cada día; el fin de semana conserva la suya.
       const diasSemana = [1, 2, 3, 4, 5, 6, 7];
       const nowIso = new Date().toISOString();
+      const capacidadPorDefecto = obtenerCapacidadActual();
 
       for (let i = 0; i < horariosFijos.length; i++) {
         const h = horariosFijos[i];
         const claseNumero = i + 1;
         const hi = (h.horaInicio || '00:00').substring(0, 5) + ':00';
         const hf = (h.horaFin || '00:00').substring(0, 5) + ':00';
-        const capacidadClase = Number(
-          capacidadesClases[h.id] ?? capacidadesClases[claseNumero] ?? 4
-        );
+        // Se busca por h.id porque al quitar una clase las siguientes se
+        // renumeran y la capacidad tiene que seguir a su horario.
+        const capacidadDelDia = (dia: number) => {
+          const valor = Number(
+            capacidades[claveCapacidad(dia, h.id)] ??
+              capacidades[claveCapacidad(1, h.id)] ??
+              capacidadPorDefecto
+          );
+          return Math.max(1, Math.round(valor) || capacidadPorDefecto);
+        };
 
         const { data: existentes, error: errorExistentes } = await supabase
           .from('horarios_semanales')
@@ -456,7 +504,6 @@ export const TurnoManagement = () => {
           .update({
             hora_inicio: hi,
             hora_fin: hf,
-            capacidad: capacidadClase,
             activo: true,
             updated_at: nowIso,
           })
@@ -467,6 +514,27 @@ export const TurnoManagement = () => {
           dismissToast(loadingToast);
           showError(`No se pudo guardar la Clase ${claseNumero}`, errorUpd.message);
           return;
+        }
+
+        const diasPorCapacidad = new Map<number, number[]>();
+        DIAS_CAPACIDAD.forEach((dia) => {
+          const capacidad = capacidadDelDia(dia);
+          diasPorCapacidad.set(capacidad, [...(diasPorCapacidad.get(capacidad) || []), dia]);
+        });
+
+        for (const [capacidad, diasConCapacidad] of diasPorCapacidad) {
+          const { error: errorCap } = await supabase
+            .from('horarios_semanales')
+            .update({ capacidad, updated_at: nowIso })
+            .eq('clase_numero', claseNumero)
+            .in('dia_semana', diasConCapacidad);
+
+          if (errorCap) {
+            console.error('Error actualizando capacidad:', { clase: claseNumero, errorCap });
+            dismissToast(loadingToast);
+            showError(`No se pudo guardar la capacidad de la Clase ${claseNumero}`, errorCap.message);
+            return;
+          }
         }
 
         const diasExistentes = new Set((existentes || []).map((e: { dia_semana: number }) => e.dia_semana));
@@ -480,7 +548,7 @@ export const TurnoManagement = () => {
                 clase_numero: claseNumero,
                 hora_inicio: hi,
                 hora_fin: hf,
-                capacidad: capacidadClase,
+                capacidad: capacidadDelDia(ds),
                 activo: true,
                 updated_at: nowIso,
               }))
@@ -746,49 +814,96 @@ export const TurnoManagement = () => {
                   </DialogHeader>
                   
                   <div className="space-y-4 overflow-y-auto min-h-0 flex-1 pr-1">
-                    {/* Card para capacidad por clase - Lista de las 9 clases */}
                     <div className="p-4 border border-border rounded-lg bg-muted/50">
                       <div className="text-center mb-3">
-                        <Label className="font-semibold" style={{ fontSize: '13px' }}>Capacidad por clase</Label>
-                        <p className="text-xs text-muted-foreground mt-1">Configura la capacidad máxima para cada clase</p>
+                        <Label className="font-semibold" style={{ fontSize: '13px' }}>Capacidad</Label>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          {diaCapacidad === null
+                            ? 'Elegí un día para ver y editar la capacidad de cada clase'
+                            : `Lugares por clase los ${DIAS_SEMANA[diaCapacidad - 1].toLowerCase()}`}
+                        </p>
                       </div>
-                      
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {horariosFijos.map((horario) => (
-                          <div key={horario.id} className="flex items-center justify-between gap-2 p-2 border rounded-md bg-background">
-                            <div className="flex-1 min-w-0">
-                              <Label className="text-xs font-medium block truncate">
-                                {horario.nombre}
-                              </Label>
-                              <span className="text-[10px] text-muted-foreground">
-                                {formatClockRangeAmPm(horario.horaInicio, horario.horaFin)}
-                              </span>
-                            </div>
-                            <Select
-                              value={capacidadesClases[horario.id]?.toString() || '4'}
-                              onValueChange={(value) => {
-                                const nuevaCapacidad = parseInt(value, 10);
-                                if (Number.isNaN(nuevaCapacidad)) return;
-                                setCapacidadesClases((prev) => ({
-                                  ...prev,
-                                  [horario.id]: nuevaCapacidad,
-                                }));
-                              }}
+
+                      {diaCapacidad === null ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
+                          {DIAS_CAPACIDAD.map((dia) => (
+                            <button
+                              key={dia}
+                              type="button"
+                              onClick={() => setDiaCapacidad(dia)}
+                              className="h-10 rounded-md border border-border bg-background text-xs font-medium hover:bg-accent hover:text-accent-foreground transition-colors"
                             >
-                              <SelectTrigger className="w-16 h-8 text-center" style={{ fontSize: '12px' }}>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 15, 20, 25, 30].map((num) => (
-                                  <SelectItem key={num} value={num.toString()} style={{ fontSize: '12px' }}>
-                                    {num}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              {DIAS_SEMANA[dia - 1]}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center justify-between mb-3">
+                            <button
+                              type="button"
+                              onClick={() => setDiaCapacidad(null)}
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >
+                              ← Días
+                            </button>
+                            <span className="text-sm font-semibold">{DIAS_SEMANA[diaCapacidad - 1]}</span>
+                            <span className="w-10" />
                           </div>
-                        ))}
-                      </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            {horariosFijos.map((horario) => {
+                              const clave = claveCapacidad(diaCapacidad, horario.id);
+                              const valor =
+                                capacidades[clave] ??
+                                capacidades[claveCapacidad(1, horario.id)] ??
+                                obtenerCapacidadActual();
+                              const conPlan = ocupacionPlan[clave] ?? 0;
+                              return (
+                                <div key={horario.id} className="flex items-center justify-between gap-2 p-2 border rounded-md bg-background">
+                                  <div className="flex-1 min-w-0">
+                                    <Label className="text-xs font-medium block truncate">
+                                      {horario.nombre}
+                                    </Label>
+                                    <span className="text-[10px] text-muted-foreground block">
+                                      {formatClockRangeAmPm(horario.horaInicio, horario.horaFin)}
+                                    </span>
+                                    {conPlan > 0 && (
+                                      <span className={`text-[10px] block ${conPlan > valor ? 'text-destructive' : 'text-muted-foreground'}`}>
+                                        {conPlan} con plan
+                                      </span>
+                                    )}
+                                  </div>
+                                  <Input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={Math.max(1, conPlan)}
+                                    max={50}
+                                    value={valor || ''}
+                                    onChange={(e) => {
+                                      const nuevaCapacidad = parseInt(e.target.value, 10);
+                                      setCapacidades((prev) => ({
+                                        ...prev,
+                                        [clave]: Number.isNaN(nuevaCapacidad) ? 0 : Math.min(50, Math.max(0, nuevaCapacidad)),
+                                      }));
+                                    }}
+                                    className="w-16 h-8 text-center text-xs"
+                                  />
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {horariosFijos.some((horario) => {
+                            const clave = claveCapacidad(diaCapacidad, horario.id);
+                            return (ocupacionPlan[clave] ?? 0) > (capacidades[clave] ?? Infinity);
+                          }) && (
+                            <p className="mt-3 text-[11px] text-destructive">
+                              La capacidad no puede ser menor que los alumnos con plan de esa clase. Para bajarla, primero hay que mover a alguno de esos alumnos.
+                            </p>
+                          )}
+                        </>
+                      )}
                     </div>
 
                     {/* Card para tarifas escalonadas */}

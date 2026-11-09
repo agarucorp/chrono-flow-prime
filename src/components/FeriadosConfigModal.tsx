@@ -350,13 +350,14 @@ export const FeriadosConfigModal = ({
 
       if (error) throw error;
 
-      // Recalcula la cuota del plan. No cancela reservas ya confirmadas.
+      // Cancela las clases del plan y las vacantes de ese día con clase a
+      // favor. Las reservas en los horarios del feriado siguen.
       if (feriadoId) {
         const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
           p_feriado_id: feriadoId,
         });
         if (aplicarError) {
-          showError('El feriado se guardó, pero no se pudo actualizar el balance del mes siguiente. Guardá de nuevo.');
+          showError('El feriado se guardó, pero no se pudieron cancelar las clases de ese día. Guardá de nuevo.');
           dismissToast(loadingToast);
           return;
         }
@@ -621,7 +622,7 @@ export const FeriadosConfigModal = ({
                   {tipo === 'dia_habil_feriado' && (
                     <div className="mb-2 p-2 bg-amber-50 dark:bg-amber-950/20 rounded text-sm text-amber-800 dark:text-amber-200">
                       <AlertCircle className="h-4 w-4 inline mr-1" />
-                      Día hábil: si no agregas horarios, el día se cierra completo y se cancelan todos los turnos.
+                      Al guardar se cancelan todas las clases de ese día y cada alumno que tenía clase recibe una clase a favor. Los horarios que agregues se ofrecen como vacantes para cualquier alumno.
                     </div>
                   )}
                   {horariosPersonalizados.length === 0 && (

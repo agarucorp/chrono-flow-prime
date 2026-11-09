@@ -269,8 +269,9 @@ export const FinSemanaConfigModal = ({
         finSemanaId = insertData?.id;
       }
 
-      // Los cupos salen de horarios_personalizados. El recálculo no toca
-      // las reservas que ya estaban confirmadas.
+      // Los cupos salen de horarios_personalizados. Las reservas en esos
+      // horarios siguen; las del plan y las de horarios que ya no existen se
+      // cancelan con clase a favor.
       if (finSemanaId) {
         const { error: aplicarError } = await supabase.rpc('fn_admin_aplicar_feriado', {
           p_feriado_id: finSemanaId,
